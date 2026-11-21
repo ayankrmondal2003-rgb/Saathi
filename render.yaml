@@ -3,11 +3,11 @@ services:
     name: surakshanet-api
     runtime: docker
     rootDir: backend
-    plan: 0.5c-512mb
+    plan: free
     region: singapore
+    autoDeployTrigger: "off"
     healthCheckPath: /ready
-    preDeployCommand: sh render-migrate.sh
-    dockerCommand: sh -c 'exec uvicorn app.main:create_app --factory --host 0.0.0.0 --port "$PORT" --workers 2 --log-level warning --no-access-log'
+    dockerCommand: sh -c 'sh render-migrate.sh && exec uvicorn app.main:create_app --factory --host 0.0.0.0 --port "$PORT" --workers 1 --log-level warning --no-access-log'
     envVars:
       - key: DATABASE_URL
         # Owner supplies the existing database's internal connection URL privately.
@@ -29,6 +29,6 @@ services:
   - type: keyvalue
     name: surakshanet-kv
     region: singapore
-    plan: 256mb
+    plan: free
     ipAllowList: []
     maxmemoryPolicy: noeviction

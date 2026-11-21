@@ -13,11 +13,7 @@ In Google Cloud IAM for the same project, create a dedicated demo service accoun
 
 ## 3. Create the Render resources
 
-1. Make the reviewed repository available to Render through your chosen Git provider. In Render Dashboard select New → Blueprint, connect the repo and select its branch and root render.yaml. Match the web and Key Value regions to the existing surakshanet_db before applying. Review the two new billable services.
-2. Enter the three-UID JSON array at the TEST_ACCOUNT_UIDS prompt. Enter the existing database's Internal Database URL at the DATABASE_URL prompt. Render derives REDIS_URL from the private Key Value service. The checked-in project ID is a public identifier. The Blueprint uses development mode for controlled test incidents, two worker processes, the existing database's internal connection and a private Key Value service. Only the API receives public HTTPS ingress.
-3. Under the API web service → Environment → Secret Files → Add Secret File, name it exactly firebase-admin.json and paste the downloaded JSON privately. Save and deploy. Initial startup can fail until the file exists. Render mounts it at /etc/secrets/firebase-admin.json.
-4. The pre-deploy hook enables PostGIS and runs the existing Alembic migrations once for the deployment. Check the deploy logs for migration success. In the service shell run `alembic current` and expect revision 0007 for this version. Never print the environment or secret file.
-5. Copy the exact generated HTTPS origin from the web service dashboard. In PowerShell set `$apiOrigin = Read-Host 'Paste Render HTTPS origin'`. Run `curl.exe -fsS "$apiOrigin/health"` and `curl.exe -fsS "$apiOrigin/ready"`. Expect status ok and ready. Check an anonymous request to `/api/users/me` returns 401 and `/docs` returns 404. Readiness probes PostGIS and the configured Redis service. Rehearse event delivery across two workers separately.
+Follow [free-tier deployment](RENDER_DEPLOYMENT.md) to verify the existing database plan and region, configure the secret file, and check readiness before building the Android app.
 
 ## 4. Install and rehearse on the Samsung
 
