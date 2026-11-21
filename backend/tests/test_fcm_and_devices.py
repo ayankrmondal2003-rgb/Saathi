@@ -74,7 +74,7 @@ async def test_device_registration_and_lifecycle(world):
         assert active_count == 1
 
 
-async def test_test_alert_endpoint(world):
+async def test_test_alert_endpoint(world, monkeypatch):
     call, sessions, settings = world
 
     # Without registered device: returns 404
@@ -91,10 +91,12 @@ async def test_test_alert_endpoint(world):
         sent_messages.append({"tokens": tokens, "title": title, "body": body, "data": data})
         return [FcmSendResult(token=t, message_id=f"msg-{t}") for t in tokens]
 
-    # In our app, we can set state.fcm_sender or call directly
-    # To test route via HTTP client:
-    # We can invoke route directly with custom sender or inspect test-alert response
     assert (await call("alert-user", "POST", "/devices/test-phone/test-alert")).status_code == 503
+    monkeypatch.setattr("app.routes.default_firebase_sender", mock_sender)
+    assert (await call("alert-user", "POST", "/devices/test-phone/test-alert")).status_code == 200
+    payload = sent_messages[0]["data"]
+    assert payload["event_type"] == "TEST_ALERT" and payload["notification_id"]
+    assert "invitation_id" not in payload and "incident_id" not in payload
 
 
 async def test_outbox_worker_successful_delivery_and_privacy(world):
@@ -137,7 +139,8 @@ async def test_outbox_worker_successful_delivery_and_privacy(world):
     assert "lat" not in sent_data
     assert "lon" not in sent_data
     assert sent_data["event_type"] == "RESPONDER_INVITATION_CREATED"
-    assert "invitation_id" in sent_data
+    inbox = (await call("responder-1", "GET", "/responders/invitations")).json()
+    assert sent_data["invitation_id"] == inbox[0]["id"] != incident_id
     assert sent_data["incident_id"] == incident_id
 
     # Verify outbox status updated to FCM_ACCEPTED and attempt_count incremented

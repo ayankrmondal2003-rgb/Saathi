@@ -108,6 +108,9 @@ async def test_moving_discovery_and_authorization(api):
     assert len(await inbox("near")) == 1
     assert (await call("near","GET",path+"/location")).json()["longitude"] == pytest.approx(lon(2400))
     inside_invite = (await inbox("inside"))[0]["id"]
+    assert (await answer("inside", inside_invite, "ACCEPTED")).status_code == 403
+    assert (await call("inside","GET",path+"/location")).status_code == 404
+    assert (await call("inside","PUT","/responders/location",json=position(lon(2400), now+timedelta(seconds=2)))).is_success
     assert (await answer("inside", inside_invite, "ACCEPTED")).status_code == 200
     assert (await call("inside","GET",path+"/location")).status_code == 200
     assert (await call("owner","POST",path+"/invitations/"+inside_invite+"/revoke")).status_code == 204

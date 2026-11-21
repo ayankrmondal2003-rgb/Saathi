@@ -222,27 +222,65 @@ fun ResponderDashboard(
 
 @Composable
 fun Incoming(invitationId: String? = null, reply: (Response) -> Unit) {
-    var incidentId by rememberSaveable { mutableStateOf<String?>(null) }
-    var statusMessage by rememberSaveable { mutableStateOf<String?>(null) }
-    var authorizedLocation by remember { mutableStateOf<String?>(null) }
-    var isExpired by rememberSaveable { mutableStateOf(false) }
-    var isClosed by rememberSaveable { mutableStateOf(false) }
-    var isBusy by rememberSaveable { mutableStateOf(false) }
-    var hasAccepted by rememberSaveable { mutableStateOf(false) }
+    val id = canonicalId(invitationId)
+    var incidentId by remember(id) { mutableStateOf<String?>(null) }
+    var statusMessage by remember(id) { mutableStateOf<String?>(null) }
+    var isExpired by remember(id) { mutableStateOf(false) }
+    var isBusy by remember(id) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val colors = MaterialTheme.surakshaColors
     val context = LocalContext.current
+
+    fun submit(decision: String) {
+        if (isBusy || id == null) return
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        if (uid == null || com.example.surakshanet.BuildConfig.API_BASE_URL.isBlank()) {
+            statusMessage = if (uid == null) "Sign in to respond." else "Safety server is not configured."
+            return
+        }
+        isBusy = true
+        scope.launch {
+            try {
+                val account = ExpectedAccount(uid)
+                val invitation = BackendClient.api.invitations(account).firstOrNull { canonicalId(it.id) == id }
+                val incident = canonicalId(invitation?.incidentId)
+                if (incident == null || incident == id) {
+                    statusMessage = "Invitation unavailable. Open the responder inbox."
+                    return@launch
+                }
+                val result = BackendClient.api.respond(id, DecisionDto(decision), account)
+                if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != uid) return@launch
+                when {
+                    result.status == "EXPIRED" -> {
+                        isExpired = true
+                        statusMessage = "This invitation has expired."
+                    }
+                    result.status != decision -> statusMessage = "Response unconfirmed. Refresh your inbox."
+                    decision == "ACCEPTED" -> incidentId = incident
+                    else -> reply(Response.DECLINED)
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                statusMessage = invitationFailure(error)
+            } finally {
+                isBusy = false
+            }
+        }
+    }
 
     Page(
         title = "Incoming SOS Alert",
         subtitle = "Emergency Assistance Request"
     ) {
-        if (hasAccepted) {
+        if (id == null) {
+            Text("No valid responder invitation. Open the responder inbox to review pending requests.")
+            return@Page
+        }
+        if (incidentId != null) {
             // Screen D: Responder Tracking Screen
             ResponderTrackingView(
-                invitationId = invitationId,
                 incidentId = incidentId,
-                authorizedLocation = authorizedLocation,
                 onComplete = { reply(Response.ACCEPTED) },
                 onLeave = { reply(Response.DECLINED) }
             )
@@ -289,42 +327,6 @@ fun Incoming(invitationId: String? = null, reply: (Response) -> Unit) {
                 StatusBadge(text = "URGENT", color = colors.emergency, pulsing = true)
             }
         }
-
-        // Distance & ETA Metric Cards
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            SurakshaMetricCard(
-                value = "340 m",
-                label = "Distance",
-                icon = Icons.Rounded.Navigation,
-                accentColor = colors.info,
-                modifier = Modifier.weight(1f)
-            )
-            SurakshaMetricCard(
-                value = "~3 mins",
-                label = "Est. Walking",
-                icon = Icons.Rounded.DirectionsWalk,
-                accentColor = colors.success,
-                modifier = Modifier.weight(1f)
-            )
-            SurakshaMetricCard(
-                value = "1 km",
-                label = "Search Zone",
-                icon = Icons.Rounded.Radar,
-                accentColor = colors.warning,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        // Map Radar Preview
-        SurakshaMapContainer(
-            height = 160.dp,
-            title = "APPROXIMATE VICINITY",
-            incidentActive = true,
-            responderCount = 1
-        )
 
         // Privacy & Protection Info
         SurakshaCard {
@@ -384,67 +386,17 @@ fun Incoming(invitationId: String? = null, reply: (Response) -> Unit) {
         }
 
         // Action Buttons
-        if (!isExpired && !isClosed) {
+        if (!isExpired) {
             Action(
-                label = if (isBusy) "Authorizing..." else "Accept and Help",
+                label = if (isBusy) "Submitting response…" else "Accept and Help",
                 icon = Icons.Rounded.CheckCircle,
                 enabled = !isBusy,
-                click = {
-                    if (isBusy) return@Action
-                    if (!invitationId.isNullOrBlank() && com.example.surakshanet.BuildConfig.API_BASE_URL.isNotBlank()) {
-                        isBusy = true
-                        scope.launch {
-                            try {
-                                val resp = com.example.surakshanet.network.BackendClient.api.respond(
-                                    invitationId,
-                                    com.example.surakshanet.network.DecisionDto("ACCEPTED")
-                                )
-                                if (resp.status == "ACCEPTED") {
-                                    statusMessage = "Invitation accepted! Fetching authorized location..."
-                                    val invs = runCatching { BackendClient.api.invitations() }.getOrNull()
-                                    val target = invs?.firstOrNull { it.id == invitationId }
-                                    if (target != null) {
-                                        incidentId = target.incidentId
-
-                                    }
-                                    hasAccepted = true
-                                } else if (resp.status == "EXPIRED") {
-                                    isExpired = true
-                                    statusMessage = "This invitation has expired."
-                                }
-                            } catch (e: Exception) {
-                                val code = (e as? retrofit2.HttpException)?.code()
-                                if (code == 409) isClosed = true
-                                statusMessage = "Server returned error: ${e.message}"
-                            } finally {
-                                isBusy = false
-                            }
-                        }
-                    } else {
-                        authorizedLocation = "Lat: 28.6139, Lon: 77.2090 (Simulated)"
-                        hasAccepted = true
-                    }
-                }
+                click = { submit("ACCEPTED") }
             )
-
             SurakshaOutlinedButton(
                 label = "Decline Request",
                 icon = Icons.Rounded.Close,
-                click = {
-                    if (!invitationId.isNullOrBlank() && com.example.surakshanet.BuildConfig.API_BASE_URL.isNotBlank()) {
-                        scope.launch {
-                            runCatching {
-                                com.example.surakshanet.network.BackendClient.api.respond(
-                                    invitationId,
-                                    com.example.surakshanet.network.DecisionDto("DECLINED")
-                                )
-                            }
-                            reply(Response.DECLINED)
-                        }
-                    } else {
-                        reply(Response.DECLINED)
-                    }
-                }
+                click = { submit("DECLINED") }
             )
 
             // Direct 112 Call
@@ -465,9 +417,7 @@ fun Incoming(invitationId: String? = null, reply: (Response) -> Unit) {
 
 @Composable
 fun ResponderTrackingView(
-    invitationId: String?,
-    incidentId: String? = null,
-    authorizedLocation: String?,
+    incidentId: String?,
     onComplete: () -> Unit,
     onLeave: () -> Unit
 ) {
@@ -596,7 +546,7 @@ fun ResponderTrackingView(
 
     // Telemetry Stat Cards
     val loc = trackingState.latestLocation
-    val accuracyStr = if (loc != null) "±${loc.accuracyMeters.toInt()} m" else "±6 m"
+    val accuracyStr = if (loc != null) "±${loc.accuracyMeters.toInt()} m" else "—"
     val stale = trackingState.isStale
 
     Row(
@@ -604,15 +554,15 @@ fun ResponderTrackingView(
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         SurakshaMetricCard(
-            value = if (loc != null) "Active" else "310 m",
-            label = "Distance",
+            value = if (loc != null) "Received" else "Awaiting",
+            label = "Location",
             icon = Icons.Rounded.Navigation,
             accentColor = colors.info,
             modifier = Modifier.weight(1f)
         )
         SurakshaMetricCard(
-            value = if (stale) "Stale" else "~2 min",
-            label = if (stale) "Data (>60s)" else "ETA",
+            value = if (loc == null) "—" else if (stale) "Stale" else "Recent",
+            label = "Fix age",
             icon = Icons.Rounded.Timer,
             accentColor = if (stale) colors.warning else colors.success,
             modifier = Modifier.weight(1f)
@@ -737,17 +687,8 @@ fun ResponderTrackingView(
         }
     }
 
-    // Route Navigation Map
-    SurakshaMapContainer(
-        height = 200.dp,
-        title = "LIVE ROUTE TO VICTIM",
-        incidentActive = !isClosed && !isRevoked,
-        responderCount = trackingState.respondersSummary.acceptedCount.coerceAtLeast(1)
-    )
-
     // Victim Coordinates Card
     val displayLoc = loc?.let { "Lat: ${it.latitude}, Lon: ${it.longitude}\nAccuracy: ±${it.accuracyMeters} m" }
-        ?: authorizedLocation?.takeIf { invitationId == null }
     if (displayLoc != null && !isRevoked) {
         StatusCard(
             title = if (stale) "Victim Coordinates (Stale >60s)" else "Authorized Live Coordinates",
@@ -757,8 +698,8 @@ fun ResponderTrackingView(
     }
 
     // Primary Actions
-    val lat = loc?.latitude ?: 28.6139.takeIf { invitationId == null }
-    val lon = loc?.longitude ?: 77.2090.takeIf { invitationId == null }
+    val lat = loc?.latitude
+    val lon = loc?.longitude
 
     if (!isClosed && !isRevoked) {
         Action(

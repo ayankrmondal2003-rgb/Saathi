@@ -151,8 +151,8 @@ object NotificationHelper {
 
     fun showSosNotification(
         context: Context,
-        invitationId: String,
-        incidentId: String,
+        alertId: String,
+        incidentId: String?,
         title: String,
         body: String,
         eventType: String
@@ -163,19 +163,22 @@ object NotificationHelper {
             return false
         }
 
-        if (!claimAlert(context, invitationId, System.currentTimeMillis())) return false
+        if (!claimAlert(context, alertId, System.currentTimeMillis())) return false
 
         val intent = Intent(context, MainActivity::class.java).apply {
-            action = ACTION_VIEW_INVITATION
-            putExtra(EXTRA_INVITATION_ID, invitationId)
-            putExtra(EXTRA_INCIDENT_ID, incidentId)
+            data = android.net.Uri.Builder().scheme("saathi").authority("notification").appendPath(eventType).appendPath(alertId).build()
+            if (eventType == "RESPONDER_INVITATION_CREATED") {
+                action = ACTION_VIEW_INVITATION
+                putExtra(EXTRA_INVITATION_ID, alertId)
+                putExtra(EXTRA_INCIDENT_ID, incidentId)
+            }
             putExtra(EXTRA_EVENT_TYPE, eventType)
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
 
         val pendingIntent = PendingIntent.getActivity(
             context,
-            invitationId.hashCode(),
+            alertId.hashCode(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -198,7 +201,7 @@ object NotificationHelper {
             .setSound(soundUri)
             .build()
 
-        val notificationId = 1000 + (invitationId.hashCode() and 0x7FFF)
+        val notificationId = 1000 + (alertId.hashCode() and 0x7FFF)
         NotificationManagerCompat.from(context).notify(notificationId, notification)
         return true
     }

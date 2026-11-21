@@ -132,7 +132,7 @@ interface BackendApi {
     @POST("api/incidents/{id}/location") suspend fun submitIncidentFix(@Path("id") id: String, @Body fix: FixDto, @Tag expected: ExpectedAccount)
     @GET("api/incidents/{id}/location") suspend fun incidentLocation(@Path("id") id: String, @Tag expected: ExpectedAccount? = null): IncidentLocationDto
     @GET("api/responders/invitations") suspend fun invitations(@Tag expected: ExpectedAccount? = null): List<InvitationDto>
-    @POST("api/responders/invitations/{id}/response") suspend fun respond(@Path("id") id: String, @Body decision: DecisionDto): StatusDto
+    @POST("api/responders/invitations/{id}/response") suspend fun respond(@Path("id") id: String, @Body decision: DecisionDto, @Tag account: ExpectedAccount? = null): StatusDto
 
     @GET("health") suspend fun health(): HealthDto
     @GET("api/users/me") suspend fun profile(@Tag expected: ExpectedAccount? = null): ProfileDto

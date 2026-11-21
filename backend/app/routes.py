@@ -208,6 +208,8 @@ async def respond(invitation_id: UUID, body: Decision, request: Request, user=De
         if body.decision == "ACCEPTED":
             await service.may_read(db, incident, user)
         return {"status": invitation.status}
+    if invitation.status == "EXPIRED":
+        return {"status": "EXPIRED"}
     if invitation.status != "PENDING":
         raise HTTPException(409, "Invitation already answered")
     now = datetime.now(timezone.utc)
@@ -220,12 +222,14 @@ async def respond(invitation_id: UUID, body: Decision, request: Request, user=De
         if not user.responder_opt_in or not user.responder_available:
             raise HTTPException(403, "Responder unavailable")
         settings = request.app.state.settings
-        eligible = await db.scalar(select(locations.c.user_id).where(locations.c.user_id == user.id,
-            locations.c.is_mock == incident.location_is_mock,
+        eligible = await db.scalar(select(locations.c.user_id).select_from(locations.join(incidents,
+            func.ST_DWithin(locations.c.location, incidents.c.latest_location, incidents.c.radius_meters))).where(
+            locations.c.user_id == user.id, locations.c.is_mock == incident.location_is_mock,
             locations.c.recorded_at >= now - timedelta(seconds=settings.max_location_age_seconds),
-            locations.c.accuracy_meters <= settings.max_accuracy_meters))
+            locations.c.accuracy_meters <= settings.max_accuracy_meters,
+            incidents.c.id == incident_id))
         if eligible is None:
-            raise HTTPException(403, "Fresh matching responder location required")
+            raise HTTPException(403, "Fresh matching responder location within the active radius required")
         await db.execute(responders.insert().values(incident_id=incident_id, responder_user_id=user.id,
             access_expires_at=now + timedelta(hours=2), assistance_status="ACCEPTED"))
         await get_hub(request).broadcast(incident_id, "RESPONDER_JOINED", {
@@ -409,8 +413,7 @@ async def test_alert(device_id: str, request: Request, user=Depends(account), db
     sender = getattr(request.app.state, "fcm_sender", None) or default_firebase_sender
     payload = {
         "event_type": "TEST_ALERT",
-        "invitation_id": "test-" + uuid4().hex,
-        "incident_id": "test-incident",
+        "notification_id": str(uuid4()),
         "created_at": datetime.now(timezone.utc).isoformat(),
         "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
     }

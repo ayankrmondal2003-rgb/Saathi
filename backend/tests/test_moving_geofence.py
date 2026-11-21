@@ -293,6 +293,22 @@ async def test_security_concurrency_and_boundaries(world):
     inside_invite = (await inbox("boundary-inside"))[0]["id"]
     assert (await call("stranger", "POST", f"/responders/invitations/{inside_invite}/response", json={"decision": "ACCEPTED"})).status_code == 404
 
+    malformed = await call("boundary-inside", "POST", "/responders/invitations/test-example/response",
+                           json={"decision": "ACCEPTED"})
+    assert malformed.status_code == 422
+    assert [(item["loc"], item["type"]) for item in malformed.json()["detail"]] == [
+        (["path", "invitation_id"], "uuid_parsing")]
+    wrong_id = await call("boundary-inside", "POST", f"/responders/invitations/{incident_id}/response",
+                          json={"decision": "ACCEPTED"})
+    assert wrong_id.status_code == 404
+
+    respond_path = f"/responders/invitations/{inside_invite}/response"
+    async with sessions.begin() as db:
+        await db.execute(text("""UPDATE responder_locations SET recorded_at=now()-interval '1 hour'
+            WHERE user_id=(SELECT id FROM users WHERE display_name='boundary-inside')"""))
+    assert (await call("boundary-inside", "POST", respond_path, json={"decision": "ACCEPTED"})).status_code == 403
+    assert (await call("boundary-inside", "GET", path + "/location")).status_code == 404
+
     # 5. Blocked / Suspended accounts
     async with sessions.begin() as db:
         await db.execute(text("UPDATE users SET account_status='BLOCKED' WHERE display_name='boundary-inside'"))

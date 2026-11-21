@@ -46,9 +46,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
-        val id = intent?.getStringExtra(NotificationHelper.EXTRA_INVITATION_ID)
-        if (!id.isNullOrBlank()) {
-            pendingInvitationId.value = id
-        }
+        pendingInvitationId.value = com.example.surakshanet.network.invitationFromAlert(
+            intent?.getStringExtra(NotificationHelper.EXTRA_EVENT_TYPE),
+            intent?.getStringExtra(NotificationHelper.EXTRA_INVITATION_ID),
+            intent?.getStringExtra(NotificationHelper.EXTRA_INCIDENT_ID)
+        )
+        intent?.removeExtra(NotificationHelper.EXTRA_INVITATION_ID)
     }
 }

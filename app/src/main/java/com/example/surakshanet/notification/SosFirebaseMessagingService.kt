@@ -42,20 +42,20 @@ class SosFirebaseMessagingService : FirebaseMessagingService() {
         // Validate event types
         when (eventType) {
             "RESPONDER_INVITATION_CREATED" -> {
-                if (invitationId.isBlank() || incidentId.isBlank()) return
+                if (com.example.surakshanet.network.invitationFromAlert(eventType, invitationId, incidentId) == null) return
                 val expiry = runCatching { java.time.Instant.parse(data["expires_at"]) }.getOrNull() ?: return
                 if (!expiry.isAfter(java.time.Instant.now())) return
                 val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
                 InvitationNotificationWorker.enqueue(this, uid, invitationId, incidentId, expiry.toEpochMilli())
             }
             "TEST_ALERT", "EMERGENCY_TEST_NOTIFICATION" -> {
-                val testId = invitationId.ifBlank { UUID.randomUUID().toString() }
+                val testId = data["notification_id"] ?: remoteMessage.messageId ?: UUID.randomUUID().toString()
                 val title = remoteMessage.notification?.title ?: "SurakshaNet Test Alert"
                 val body = remoteMessage.notification?.body ?: "This is an authorized test notification."
                 NotificationHelper.showSosNotification(
                     context = applicationContext,
-                    invitationId = testId,
-                    incidentId = incidentId.ifBlank { testId },
+                    alertId = testId,
+                    incidentId = null,
                     title = title,
                     body = body,
                     eventType = eventType
