@@ -7,7 +7,7 @@ services:
     region: singapore
     autoDeployTrigger: "off"
     healthCheckPath: /ready
-    dockerCommand: sh -c 'sh render-migrate.sh && exec uvicorn app.main:create_app --factory --host 0.0.0.0 --port "$PORT" --workers 1 --log-level warning --no-access-log'
+    dockerCommand: sh /app/start-render.sh
     envVars:
       - key: DATABASE_URL
         # Owner supplies the existing database's internal connection URL privately.

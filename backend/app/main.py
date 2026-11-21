@@ -55,15 +55,20 @@ def create_app(settings=None, *, initialize_firebase=True):
         outbox_worker = None
         try:
             if initialize_firebase:
-                credential = (credentials.Certificate(settings.google_application_credentials)
-                              if settings.google_application_credentials else credentials.ApplicationDefault())
+                print("[startup] Loading Firebase Admin credentials", flush=True)
+                try:
+                    credential = (credentials.Certificate(settings.google_application_credentials)
+                                  if settings.google_application_credentials else credentials.ApplicationDefault())
+                    credential.get_credential()
+                except Exception as error:
+                    raise RuntimeError(f"Firebase credential loading failed ({type(error).__name__})") from None
                 if settings.google_application_credentials and credential.project_id != settings.firebase_project_id:
                     raise RuntimeError("Firebase credential project mismatch")
-                credential.get_credential()
                 app.state.firebase = firebase_admin.initialize_app(credential, {"projectId": settings.firebase_project_id},
                                                                   name="surakshanet")
             redis_url = settings.redis_url.get_secret_value() if settings.redis_url else os.getenv("REDIS_URL")
             app_hub = getattr(app.state, "hub", hub)
+            print("[startup] Firebase initialized; starting realtime services" if initialize_firebase else "[startup] Starting test realtime services", flush=True)
             await app_hub.start_distributed(redis_url, sessions=app.state.sessions, worker_id=settings.worker_id)
             geofence_worker = asyncio.create_task(periodic_geofence())
             outbox_worker = asyncio.create_task(periodic_outbox())
