@@ -569,7 +569,7 @@ class RealtimeHub:
             event_type=msg.event_type,
             incident_id=str(inc_uuid),
             timestamp=msg.timestamp,
-            sequence=msg.sequence,
+            sequence=self._next_sequence(inc_uuid),
             payload=msg.payload
         )
         msg_text = event.model_dump_json()

@@ -46,6 +46,33 @@ class HomeLayoutTest {
     private fun clickable(node: AccessibilityNodeInfo): AccessibilityNodeInfo =
         generateSequence(node) { it.parent }.first { it.isClickable }
 
+    @Test fun keypadDeletesAndSubmitsOnceAndOpensRecovery() {
+        val submitted = java.util.concurrent.atomic.AtomicReference<String>()
+        val recovery = java.util.concurrent.atomic.AtomicBoolean()
+        ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.setContent {
+                    SurakshaNetTheme {
+                        com.example.surakshanet.ui.SurakshaPinPad(
+                            onPinSubmit = { submitted.set(it) }, onKeepActive = {},
+                            onForgotPin = { recovery.set(true) }
+                        )
+                    }
+                }
+            }
+            fun tap(label: String) {
+                val node = awaitNode(label) { it.contentDescription == label || it.text == label }
+                assertTrue(clickable(node).performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                instrumentation.waitForIdleSync()
+            }
+            listOf("Digit 8", "Digit 2", "Delete last digit", "Digit 3", "Digit 9",
+                "Digit 1", "Digit 6", "Digit 2").forEach(::tap)
+            org.junit.Assert.assertEquals("839162", submitted.get())
+            tap("Forgot Safety PIN?")
+            assertTrue(recovery.get())
+        }
+    }
+
     @Test fun guidanceScrollsAboveDockAndQuickTapOpensConfirmation() {
         val context = instrumentation.targetContext
         assumeFalse("Interactive layout test requires an unlocked display",

@@ -319,6 +319,10 @@ def test_pin_recovery_does_not_close_incident(client_env):
                     json={"new_pin": "716253", "confirm_pin": "716253"})
     assert r.status_code == 200
 
+    throttled = client.post("/api/security/safety-pin/recover", headers={"X-Test-Actor": "victim"},
+                            json={"new_pin": "836052", "confirm_pin": "836052"})
+    assert throttled.status_code == 429
+
     # Incident remains active
     snapshot = client.get(f"/api/incidents/{inc_id}/snapshot", headers={"X-Test-Actor": "victim"}).json()
     assert snapshot["status"] == "ACTIVE"

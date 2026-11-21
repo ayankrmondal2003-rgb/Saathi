@@ -142,10 +142,10 @@ interface BackendApi {
     @DELETE("api/devices/{token}") suspend fun unregisterDevice(@Path("token") token: String): retrofit2.Response<Unit>
     @POST("api/devices/{deviceId}/test-alert") suspend fun sendTestAlert(@Path("deviceId") deviceId: String): TestAlertResponseDto
     @POST("api/incidents/{id}/ws-ticket") suspend fun wsTicket(@Path("id") id: String): WsTicketDto
-    @GET("api/incidents/{id}/snapshot") suspend fun snapshot(@Path("id") id: String): IncidentSnapshotDto
+    @GET("api/incidents/{id}/snapshot") suspend fun snapshot(@Path("id") id: String, @Tag expected: ExpectedAccount? = null): IncidentSnapshotDto
     @PUT("api/incidents/{id}/responders/status") suspend fun updateResponderStatus(@Path("id") id: String, @Body status: ResponderStatusUpdateDto): StatusDto
     @POST("api/security/safety-pin/setup") suspend fun setupSafetyPin(@Body request: SafetyPinSetupDto, @Tag expected: ExpectedAccount? = null): StatusDto
-    @POST("api/security/safety-pin/change") suspend fun changeSafetyPin(@Body request: SafetyPinChangeDto): StatusDto
+    @POST("api/security/safety-pin/change") suspend fun changeSafetyPin(@Body request: SafetyPinChangeDto, @Tag expected: ExpectedAccount? = null): StatusDto
     @GET("api/security/safety-pin/status") suspend fun safetyPinStatus(@Tag expected: ExpectedAccount? = null): SafetyPinStatusDto
     @POST("api/security/safety-pin/recover") suspend fun recoverSafetyPin(@Body request: SafetyPinRecoveryDto, @Tag expected: ExpectedAccount? = null): StatusDto
     @POST("api/incidents/{id}/resolve") suspend fun resolveIncident(@Path("id") id: String, @Body request: IncidentResolutionRequestDto, @Tag expected: ExpectedAccount? = null): IncidentResolutionResponseDto

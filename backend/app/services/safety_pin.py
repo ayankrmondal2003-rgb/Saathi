@@ -166,6 +166,18 @@ async def recover_pin(db, user_id: UUID, new_pin: str, confirm_pin: str):
     validate_pin_strength(new_pin)
 
     now = datetime.now(timezone.utc)
+    credentials = await get_credentials(db, user_id)
+    primary = credentials.get("PRIMARY_PIN")
+    if primary:
+        locked_until = primary["locked_until"]
+        changed = primary["last_changed_at"]
+        if locked_until and locked_until > now:
+            raise HTTPException(429, "Safety PIN recovery is temporarily locked.")
+        if changed and changed > primary["created_at"] and changed + timedelta(seconds=60) > now:
+            raise HTTPException(429, "Wait one minute after a PIN change before recovering again.")
+    duress = credentials.get("DURESS_PIN")
+    if duress and verify_hash(duress["pin_hash"], new_pin):
+        raise HTTPException(422, "Primary PIN and Duress PIN must be distinct.")
     new_hash = hash_pin(new_pin)
 
     query = insert(safety_credentials).values(

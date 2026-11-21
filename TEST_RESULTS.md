@@ -1,3 +1,15 @@
+# Phase 19 incident lifecycle checks
+
+| Check | Evidence |
+|---|---|
+| VERIFIED · isolated backend | 65 passed, 26 deprecation warnings. A fresh PostGIS 3.7.0 database migrated to 0007 and a dedicated Redis 7 instance served the suite. Coverage includes owner-only PIN resolution, idempotent closure, lockout, authenticated recovery, revoked access, moving-radius discovery, cross-worker events and the FCM outbox with test providers. |
+| VERIFIED · Android JVM and build | Gradle sync succeeded. All 60 debug JVM tests passed. Both the debug APK and instrumentation APK built. |
+| VERIFIED · deployed service availability | The existing Render service returned HTTP 200 on both /health and /ready. The local Phase 19 changes require a separate deployment. |
+| BLOCKED · device UI tests | ADB listed two emulators, but APK installation stalled on both. The keypad and recovery-action instrumentation test compiled. Its execution and small-screen layout remain unverified. |
+| BLOCKED · three-phone exercise | No authenticated controlled three-phone session was available for this run. Samsung PIN enrollment, notification display, GPS cleanup, dock layout and invitation acceptance on handsets require observation. |
+
+Deploy the reviewed backend before distributing the Android build. The new client sends its short-lived WebSocket ticket in the Authorization header. The backend also accepts the legacy client during rollout. The isolated tests reproduced the missing-primary-PIN response. The account state at the time of the historical Samsung HTTP 400 remains unknown.
+
 # Phase 18 cloud deployment checks
 
 | Check | Result |

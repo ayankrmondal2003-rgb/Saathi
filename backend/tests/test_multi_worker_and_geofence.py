@@ -142,7 +142,7 @@ def test_multi_worker_distributed_location_and_revocation(multi_worker_env):
     ticket = ticket_res.json()["ticket"]
 
     # Connect WebSocket to Worker 2 using the ticket
-    with client_2.websocket_connect(f"/ws/incidents/{incident_id}?ticket={ticket}") as ws_worker2:
+    with client_2.websocket_connect(f"/ws/incidents/{incident_id}", headers={"Authorization": f"Ticket {ticket}"}) as ws_worker2:
         # 1. Authoritative initial snapshot from PostgreSQL
         snapshot_raw = ws_worker2.receive_text()
         snapshot = json.loads(snapshot_raw)

@@ -36,6 +36,15 @@ class PinResolutionTest {
             message(429, "Safety PIN verification is rate-limited. Retry in 83 seconds."))
     }
 
+    @Test fun pinStatusRequiresServerEvidence() {
+        val configured = SafetyPinStatusDto(true, false, 0, false)
+        assertEquals(PrimaryPinState.UNKNOWN, primaryPinState(null))
+        assertEquals(PrimaryPinState.NOT_CONFIGURED, primaryPinState(configured.copy(hasPrimaryPin = false)))
+        assertEquals(PrimaryPinState.CONFIGURED, primaryPinState(configured))
+        assertEquals(PrimaryPinState.LOCKED, primaryPinState(configured.copy(isLocked = true)))
+        assertEquals(PrimaryPinState.RECOVERY_REQUIRED, primaryPinState(configured, recovering = true))
+    }
+
     @Test fun networkFailureCannotConfirmClosure() = runTest {
         val result = runCatching { resolveWithPin("incident") { throw IOException() } }
         assertTrue(result.exceptionOrNull() is IOException)

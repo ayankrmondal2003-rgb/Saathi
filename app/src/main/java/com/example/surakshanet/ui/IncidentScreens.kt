@@ -379,6 +379,7 @@ fun ActiveIncident(
     end: () -> Unit
 ) {
     var showPinDialog by rememberSaveable { mutableStateOf(false) }
+    var pinNotice by remember { mutableStateOf<String?>(null) }
     var showRecoveryDialog by rememberSaveable { mutableStateOf(false) }
     var isVerifying by remember { mutableStateOf(false) }
     var pinError by remember { mutableStateOf<String?>(null) }
@@ -391,16 +392,37 @@ fun ActiveIncident(
     val tracking = remember(context) { LocalTrackingRepository.get(context) }
     val shared = tracking.sync.isShared(uid, tracking.session.value.id)
     var snapshot by remember(uid, incident.started) { mutableStateOf<com.example.surakshanet.network.IncidentSnapshotDto?>(null) }
-    LaunchedEffect(shared, uid, incident.started) {
+    var serverMessage by remember(uid, incident.started) { mutableStateOf("Connecting to safety server") }
+    var lastSnapshotTime by remember(uid, incident.started) { mutableStateOf<java.time.Instant?>(null) }
+    var snapshotRetry by remember { mutableIntStateOf(0) }
+    var paused by remember { mutableStateOf(false) }
+    LaunchedEffect(shared, uid, incident.started, snapshotRetry) {
+        paused = false
+        var failures = 0
         while (shared) {
             val id = tracking.sync.getActiveIncidentId(uid)
             if (id != null) {
                 try {
-                    snapshot = BackendClient.api.snapshot(id)
+                    val confirmed = BackendClient.api.snapshot(id, ExpectedAccount(uid))
+                    check(tracking.sync.getActiveIncidentId(uid) == id && confirmed.incidentId == id)
+                    snapshot = confirmed
+                    lastSnapshotTime = java.time.Instant.now()
+                    if (confirmed.status == "CLOSED") {
+                        tracking.sync.clearActiveIncident(uid)
+                        end()
+                        break
+                    }
+                    serverMessage = "Connected to safety server"
+                    failures = 0
                 } catch (cancelled: kotlinx.coroutines.CancellationException) {
                     throw cancelled
-                } catch (_: Exception) {
-                    snapshot = null
+                } catch (e: Exception) {
+                    if (e is HttpException && e.code() in listOf(401, 403, 404)) snapshot = null
+                    serverMessage = if (e is java.io.IOException) "Server unreachable · check connection" else "Server update unavailable"
+                    if (++failures >= 3) {
+                        paused = true
+                        break
+                    }
                 }
             }
             delay(5000)
@@ -422,7 +444,7 @@ fun ActiveIncident(
 
     Page(
         title = "Emergency Active",
-        subtitle = "Incident #SOS-${incident.started.toString().takeLast(4)}"
+        subtitle = tracking.sync.getActiveIncidentId(uid)?.let { "Test incident · ${it.take(8)}" } ?: if (shared) "Awaiting server confirmation" else "Local practice incident"
     ) {
         if (isDuressSimulation) {
             DemoBanner(
@@ -430,7 +452,7 @@ fun ActiveIncident(
                 active = true
             )
         } else {
-            DemoBanner(label = if (shared) "TEST SOS · SERVER SYNC" else "LOCAL PRACTICE SOS", active = true)
+            DemoBanner(label = if (shared) if (tracking.sync.getActiveIncidentId(uid) == null) "REMOTE SOS PENDING" else "TEST SOS" else "LOCAL PRACTICE SOS", active = true)
         }
 
         // Hero Digital Timer Card
@@ -463,12 +485,19 @@ fun ActiveIncident(
             }
         }
 
-        // Radar Map Container with 1 km zone & simulated responder
-        SurakshaMapContainer(
-            title = "1.0 KM EMERGENCY RADIUS",
-            incidentActive = true,
-            responderCount = snapshot?.respondersSummary?.acceptedCount ?: 0
-        )
+        if (shared) {
+            SurakshaCard {
+                Text(serverMessage, style = MaterialTheme.typography.titleMedium)
+                val latest = snapshot
+                if (latest != null) {
+                    lastSnapshotTime?.let { Text("Last server sync · $it") }
+                    Text("Server start · ${latest.createdAt}")
+                    Text("Last server location · ${latest.lastLocation?.receivedAt ?: "Awaiting first upload"}")
+                    latest.lastLocation?.let { Text("Server fix accuracy · ±${it.accuracyMeters.toInt()} m") }
+                }
+                if (paused) TextButton(onClick = { snapshotRetry++ }) { Text("Retry server connection") }
+            }
+        }
 
         // 3 Key Metrics Row
         Row(
@@ -515,7 +544,7 @@ fun ActiveIncident(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "Responders En Route",
+                    text = "Accepted community responders",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = colors.textPrimary
@@ -525,7 +554,7 @@ fun ActiveIncident(
             val responders = snapshot?.activeResponders.orEmpty()
             if (responders.isEmpty()) Text("No confirmed responder updates")
             for (responder in responders) {
-                Text(responder.responderId + " · " + responder.assistanceStatus)
+                Text("Responder " + responder.responderId.take(8) + " · " + responder.assistanceStatus)
             }
         }
 
@@ -550,13 +579,13 @@ fun ActiveIncident(
                         color = colors.textPrimary
                     )
                     Text(
-                        text = "Real-time delivery & live tracking grants",
+                        text = "Contact preferences and test alert status",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.textSecondary
                     )
                 }
                 StatusBadge(
-                    text = "${contacts.count { it.notifyOnSos }} NOTIFIED",
+                    text = "${contacts.count { it.notifyOnSos }} ENABLED",
                     color = if (contacts.any { it.notifyOnSos }) colors.success else colors.textTertiary
                 )
             }
@@ -572,7 +601,7 @@ fun ActiveIncident(
                 contacts.forEach { contact ->
                     val alertStatus = alertStatuses.find { it.contactId == contact.id }
                     val deliveryStatus = alertStatus?.deliveryStatus
-                        ?: if (contact.notifyOnSos) ContactDeliveryStatus.PROVIDER_ACCEPTED else ContactDeliveryStatus.NOT_REQUESTED
+                        ?: if (contact.notifyOnSos) ContactDeliveryStatus.UNKNOWN else ContactDeliveryStatus.NOT_REQUESTED
                     val statusColor = when (deliveryStatus) {
                         ContactDeliveryStatus.DELIVERED_WHEN_CONFIRMED, ContactDeliveryStatus.PROVIDER_ACCEPTED -> colors.success
                         ContactDeliveryStatus.QUEUED, ContactDeliveryStatus.SENDING -> colors.warning
@@ -607,7 +636,7 @@ fun ActiveIncident(
                                         StatusBadge(text = "PRIMARY", color = colors.emergency)
                                     }
                                 }
-                                StatusBadge(text = deliveryStatus.label, color = statusColor)
+                                StatusBadge(text = if (deliveryStatus == ContactDeliveryStatus.PROVIDER_ACCEPTED) "Simulated acceptance" else deliveryStatus.label, color = statusColor)
                             }
 
                             Spacer(Modifier.height(4.dp))
@@ -680,6 +709,7 @@ fun ActiveIncident(
             isEmergency = true,
             click = {
                 pinError = null
+                pinNotice = null
                 showPinDialog = true
             }
         )
@@ -713,7 +743,7 @@ fun ActiveIncident(
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(
-                modifier = Modifier.fillMaxWidth().imePadding().padding(16.dp),
+                modifier = Modifier.fillMaxWidth().safeDrawingPadding().imePadding().padding(12.dp),
                 shape = RoundedCornerShape(28.dp),
                 color = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.onSurface
@@ -736,6 +766,7 @@ fun ActiveIncident(
                     pinLength = 6,
                     isVerifying = isVerifying,
                     errorMessage = pinError,
+                    notice = pinNotice,
                     cooldownSeconds = cooldownSeconds,
                     onPinSubmit = { pin ->
                         isVerifying = true
@@ -805,14 +836,14 @@ fun ActiveIncident(
 
     // Safety PIN Recovery Dialog
     if (showRecoveryDialog) {
-        val enroll = pinStatus?.hasPrimaryPin == false || pinError == MISSING_PRIMARY_PIN
+        val enroll = com.example.surakshanet.network.primaryPinState(pinStatus, recovering = true) == com.example.surakshanet.network.PrimaryPinState.NOT_CONFIGURED || pinError == MISSING_PRIMARY_PIN
         var isRecovering by remember { mutableStateOf(false) }
         Dialog(
             onDismissRequest = { if (!isRecovering) showRecoveryDialog = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(
-                modifier = Modifier.fillMaxWidth().imePadding().padding(16.dp),
+                modifier = Modifier.fillMaxWidth().safeDrawingPadding().imePadding().padding(12.dp),
                 shape = RoundedCornerShape(28.dp),
                 color = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.onSurface
@@ -925,7 +956,10 @@ fun ActiveIncident(
                                         user.getIdToken(true).await()
                                         check(BackendClient.api.recoverSafetyPin(SafetyPinRecoveryDto(newPin, confirmPin), expected).status == "RECOVERED")
                                     }
-                                    pinStatus = null
+                                    val refreshed = BackendClient.api.safetyPinStatus(expected)
+                                    check(refreshed.hasPrimaryPin)
+                                    pinStatus = refreshed
+                                    pinNotice = if (enroll) "PIN enrolled. Enter it to end this SOS." else "PIN recovered. Enter your new PIN to end this SOS."
                                     showRecoveryDialog = false
                                     showPinDialog = true
                                     pinError = null

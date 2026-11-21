@@ -129,6 +129,7 @@ class IncidentTrackingRepository(
                     lastSequence = event.sequence
                     val now = System.currentTimeMillis()
                     _state.update { current ->
+                        if (current.status != "ACTIVE" || recordedMillis(event.location) <= current.lastLocationReceivedAtMillis) return@update current
                         current.copy(
                             latestLocation = event.location,
                             isStale = event.location.stale || now - recordedMillis(event.location) > 60000L,

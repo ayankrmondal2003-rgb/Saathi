@@ -51,3 +51,16 @@ internal suspend fun resolveWithPin(id: String, submit: suspend () -> IncidentRe
     ))
     return result
 }
+
+internal enum class PrimaryPinState(val label: String) {
+    UNKNOWN("PIN status unknown"), NOT_CONFIGURED("PIN not set"), CONFIGURED("PIN set"),
+    LOCKED("PIN locked"), RECOVERY_REQUIRED("PIN recovery required")
+}
+
+internal fun primaryPinState(status: SafetyPinStatusDto?, recovering: Boolean = false): PrimaryPinState = when {
+    status == null -> PrimaryPinState.UNKNOWN
+    !status.hasPrimaryPin -> PrimaryPinState.NOT_CONFIGURED
+    recovering -> PrimaryPinState.RECOVERY_REQUIRED
+    status.isLocked -> PrimaryPinState.LOCKED
+    else -> PrimaryPinState.CONFIGURED
+}

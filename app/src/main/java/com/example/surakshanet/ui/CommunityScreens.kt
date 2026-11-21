@@ -1,5 +1,8 @@
 package com.example.surakshanet.ui
 
+import com.example.surakshanet.network.primaryPinState
+import com.example.surakshanet.network.ExpectedAccount
+import com.example.surakshanet.network.pinFailure
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.*
@@ -1279,7 +1282,7 @@ fun Profile(
         SafetyReadinessSection()
 
         // Safety PIN Section
-        SafetyPinSetup()
+        SafetyPinSetup(user.uid)
 
         // GPS Diagnostics (Debug Mode)
         diagnostics?.let {
@@ -1372,7 +1375,7 @@ private fun ThemeOptionButton(
 }
 
 @Composable
-private fun SafetyPinSetup() {
+private fun SafetyPinSetup(uid: String) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) } // 0: Primary PIN, 1: Duress PIN
     val colors = MaterialTheme.surakshaColors
@@ -1385,31 +1388,34 @@ private fun SafetyPinSetup() {
     var isSubmitting by remember { mutableStateOf(false) }
 
     // Primary PIN fields
-    var currentPin by rememberSaveable { mutableStateOf("") }
-    var primaryPin by rememberSaveable { mutableStateOf("") }
-    var primaryPinConfirm by rememberSaveable { mutableStateOf("") }
+    var currentPin by remember { mutableStateOf("") }
+    var primaryPin by remember { mutableStateOf("") }
+    var primaryPinConfirm by remember { mutableStateOf("") }
 
     // Duress PIN fields
-    var duressPin by rememberSaveable { mutableStateOf("") }
-    var duressPinConfirm by rememberSaveable { mutableStateOf("") }
+    var duressPin by remember { mutableStateOf("") }
+    var duressPinConfirm by remember { mutableStateOf("") }
 
-    fun refreshStatus() {
-        if (com.example.surakshanet.BuildConfig.API_BASE_URL.isBlank()) return
+    val expected = remember(uid) { ExpectedAccount(uid) }
+    suspend fun refreshStatus(): SafetyPinStatusDto {
+        status = null
         isLoadingStatus = true
-        scope.launch {
-            try {
-                status = BackendClient.api.safetyPinStatus()
-            } catch (e: Exception) {
-                // Ignore background fetch error
-            } finally {
-                isLoadingStatus = false
-            }
+        try {
+            return BackendClient.api.safetyPinStatus(expected).also { status = it }
+        } finally {
+            isLoadingStatus = false
         }
     }
 
-    LaunchedEffect(expanded) {
-        if (expanded) {
-            refreshStatus()
+    LaunchedEffect(uid, expanded) {
+        if (com.example.surakshanet.BuildConfig.API_BASE_URL.isNotBlank()) {
+            try {
+                refreshStatus()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                actionError = pinFailure(e)
+            }
         }
     }
 
@@ -1486,7 +1492,7 @@ private fun SafetyPinSetup() {
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = if (hasPrimary) "PIN Set" else "PIN Not Set",
+                        text = primaryPinState(status).label,
                         style = MaterialTheme.typography.labelSmall,
                         color = colors.textPrimary,
                         fontWeight = FontWeight.Medium
@@ -1513,7 +1519,7 @@ private fun SafetyPinSetup() {
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = if (hasDuress) "Duress Set" else "Duress Optional",
+                        text = if (status == null) "Duress unknown" else if (hasDuress) "Duress set" else "Duress optional",
                         style = MaterialTheme.typography.labelSmall,
                         color = colors.textPrimary,
                         fontWeight = FontWeight.Medium
@@ -1586,6 +1592,7 @@ private fun SafetyPinSetup() {
                     if (isChange) {
                         OutlinedTextField(
                             value = currentPin,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                             onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) currentPin = it },
                             label = { Text("Current 6-Digit PIN") },
                             singleLine = true,
@@ -1596,6 +1603,7 @@ private fun SafetyPinSetup() {
 
                     OutlinedTextField(
                         value = primaryPin,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                         onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) primaryPin = it },
                         label = { Text("New 6-Digit PIN") },
                         singleLine = true,
@@ -1605,6 +1613,7 @@ private fun SafetyPinSetup() {
 
                     OutlinedTextField(
                         value = primaryPinConfirm,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                         onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) primaryPinConfirm = it },
                         label = { Text("Confirm 6-Digit PIN") },
                         singleLine = true,
@@ -1614,7 +1623,7 @@ private fun SafetyPinSetup() {
 
                     Action(
                         label = if (isSubmitting) "Saving PIN..." else (if (isChange) "Update Safety PIN" else "Save Safety PIN"),
-                        enabled = !isSubmitting && primaryPin.length == 6 && primaryPinConfirm.length == 6 && (!isChange || currentPin.length == 6),
+                        enabled = status != null && !isLoadingStatus && !isSubmitting && primaryPin.length == 6 && primaryPinConfirm.length == 6 && (!isChange || currentPin.length == 6),
                         click = {
                             val valErr = validatePin(primaryPin)
                             if (valErr != null) {
@@ -1631,14 +1640,14 @@ private fun SafetyPinSetup() {
                             scope.launch {
                                 try {
                                     if (com.example.surakshanet.BuildConfig.API_BASE_URL.isNotBlank()) {
-                                        if (isChange) {
+                                        val result = if (isChange) {
                                             BackendClient.api.changeSafetyPin(
                                                 SafetyPinChangeDto(
                                                     currentPin = currentPin,
                                                     newPin = primaryPin,
                                                     confirmPin = primaryPinConfirm,
                                                     credentialType = "PRIMARY_PIN"
-                                                )
+                                                ), expected
                                             )
                                         } else {
                                             BackendClient.api.setupSafetyPin(
@@ -1646,19 +1655,21 @@ private fun SafetyPinSetup() {
                                                     pin = primaryPin,
                                                     confirmPin = primaryPinConfirm,
                                                     credentialType = "PRIMARY_PIN"
-                                                )
+                                                ), expected
                                             )
                                         }
-                                        refreshStatus()
-                                        actionMessage = "Safety PIN configured successfully!"
+                                        check(result.status == (if (isChange) "UPDATED" else "CONFIGURED"))
+                                        check(refreshStatus().hasPrimaryPin)
+                                        actionMessage = "Safety PIN confirmed by the server."
                                         currentPin = ""
                                         primaryPin = ""
                                         primaryPinConfirm = ""
                                     } else {
-                                        actionMessage = "Saved in local demo mode (Demo PIN: 123456)"
+                                        actionError = "Connect to the safety server to configure a PIN."
                                     }
                                 } catch (e: Exception) {
-                                    actionError = e.message ?: "Failed to update PIN"
+                                    if (e is kotlinx.coroutines.CancellationException) throw e
+                                    actionError = pinFailure(e)
                                 } finally {
                                     isSubmitting = false
                                 }
@@ -1698,6 +1709,7 @@ private fun SafetyPinSetup() {
 
                     OutlinedTextField(
                         value = duressPin,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                         onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) duressPin = it },
                         label = { Text("6-Digit Duress PIN") },
                         singleLine = true,
@@ -1707,6 +1719,7 @@ private fun SafetyPinSetup() {
 
                     OutlinedTextField(
                         value = duressPinConfirm,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                         onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) duressPinConfirm = it },
                         label = { Text("Confirm Duress PIN") },
                         singleLine = true,
@@ -1716,7 +1729,7 @@ private fun SafetyPinSetup() {
 
                     Action(
                         label = if (isSubmitting) "Saving Duress PIN..." else "Save Duress PIN",
-                        enabled = !isSubmitting && duressPin.length == 6 && duressPinConfirm.length == 6,
+                        enabled = status != null && !isLoadingStatus && !isSubmitting && duressPin.length == 6 && duressPinConfirm.length == 6,
                         click = {
                             val valErr = validatePin(duressPin)
                             if (valErr != null) {
@@ -1733,22 +1746,23 @@ private fun SafetyPinSetup() {
                             scope.launch {
                                 try {
                                     if (com.example.surakshanet.BuildConfig.API_BASE_URL.isNotBlank()) {
-                                        BackendClient.api.setupSafetyPin(
+                                        val result = BackendClient.api.setupSafetyPin(
                                             SafetyPinSetupDto(
                                                 pin = duressPin,
                                                 confirmPin = duressPinConfirm,
                                                 credentialType = "DURESS_PIN"
-                                            )
+                                            ), expected
                                         )
-                                        refreshStatus()
+                                        check(result.status == "CONFIGURED" && refreshStatus().hasDuressPin)
                                         actionMessage = "Duress PIN configured successfully!"
                                         duressPin = ""
                                         duressPinConfirm = ""
                                     } else {
-                                        actionMessage = "Saved in local demo mode"
+                                        actionError = "Connect to the safety server to configure a PIN."
                                     }
                                 } catch (e: Exception) {
-                                    actionError = e.message ?: "Failed to set Duress PIN"
+                                    if (e is kotlinx.coroutines.CancellationException) throw e
+                                    actionError = pinFailure(e)
                                 } finally {
                                     isSubmitting = false
                                 }

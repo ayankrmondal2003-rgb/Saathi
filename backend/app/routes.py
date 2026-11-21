@@ -431,6 +431,10 @@ async def handle_incident_ws(websocket: WebSocket, incident_id: UUID, ticket: st
             await websocket.close(code=1008, reason="WSS required")
             return
 
+    authorization = websocket.headers.get("authorization")
+    if authorization:
+        scheme, _, value = authorization.partition(" ")
+        ticket = value if scheme.lower() == "ticket" else None
     if not ticket:
         await websocket.close(code=1008, reason="Ticket required")
         return

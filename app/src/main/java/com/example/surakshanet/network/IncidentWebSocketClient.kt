@@ -209,7 +209,12 @@ class IncidentWebSocketClient(
         var backoffMs = 1000L
         val maxBackoffMs = 30000L
 
+        var failures = 0
         while (scope.isActive && !isClosedByUser.get()) {
+            if (failures++ >= 6) {
+                _state.value = WsConnectionState.DISCONNECTED
+                break
+            }
             val currentState = _state.value
             if (currentState == WsConnectionState.ACCESS_REVOKED || currentState == WsConnectionState.INCIDENT_CLOSED) {
                 break
@@ -234,8 +239,8 @@ class IncidentWebSocketClient(
 
             val fullUrl = com.example.surakshanet.BuildConfig.API_BASE_URL.toHttpUrl()
                 .newBuilder().addPathSegments("api/ws/incidents").addPathSegment(incidentId)
-                .addQueryParameter("ticket", ticket.ticket).build()
-            val request = Request.Builder().url(fullUrl)
+                .build()
+            val request = Request.Builder().url(fullUrl).header("Authorization", "Ticket ${ticket.ticket}")
                 .build()
 
             val socketCompleted = CompletableDeferred<Unit>()
@@ -254,6 +259,7 @@ class IncidentWebSocketClient(
                     if (envelope.get("incident_id")?.asString != incidentId) return
                     val event = RealtimeIncidentEvent.parse(text) ?: return
                     val sequence = envelope.get("sequence")?.asLong ?: return
+                    if (event is RealtimeIncidentEvent.IncidentSnapshotEvent) failures = 0
                     val terminal = event is RealtimeIncidentEvent.AccessRevokedEvent || event is RealtimeIncidentEvent.IncidentClosedEvent
                     if (!terminal && sequence <= lastSequence) return
                     lastSequence = sequence

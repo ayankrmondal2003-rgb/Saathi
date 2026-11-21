@@ -1428,6 +1428,7 @@ fun SurakshaPinPad(
     expectedPin: String? = null,
     isVerifying: Boolean = false,
     errorMessage: String? = null,
+    notice: String? = null,
     cooldownSeconds: Int = 0,
     onPinSubmit: ((String) -> Unit)? = null,
     onPinSuccess: (() -> Unit)? = null,
@@ -1494,6 +1495,8 @@ fun SurakshaPinPad(
             color = colors.textSecondary,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
+
+        if (notice != null) Text(notice, color = colors.textPrimary)
 
         // PIN Indicator Dots
         Row(

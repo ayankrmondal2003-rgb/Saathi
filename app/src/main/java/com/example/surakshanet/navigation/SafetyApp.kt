@@ -331,7 +331,9 @@ private fun MainGraph(
                                 scope.launch {
                                     com.example.surakshanet.notification.DeviceRepository.get(context).unregisterDevice()
                                 }
-                                vm.end()
+                                if (state.incident?.status == IncidentStatus.ACTIVE) {
+                                    android.widget.Toast.makeText(context, "Signing out stops local sharing. Your server incident remains open until closure is confirmed.", android.widget.Toast.LENGTH_LONG).show()
+                                }
                                 logout()
                             },
                             diagnostics = if (debug) ({ nav.navigate("Diagnostics") }) else null,
