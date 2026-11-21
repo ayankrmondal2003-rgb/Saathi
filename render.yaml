@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: surakshanet-api
+    runtime: docker
+    rootDir: backend
+    plan: 0.5c-512mb
+    region: singapore
+    healthCheckPath: /ready
+    preDeployCommand: sh render-migrate.sh
+    dockerCommand: sh -c 'exec uvicorn app.main:create_app --factory --host 0.0.0.0 --port "$PORT" --workers 2 --log-level warning --no-access-log'
+    envVars:
+      - key: DATABASE_URL
+        # Owner supplies the existing database's internal connection URL privately.
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          name: surakshanet-kv
+          type: keyvalue
+          property: connectionString
+      # Synthetic fixes are supported. The API and outbox enforce the test UID allowlist.
+      - key: ENVIRONMENT
+        value: development
+      - key: FIREBASE_PROJECT_ID
+        value: surakshanet-c4ec1
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /etc/secrets/firebase-admin.json
+      - key: TEST_ACCOUNT_UIDS
+        sync: false
+  - type: keyvalue
+    name: surakshanet-kv
+    region: singapore
+    plan: 256mb
+    ipAllowList: []
+    maxmemoryPolicy: noeviction

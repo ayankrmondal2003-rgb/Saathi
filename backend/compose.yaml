@@ -1,0 +1,61 @@
+services:
+  db:
+    image: postgis/postgis:16-3.5
+    environment:
+      POSTGRES_USER: suraksha
+      POSTGRES_DB: suraksha_dev
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-suraksha_dev_pass}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - development_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U suraksha -d suraksha_dev"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:56379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  worker1:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://suraksha:${POSTGRES_PASSWORD:-suraksha_dev_pass}@db:5432/suraksha_dev
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: development
+      FIREBASE_PROJECT_ID: surakshanet-dev
+      WORKER_ID: worker-1
+    ports:
+      - "127.0.0.1:8001:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker2:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://suraksha:${POSTGRES_PASSWORD:-suraksha_dev_pass}@db:5432/suraksha_dev
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: development
+      FIREBASE_PROJECT_ID: surakshanet-dev
+      WORKER_ID: worker-2
+    ports:
+      - "127.0.0.1:8002:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  development_db:

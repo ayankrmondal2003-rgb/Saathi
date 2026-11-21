@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.SurakshaNet" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowSplashScreenBackground">@color/brand_plate</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/brand_foreground</item>
+    </style>
+</resources>

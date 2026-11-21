@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "710446729837",
+    "project_id": "surakshanet-c4ec1",
+    "storage_bucket": "surakshanet-c4ec1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:710446729837:android:ef7cb89ea5a15eee55cd64",
+        "android_client_info": {
+          "package_name": "com.example.surakshanet"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBDyHXxtJ_RTzs7F9NsBIyF4yRCxunTu_A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

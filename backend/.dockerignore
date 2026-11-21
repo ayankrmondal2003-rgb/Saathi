@@ -1,0 +1,10 @@
+**
+!app/
+!app/**/*.py
+!app/**/
+!alembic/
+!alembic/**/
+!alembic/**/*.py
+!alembic.ini
+!requirements.txt
+!render-migrate.sh
