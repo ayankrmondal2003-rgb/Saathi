@@ -2,7 +2,7 @@
 import asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from app.config import Settings
+from app.config import load_settings
 
 
 async def cleanup(db, settings, batch=250):
@@ -44,7 +44,7 @@ async def cleanup(db, settings, batch=250):
 
 
 async def main():
-    settings = Settings()
+    settings = load_settings()
     engine = create_async_engine(settings.database_url.get_secret_value(), hide_parameters=True)
     try:
         async with async_sessionmaker(engine).begin() as db:

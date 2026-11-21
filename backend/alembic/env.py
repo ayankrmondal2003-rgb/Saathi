@@ -1,7 +1,7 @@
 import asyncio
 from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
-from app.config import Settings
+from app.config import ConfigurationError, load_settings
 from app.database.v1 import metadata
 
 
@@ -21,7 +21,7 @@ def migrate(connection):
 
 async def run():
     print('[startup] Validating migration settings and connecting to PostgreSQL', flush=True)
-    engine = create_async_engine(Settings().database_url.get_secret_value(), hide_parameters=True)
+    engine = create_async_engine(load_settings().database_url.get_secret_value(), hide_parameters=True)
     try:
         async with engine.connect() as connection:
             await connection.run_sync(migrate)
@@ -40,6 +40,8 @@ elif context.config.attributes.get("connection") is not None:
 else:
     try:
         asyncio.run(run())
+    except ConfigurationError:
+        raise
     except Exception as error:
         if context.get_x_argument(as_dictionary=True).get("ensure_postgis") != "true":
             raise

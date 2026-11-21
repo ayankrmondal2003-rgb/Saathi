@@ -12,13 +12,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from app.config import Settings
+from app.config import load_settings
 from app.routes import router, ws_router
 from app.services.realtime import hub
 
 
 def create_app(settings=None, *, initialize_firebase=True):
-    settings = settings or Settings()
+    settings = settings or load_settings()
     if os.getenv("FIREBASE_AUTH_EMULATOR_HOST") and settings.environment != "test":
         raise RuntimeError("Auth emulator requires an isolated test deployment")
     if not initialize_firebase and settings.environment != "test":

@@ -1,5 +1,14 @@
 # Controlled deployment settings
 
+When startup reports `Invalid settings`, correct the named field in the Render web service's Environment tab. The text in parentheses is the validation rule. An index such as `TEST_ACCOUNT_UIDS[0]` identifies an array element. Field diagnostics omit rejected values.
+
+- **DATABASE_URL (postgres_url)** — copy the complete Postgres Internal Database URL, including its database path, into the private field. The server accepts postgres, postgresql and postgresql+asyncpg schemes and normalizes the first two for asyncpg.
+- **TEST_ACCOUNT_UIDS (json_invalid or json_array)** — enter a JSON array directly. `[]` is valid and denies all test users. For the rehearsal enter a JSON array of authorized UID strings. Avoid shell quotes around the whole array in the dashboard.
+- **ENVIRONMENT (literal_error)** — use `development` for the controlled demo.
+- **FIREBASE_PROJECT_ID (missing or string_too_short)** — set the project ID listed below. The credential path has its own setting.
+- **REDIS_URL (redis_url)** — restore the private Key Value connectionString binding, including the provider-issued scheme.
+
+
 | Setting | Source and handling |
 |---|---|
 | DATABASE_URL | Owner supplies the existing surakshanet_db Internal Database URL privately at the Blueprint prompt. Settings normalizes the PostgreSQL scheme for asyncpg. Alembic enables PostGIS through that same connection before applying migrations. |
