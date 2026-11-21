@@ -144,11 +144,11 @@ interface BackendApi {
     @POST("api/incidents/{id}/ws-ticket") suspend fun wsTicket(@Path("id") id: String): WsTicketDto
     @GET("api/incidents/{id}/snapshot") suspend fun snapshot(@Path("id") id: String): IncidentSnapshotDto
     @PUT("api/incidents/{id}/responders/status") suspend fun updateResponderStatus(@Path("id") id: String, @Body status: ResponderStatusUpdateDto): StatusDto
-    @POST("api/security/safety-pin/setup") suspend fun setupSafetyPin(@Body request: SafetyPinSetupDto): StatusDto
+    @POST("api/security/safety-pin/setup") suspend fun setupSafetyPin(@Body request: SafetyPinSetupDto, @Tag expected: ExpectedAccount? = null): StatusDto
     @POST("api/security/safety-pin/change") suspend fun changeSafetyPin(@Body request: SafetyPinChangeDto): StatusDto
-    @GET("api/security/safety-pin/status") suspend fun safetyPinStatus(): SafetyPinStatusDto
-    @POST("api/security/safety-pin/recover") suspend fun recoverSafetyPin(@Body request: SafetyPinRecoveryDto): StatusDto
-    @POST("api/incidents/{id}/resolve") suspend fun resolveIncident(@Path("id") id: String, @Body request: IncidentResolutionRequestDto): IncidentResolutionResponseDto
+    @GET("api/security/safety-pin/status") suspend fun safetyPinStatus(@Tag expected: ExpectedAccount? = null): SafetyPinStatusDto
+    @POST("api/security/safety-pin/recover") suspend fun recoverSafetyPin(@Body request: SafetyPinRecoveryDto, @Tag expected: ExpectedAccount? = null): StatusDto
+    @POST("api/incidents/{id}/resolve") suspend fun resolveIncident(@Path("id") id: String, @Body request: IncidentResolutionRequestDto, @Tag expected: ExpectedAccount? = null): IncidentResolutionResponseDto
 }
 
 object BackendClient {

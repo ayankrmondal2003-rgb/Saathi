@@ -33,7 +33,19 @@ import com.example.surakshanet.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
-import java.io.IOException
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import com.example.surakshanet.network.ExpectedAccount
+import com.example.surakshanet.network.SafetyPinSetupDto
+import com.example.surakshanet.network.SafetyPinStatusDto
+import com.example.surakshanet.network.MISSING_PRIMARY_PIN
+import com.example.surakshanet.network.pinFailure
+import com.example.surakshanet.network.resolveWithPin
+import com.google.firebase.auth.EmailAuthProvider
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.tasks.await
 
 @Composable
 fun Home(state: DemoState, start: (Boolean) -> Unit, contacts: () -> Unit) {
@@ -674,6 +686,22 @@ fun ActiveIncident(
     }
 
     // Safety PIN Deactivation Dialog
+    var pinStatus by remember(uid) { mutableStateOf<SafetyPinStatusDto?>(null) }
+    var statusAttempt by remember { mutableIntStateOf(0) }
+    LaunchedEffect(showPinDialog, shared, uid, statusAttempt) {
+        if (showPinDialog && shared) {
+            pinStatus = null
+            try {
+                val status = BackendClient.api.safetyPinStatus(ExpectedAccount(uid))
+                pinStatus = status
+                cooldownSeconds = status.retryAfterSeconds
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                pinError = pinFailure(e)
+            }
+        }
+    }
     if (showPinDialog) {
         Dialog(
             onDismissRequest = {
@@ -684,14 +712,26 @@ fun ActiveIncident(
             },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            GlassSurface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+            Surface(
+                modifier = Modifier.fillMaxWidth().imePadding().padding(16.dp),
                 shape = RoundedCornerShape(28.dp),
-                elevation = 16.dp
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface
             ) {
-                SurakshaPinPad(
+                if (shared && (pinStatus?.hasPrimaryPin != true || pinError == MISSING_PRIMARY_PIN)) {
+                    Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("End SOS", style = MaterialTheme.typography.titleLarge)
+                        if (pinStatus?.hasPrimaryPin == false || pinError == MISSING_PRIMARY_PIN) {
+                            Text(MISSING_PRIMARY_PIN)
+                            Button(onClick = { showPinDialog = false; showRecoveryDialog = true }) { Text("Set Safety PIN") }
+                        } else {
+                            Text(pinError ?: "Checking your Safety PIN…")
+                            if (pinError != null) TextButton(onClick = { pinError = null; statusAttempt++ }) { Text("Retry") }
+                        }
+                        TextButton(onClick = { showPinDialog = false }) { Text("Keep SOS active") }
+                    }
+                } else SurakshaPinPad(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
                     pinLength = 6,
                     isVerifying = isVerifying,
@@ -710,13 +750,12 @@ fun ActiveIncident(
                                         isVerifying = false
                                         return@launch
                                     }
-                                    val response = BackendClient.api.resolveIncident(
-                                        id = targetId,
-                                        request = IncidentResolutionRequestDto(pin = pin, reason = "USER_RESOLVED")
-                                    )
+                                    val response = resolveWithPin(targetId) {
+                                        BackendClient.api.resolveIncident(targetId, IncidentResolutionRequestDto(pin), ExpectedAccount(uid))
+                                    }
                                     when (response.resolutionStatus) {
                                         "CONFIRMED" -> {
-                                            repo.close()
+                                            if (repo.sync.getActiveIncidentId(uid) != targetId) return@launch
                                             repo.sync.clearActiveIncident(uid)
                                             showPinDialog = false
                                             end()
@@ -731,43 +770,34 @@ fun ActiveIncident(
                                     }
                                 } else {
                                     if (pin == "123456" || pin == "1234") {
-                                        LocalTrackingRepository.get(context).close()
                                         showPinDialog = false
                                         end()
                                     } else {
                                         pinError = "Incorrect Demo PIN (Use 123456 in demo mode)"
                                     }
                                 }
-                            } catch (e: HttpException) {
-                                when (e.code()) {
-                                    403 -> {
-                                        pinError = "Incorrect Safety PIN. Incident remains active."
-                                    }
-                                    429 -> {
-                                        cooldownSeconds = 300
-                                        pinError = "Too many failed attempts. Temporary lockout for 5 minutes."
-                                    }
-                                    else -> {
-                                        pinError = "Server resolution rejected (${e.code()}). SOS remains active."
-                                    }
-                                }
-                            } catch (e: IOException) {
-                                pinError = "Network offline. Server closure could not be verified. SOS remains active."
+                            } catch (e: CancellationException) {
+                                throw e
                             } catch (e: Exception) {
-                                pinError = e.message ?: "Resolution failed. SOS remains active."
+                                pinError = pinFailure(e)
+                                if (e is HttpException && e.code() == 429) {
+                                    statusAttempt++
+                                }
                             } finally {
                                 isVerifying = false
                             }
                         }
                     },
                     onKeepActive = {
-                        showPinDialog = false
+                        if (!isVerifying) showPinDialog = false
                         pinError = null
                     },
-                    onForgotPin = {
-                        showPinDialog = false
-                        showRecoveryDialog = true
-                    }
+                    onForgotPin = if (shared) ({
+                        if (!isVerifying) {
+                            showPinDialog = false
+                            showRecoveryDialog = true
+                        }
+                    }) else null
                 )
             }
         }
@@ -775,21 +805,22 @@ fun ActiveIncident(
 
     // Safety PIN Recovery Dialog
     if (showRecoveryDialog) {
+        val enroll = pinStatus?.hasPrimaryPin == false || pinError == MISSING_PRIMARY_PIN
+        var isRecovering by remember { mutableStateOf(false) }
         Dialog(
-            onDismissRequest = { showRecoveryDialog = false },
+            onDismissRequest = { if (!isRecovering) showRecoveryDialog = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            GlassSurface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+            Surface(
+                modifier = Modifier.fillMaxWidth().imePadding().padding(16.dp),
                 shape = RoundedCornerShape(28.dp),
-                elevation = 16.dp
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface
             ) {
-                var newPin by rememberSaveable { mutableStateOf("") }
-                var confirmPin by rememberSaveable { mutableStateOf("") }
+                var newPin by remember { mutableStateOf("") }
+                var confirmPin by remember { mutableStateOf("") }
                 var recoveryError by rememberSaveable { mutableStateOf<String?>(null) }
-                var isRecovering by remember { mutableStateOf(false) }
+                var password by remember { mutableStateOf("") }
 
                 Column(
                     modifier = Modifier
@@ -815,20 +846,30 @@ fun ActiveIncident(
                     }
 
                     Text(
-                        text = "Safety PIN Recovery",
+                        text = if (enroll) "Set Safety PIN" else "Recover Safety PIN",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = colors.textPrimary
                     )
 
                     Text(
-                        text = "Resetting your Safety PIN updates your stored credential without silently canceling this emergency. Enter your new 6-digit PIN below.",
+                        text = "Your SOS stays active. After saving, enter your new six-digit PIN to end it.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = colors.textSecondary,
                         textAlign = TextAlign.Center
                     )
 
+                    if (!enroll) OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Account password") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        singleLine = true, modifier = Modifier.fillMaxWidth()
+                    )
                     OutlinedTextField(
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         value = newPin,
                         onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) newPin = it },
                         label = { Text("New 6-Digit PIN") },
@@ -838,6 +879,8 @@ fun ActiveIncident(
                     )
 
                     OutlinedTextField(
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         value = confirmPin,
                         onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) confirmPin = it },
                         label = { Text("Confirm New PIN") },
@@ -856,8 +899,8 @@ fun ActiveIncident(
                     }
 
                     Action(
-                        label = if (isRecovering) "Resetting PIN..." else "Reset Safety PIN",
-                        enabled = !isRecovering && newPin.length == 6 && confirmPin.length == 6,
+                        label = if (isRecovering) "Saving…" else if (enroll) "Set Safety PIN" else "Verify password and reset PIN",
+                        enabled = !isRecovering && (enroll || password.isNotEmpty()) && newPin.length == 6 && confirmPin.length == 6,
                         click = {
                             if (newPin != confirmPin) {
                                 recoveryError = "PIN confirmation does not match"
@@ -867,16 +910,31 @@ fun ActiveIncident(
                             recoveryError = null
                             scope.launch {
                                 try {
-                                    if (shared) {
-                                        BackendClient.api.recoverSafetyPin(
-                                            SafetyPinRecoveryDto(newPin = newPin, confirmPin = confirmPin)
-                                        )
+                                    val expected = ExpectedAccount(uid)
+                                    if (enroll) {
+                                        check(BackendClient.api.setupSafetyPin(SafetyPinSetupDto(newPin, confirmPin), expected).status == "CONFIGURED")
+                                    } else {
+                                        val user = FirebaseAuth.getInstance().currentUser
+                                        val email = user?.email
+                                        if (user == null || user.uid != uid || email == null) {
+                                            recoveryError = "Sign in with the incident owner's account."
+                                            return@launch
+                                        }
+                                        user.reauthenticate(EmailAuthProvider.getCredential(email, password)).await()
+                                        password = ""
+                                        user.getIdToken(true).await()
+                                        check(BackendClient.api.recoverSafetyPin(SafetyPinRecoveryDto(newPin, confirmPin), expected).status == "RECOVERED")
                                     }
+                                    pinStatus = null
                                     showRecoveryDialog = false
                                     showPinDialog = true
-                                    pinError = "PIN reset successfully. Enter your new PIN to deactivate SOS."
+                                    pinError = null
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: com.google.firebase.FirebaseException) {
+                                    recoveryError = "Account verification failed. Check your password and connection, then retry."
                                 } catch (e: Exception) {
-                                    recoveryError = e.message ?: "Recovery failed"
+                                    recoveryError = pinFailure(e)
                                 } finally {
                                     isRecovering = false
                                 }
@@ -886,7 +944,7 @@ fun ActiveIncident(
 
                     SurakshaOutlinedButton(
                         label = "Cancel",
-                        click = { showRecoveryDialog = false }
+                        click = { if (!isRecovering) showRecoveryDialog = false }
                     )
                 }
             }

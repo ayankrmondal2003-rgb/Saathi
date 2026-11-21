@@ -33,7 +33,7 @@ def client_env():
     def who(request: Request):
         actor = request.headers.get("X-Test-Actor", "victim")
         settings.test_account_uids.add(prefix + actor)
-        return Identity(prefix + actor, f"{actor}@example.invalid", actor, True, int(datetime.now(timezone.utc).timestamp()))
+        return Identity(prefix + actor, f"{actor}@example.invalid", actor, True, int(datetime.now(timezone.utc).timestamp()) - int(request.headers.get("X-Test-Auth-Age", "0")))
 
     app.dependency_overrides[identity] = who
     with TestClient(app) as client:
@@ -163,7 +163,15 @@ def test_unenrolled_user_cannot_resolve(client_env):
     r = client.post(f"/api/incidents/{inc_id}/resolve", headers={"X-Test-Actor": "victim_no_pin"},
                     json={"pin": "839162"})
     assert r.status_code == 400
-    assert "not enrolled" in r.text.lower()
+    assert r.json()["detail"] == "Safety PIN not enrolled. Configure your Safety PIN in settings first."
+    headers = {"X-Test-Actor": "victim_no_pin"}
+    assert not client.get("/api/security/safety-pin/status", headers=headers).json()["has_primary_pin"]
+    assert client.post("/api/security/safety-pin/setup", headers=headers,
+                       json={"pin": "839162", "confirm_pin": "839162"}).status_code == 200
+    assert client.get("/api/security/safety-pin/status", headers=headers).json()["has_primary_pin"]
+    assert client.get(f"/api/incidents/{inc_id}/snapshot", headers=headers).json()["status"] == "ACTIVE"
+    resolved = client.post(f"/api/incidents/{inc_id}/resolve", headers=headers, json={"pin": "839162"})
+    assert resolved.json()["resolution_status"] == "CONFIRMED"
 
 
 def test_non_owner_and_responder_cannot_resolve(client_env):
@@ -302,6 +310,10 @@ def test_pin_recovery_does_not_close_incident(client_env):
                            json={"pin": "716253", "confirm_pin": "716253"})
     assert repeated.status_code == 409
 
+    stale = client.post("/api/security/safety-pin/recover",
+                        headers={"X-Test-Actor": "victim", "X-Test-Auth-Age": "600"},
+                        json={"new_pin": "716253", "confirm_pin": "716253"})
+    assert stale.status_code == 403
     # Perform PIN recovery
     r = client.post("/api/security/safety-pin/recover", headers={"X-Test-Actor": "victim"},
                     json={"new_pin": "716253", "confirm_pin": "716253"})

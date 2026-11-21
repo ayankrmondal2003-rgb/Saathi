@@ -304,6 +304,7 @@ async def resolve_incident_with_pin(db, hub, incident_id: UUID, user, pin: str, 
                 created_at=now
             ))
         await service.audit(db, incident_id, user.id, "INCIDENT_RESOLVED_WITH_SAFETY_PIN")
+        await db.commit()
         await hub.close_incident(incident_id, reason="Incident resolved with Safety PIN")
 
         return {

@@ -1461,9 +1461,9 @@ fun SurakshaPinPad(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(20.dp),
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Box(
             modifier = Modifier
@@ -1605,7 +1605,9 @@ fun SurakshaPinPad(
                                             enteredPin += key
                                             if (enteredPin.length == pinLength) {
                                                 if (onPinSubmit != null) {
-                                                    onPinSubmit(enteredPin)
+                                                    val submitted = enteredPin
+                                                    enteredPin = ""
+                                                    onPinSubmit(submitted)
                                                 } else if (expectedPin != null) {
                                                     if (enteredPin == expectedPin || expectedPin.isBlank()) {
                                                         onPinSuccess?.invoke()
@@ -1621,7 +1623,13 @@ fun SurakshaPinPad(
                                     }
                                 }
                             },
-                            modifier = Modifier.size(66.dp),
+                            modifier = Modifier.size(52.dp).semantics {
+                                contentDescription = when (key) {
+                                    "DEL" -> "Delete last digit"
+                                    "CLEAR" -> "Clear PIN"
+                                    else -> "Digit $key"
+                                }
+                            },
                             shape = CircleShape,
                             elevation = if (isLocked) 0.dp else 4.dp,
                             backgroundColor = if (isLocked) colors.glassSurfaceSubtle.copy(alpha = 0.25f) else colors.glassSurface
@@ -1658,7 +1666,7 @@ fun SurakshaPinPad(
 
         // Forgot PIN Link
         if (onForgotPin != null) {
-            TextButton(onClick = onForgotPin) {
+            TextButton(onClick = onForgotPin, enabled = !isVerifying) {
                 Text(
                     text = "Forgot Safety PIN?",
                     style = MaterialTheme.typography.labelMedium,
