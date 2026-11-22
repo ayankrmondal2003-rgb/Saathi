@@ -8,9 +8,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.surakshanet.data.DemoState
@@ -54,6 +57,7 @@ class HomeLayoutTest {
                 activity.setContent {
                     SurakshaNetTheme {
                         com.example.surakshanet.ui.SurakshaPinPad(
+                            modifier = Modifier.height(500.dp).safeDrawingPadding().verticalScroll(rememberScrollState()),
                             onPinSubmit = { submitted.set(it) }, onKeepActive = {},
                             onForgotPin = { recovery.set(true) }
                         )
@@ -61,13 +65,16 @@ class HomeLayoutTest {
                 }
             }
             fun tap(label: String) {
-                val node = awaitNode(label) { it.contentDescription == label || it.text == label }
+                val node = awaitNode(label) { it.contentDescription?.toString() == label || it.text?.toString() == label }
                 assertTrue(clickable(node).performAction(AccessibilityNodeInfo.ACTION_CLICK))
                 instrumentation.waitForIdleSync()
             }
             listOf("Digit 8", "Digit 2", "Delete last digit", "Digit 3", "Digit 9",
                 "Digit 1", "Digit 6", "Digit 2").forEach(::tap)
             org.junit.Assert.assertEquals("839162", submitted.get())
+            val scroll = awaitNode("PIN scroll container") { it.isScrollable }
+            scroll.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+            instrumentation.waitForIdleSync()
             tap("Forgot Safety PIN?")
             assertTrue(recovery.get())
         }

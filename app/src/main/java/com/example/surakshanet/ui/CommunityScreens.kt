@@ -770,7 +770,12 @@ fun SafetyReadinessSection() {
     val tokenState by deviceRepo.tokenState.collectAsStateWithLifecycle()
     var permissionStatus by remember { mutableStateOf(com.example.surakshanet.notification.NotificationHelper.hasNotificationPermission(context)) }
     var channelStatus by remember { mutableStateOf(com.example.surakshanet.notification.NotificationHelper.getChannelStatus(context)) }
-    var lastAlertTs by remember { mutableStateOf(com.example.surakshanet.notification.SosFirebaseMessagingService.getLastAlertTimestamp(context)) }
+    val alertTimestamps = remember(context) {
+        com.example.surakshanet.notification.SosFirebaseMessagingService.lastAlertTimestamps(context)
+    }
+    val lastAlertTs by alertTimestamps.collectAsStateWithLifecycle(
+        initialValue = com.example.surakshanet.notification.SosFirebaseMessagingService.getLastAlertTimestamp(context)
+    )
     var testResult by rememberSaveable { mutableStateOf<String?>(null) }
     var isTesting by rememberSaveable { mutableStateOf(false) }
     var isRefreshingToken by rememberSaveable { mutableStateOf(false) }
@@ -780,7 +785,6 @@ fun SafetyReadinessSection() {
     LaunchedEffect(Unit) {
         permissionStatus = com.example.surakshanet.notification.NotificationHelper.hasNotificationPermission(context)
         channelStatus = com.example.surakshanet.notification.NotificationHelper.getChannelStatus(context)
-        lastAlertTs = com.example.surakshanet.notification.SosFirebaseMessagingService.getLastAlertTimestamp(context)
         deviceRepo.refreshAndRegister()
     }
 

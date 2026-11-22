@@ -1,3 +1,47 @@
+# Phase 20 verification
+
+Phase 20 remains PARTIAL until a controlled cloud incident is exercised through acceptance, movement, PIN closure and handset GPS shutdown with consenting participants.
+
+| Check | Result |
+|---|---|
+| Source versions | VERIFIED. Local master and remote master were both 672191e562d891dcb53f0c4f7ed1a94dcd0f72ba before the final receipt-display fix. The earlier baseline was c14adbb9c12d1ea11b79becae4c3c2bc532d409f. |
+| Render revision | BLOCKED. No actual deployed SHA was supplied. The supplied text was a placeholder. Health probes do not identify the deployed revision. |
+| Deployed health | VERIFIED. /health and /ready returned HTTP 200 on repeated explicit checks. |
+| Backend regressions | VERIFIED. Fresh isolated PostGIS 3.7.0 at migration 0007 and Redis 7. All 65 tests passed with 26 deprecation warnings in 29.61 seconds. The temporary database and Redis were stopped afterward. |
+| Lifecycle coverage | VERIFIED in isolated tests. Includes moving A–B–C–D discovery, radius eligibility, accepted access after movement, ownership, decline and expiry, outbox processing, two-worker WebSockets, PIN enrollment/recovery/lockout, idempotent closure and revocation. Firebase identities and senders in these tests are fixtures. |
+| Android JVM | VERIFIED. 65 tests passed, including bounded WebSocket retries and matching assistance-status responses. |
+| Samsung installation | VERIFIED. Debug APK installed successfully on SM-E625F. Both old and new versions report 1.0 / code 1, so version numbers alone cannot identify the build. The old APK SHA-256 began 3126a9ab; the initial Phase 20 APK began cdd8d904. |
+| Samsung authentication and messaging | PARTIAL. Existing signed-in verified profile, registered device state and primary PIN configured were observed. A new registration, password sign-in, account switch and PIN recovery were not exercised on the handset. |
+| Samsung self-test | VERIFIED. One request timed out. A deliberate retry returned provider acceptance for one device. A fresh SurakshaNet Test Alert appeared in the tray, and tapping it returned to Profile without invitation acceptance. Sound/vibration intensity was not measured. |
+| Samsung responder incident | BLOCKED. Only one phone and one existing signed-in account were available. Genuine invitation acceptance, movement, closure and revocation on multiple phones remain unverified. |
+| Instrumentation first run | FAILED. Seven of eight tests passed. The keypad fixture omitted the production scroll container, making Forgot Safety PIN inaccessible on this screen size. The fixture now exercises scrolling, and a receipt-timestamp observer regression was added. Final rerun recorded below. |
+
+Changes in this phase are Android and documentation only. Exhausted WebSocket retries now expose OFFLINE and a manual retry action. Assistance-state changes require a matching server response. Profile receipt time now observes changes while visible. THREE_PHONE_DEMO.md removes invented account details, PIN examples, incorrect hash/ticket claims and unsupported prerequisites.
+
+## Final Samsung verification
+
+VERIFIED — Final instrumentation run: 9 tests passed in 9.459 seconds. Earlier runs exposed test-fixture accessibility problems; the fixture now uses a constrained scrollable viewport and compares accessibility text as strings. The final run covers keypad entry/deletion and recovery action, hold activation, dock scrolling, encrypted queue isolation, notification deduplication, receipt observation and service declarations. It does not prove a real cloud incident was resolved.
+
+VERIFIED — Final debug APK built and installed. The local APK and Samsung's installed base.apk have identical SHA-256: `93aeace41b6ac4ce973883b27a56c8f67517c4d5d6b29b420191e5b736ece66d`. Artifact: `app/build/outputs/apk/debug/app-debug.apk`.
+
+Files changed during Phase 20:
+
+- `app/src/main/java/com/example/surakshanet/network/IncidentWebSocketClient.kt`
+- `app/src/main/java/com/example/surakshanet/location/IncidentTrackingRepository.kt`
+- `app/src/main/java/com/example/surakshanet/ui/CommunityScreens.kt`
+- `app/src/main/java/com/example/surakshanet/notification/SosFirebaseMessagingService.kt`
+- `app/src/test/java/com/example/surakshanet/RealtimeTrackingTest.kt`
+- `app/src/androidTest/java/com/example/surakshanet/HomeLayoutTest.kt`
+- `app/src/androidTest/java/com/example/surakshanet/PhaseNineRecoveryTest.kt`
+- `THREE_PHONE_DEMO.md`
+- `TEST_RESULTS.md`
+
+No backend code or migration changes were needed in this phase. Public broadcasting and emergency dispatch remain disabled by the existing test-only controls.
+
+## Rollout gate
+
+Compare Render Events' actual successful deployment SHA with the reviewed backend revision. If outdated, obtain deployment approval and deploy the reviewed commit using the existing free Docker service, startup migration lock and private secrets. After rollout check /health and /ready, authenticated profile access, device registration, one self-test and the complete three-phone procedure. Keep test-only controls enabled. This phase has performed no cloud deployment or Git push.
+
 # Responder invitation HTTP 422 correction
 
 The isolated HTTP regression reproduced HTTP 422 with validation location `["path", "invitation_id"]` and type `uuid_parsing` when posting the device-test identifier `test-example` with the correct `{"decision":"ACCEPTED"}` body. The former TEST_ALERT payload contained a test-prefixed invitation identifier, and MainActivity routed its tap into Incoming. The original Samsung response body has not been captured.

@@ -6,6 +6,12 @@ import com.example.surakshanet.location.LocationUpdate
 import com.example.surakshanet.network.IncidentFixQueue
 import com.example.surakshanet.notification.NotificationHelper
 import java.util.UUID
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import com.example.surakshanet.notification.SosFirebaseMessagingService
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -38,6 +44,21 @@ class PhaseNineRecoveryTest {
                 assertTrue(queue.pending("fixture-a", "incident", now + 121000).isEmpty())
             }
         } finally { context.deleteDatabase(name) }
+    }
+
+    @Test fun notificationReceiptTimestampUpdatesWhileObserved() = runBlocking {
+        val original = SosFirebaseMessagingService.getLastAlertTimestamp(context)
+        val next = original + 1
+        try {
+            val values = withTimeout(5000) {
+                SosFirebaseMessagingService.lastAlertTimestamps(context).onEach {
+                    if (it == original) SosFirebaseMessagingService.saveLastAlertTimestamp(context, next)
+                }.take(2).toList()
+            }
+            assertEquals(listOf(original, next), values)
+        } finally {
+            SosFirebaseMessagingService.saveLastAlertTimestamp(context, original)
+        }
     }
 
     @Test fun duplicateInvitationDoesNotAlertAgain() {

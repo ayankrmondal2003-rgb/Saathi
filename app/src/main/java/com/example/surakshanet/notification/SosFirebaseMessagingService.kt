@@ -1,6 +1,7 @@
 package com.example.surakshanet.notification
 
 import android.content.Context
+import kotlinx.coroutines.channels.awaitClose
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.CoroutineScope
@@ -91,6 +92,19 @@ class SosFirebaseMessagingService : FirebaseMessagingService() {
                 .putLong(KEY_LAST_ALERT_TS, timestamp)
                 .apply()
         }
+
+        fun lastAlertTimestamps(context: Context): kotlinx.coroutines.flow.Flow<Long> =
+            kotlinx.coroutines.flow.callbackFlow {
+                val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                    if (key == KEY_LAST_ALERT_TS) trySend(getLastAlertTimestamp(context))
+                }
+                preferences.registerOnSharedPreferenceChangeListener(listener)
+                trySend(getLastAlertTimestamp(context))
+                awaitClose {
+                    preferences.unregisterOnSharedPreferenceChangeListener(listener)
+                }
+            }
 
         fun getLastAlertTimestamp(context: Context): Long {
             return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
