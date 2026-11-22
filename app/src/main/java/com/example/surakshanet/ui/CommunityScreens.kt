@@ -248,21 +248,22 @@ fun Incoming(invitationId: String? = null, reply: (Response) -> Unit) {
                     statusMessage = "Invitation unavailable. Open the responder inbox."
                     return@launch
                 }
-                val result = BackendClient.api.respond(id, DecisionDto(decision), account)
+                val result = confirmedInvitationResponse(decision) {
+                    BackendClient.api.respond(id, DecisionDto(decision), account)
+                }
                 if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid != uid) return@launch
                 when {
-                    result.status == "EXPIRED" -> {
+                    result == "EXPIRED" -> {
                         isExpired = true
                         statusMessage = "This invitation has expired."
                     }
-                    result.status != decision -> statusMessage = "Response unconfirmed. Refresh your inbox."
                     decision == "ACCEPTED" -> incidentId = incident
                     else -> reply(Response.DECLINED)
                 }
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                statusMessage = invitationFailure(error)
+                statusMessage = invitationFailure(error, debug = com.example.surakshanet.BuildConfig.DEBUG)
             } finally {
                 isBusy = false
             }

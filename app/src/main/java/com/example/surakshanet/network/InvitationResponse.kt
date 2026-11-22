@@ -15,7 +15,17 @@ internal fun invitationFromAlert(type: String?, invitation: String?, incident: S
     return canonicalId(invitation)?.takeUnless { it == incidentId }
 }
 
-internal fun invitationFailure(error: Exception): String {
+internal suspend fun confirmedInvitationResponse(
+    decision: String,
+    submit: suspend () -> StatusDto
+): String {
+    require(decision == "ACCEPTED" || decision == "DECLINED")
+    val status = submit().status
+    check(status == decision || status == "EXPIRED")
+    return status
+}
+
+internal fun invitationFailure(error: Exception, debug: Boolean = false): String {
     if (error is IOException) return "Cannot reach the server. Reconnect and retry."
     if (error !is HttpException) return "The server response could not be confirmed. Refresh your invitations."
     val detail = runCatching {
@@ -38,7 +48,8 @@ internal fun invitationFailure(error: Exception): String {
             else -> "The invitation has changed. Refresh your inbox."
         }
         422 -> {
-            val fields = detail?.takeIf { it.isJsonArray }?.asJsonArray?.toList().orEmpty().mapNotNull { item ->
+            val errors = detail?.takeIf { it.isJsonArray }?.asJsonArray?.toList().orEmpty()
+            val fields = errors.mapNotNull { item ->
                 val location = item.takeIf { it.isJsonObject }?.asJsonObject?.get("loc")
                 when (location?.toString()) {
                     "[\"path\",\"invitation_id\"]" -> "invitation identifier"
@@ -47,8 +58,21 @@ internal fun invitationFailure(error: Exception): String {
                     else -> null
                 }
             }.distinct()
-            if (fields.isEmpty()) "Invitation request validation failed. Refresh your inbox."
-            else "Invalid ${fields.joinToString()}. Refresh your inbox."
+            val message = if (fields.isEmpty()) "Invitation request validation failed. Refresh your inbox."
+                else "Invalid ${fields.joinToString()}. Refresh your inbox."
+            val diagnostics = if (debug) errors.mapNotNull { item ->
+                val errorObject = item.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
+                val field = when (errorObject["loc"]?.toString()) {
+                    "[\"path\",\"invitation_id\"]" -> "path.invitation_id"
+                    "[\"body\",\"decision\"]" -> "body.decision"
+                    "[\"body\"]" -> "body"
+                    else -> return@mapNotNull null
+                }
+                val type = errorObject["type"]?.takeIf { it.isJsonPrimitive }?.asString
+                if (type in setOf("uuid_parsing", "missing", "literal_error", "json_invalid", "model_attributes_type"))
+                    "$field ($type)" else "$field (validation error)"
+            }.distinct().joinToString() else ""
+            if (diagnostics.isBlank()) message else "$message\n$diagnostics"
         }
         else -> "Invitation service unavailable. Try again later."
     }

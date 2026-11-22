@@ -1406,12 +1406,12 @@ fun SurakshaMapContainer(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box(Modifier.size(8.dp).clip(CircleShape).background(colors.emergency))
-                        Text("You (Live)", style = MaterialTheme.typography.labelSmall, color = colors.textPrimary)
+                        Text("Illustrative position", style = MaterialTheme.typography.labelSmall, color = colors.textPrimary)
                     }
                     if (incidentActive) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Box(Modifier.size(8.dp).clip(CircleShape).background(colors.success))
-                            Text("Responder (En Route)", style = MaterialTheme.typography.labelSmall, color = colors.textPrimary)
+                            Text("Illustrative responder", style = MaterialTheme.typography.labelSmall, color = colors.textPrimary)
                         }
                     }
                     Text("1 km zone", style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)

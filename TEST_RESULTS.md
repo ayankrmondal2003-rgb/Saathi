@@ -1,3 +1,17 @@
+# Responder invitation HTTP 422 correction
+
+The isolated HTTP regression reproduced HTTP 422 with validation location `["path", "invitation_id"]` and type `uuid_parsing` when posting the device-test identifier `test-example` with the correct `{"decision":"ACCEPTED"}` body. The former TEST_ALERT payload contained a test-prefixed invitation identifier, and MainActivity routed its tap into Incoming. The original Samsung response body has not been captured.
+
+- VERIFIED — 65 backend tests passed with 26 deprecation warnings, fresh PostGIS 3.7.0 at migration 0007, and Redis 7. Coverage includes malformed UUID, incident UUID substituted for invitation UUID, ownership, stale responder location, expired invitations, decline without tracking access, successful acceptance and movement after acceptance.
+- VERIFIED — 63 Android JVM tests passed. Tests cover notification event and identifier validation, decision serialization, matching server confirmation, failure during decline, and sanitized validation diagnostics.
+- IMPLEMENTED — TEST_ALERT now has a separate notification_id. Only RESPONDER_INVITATION_CREATED opens invitation acceptance. Android confirms the invitation through the authenticated inbox and confirms the decision through the server. Precise coordinates come from authorized tracking.
+- IMPLEMENTED — First acceptance requires a fresh matching responder location inside the current PostGIS search radius. An existing accepted grant remains valid after the victim moves. Expired responses are repeatable.
+- PARTIAL — Debug APK built. Physical notification taps, Samsung acceptance and decline, and Render rollout require follow-up verification.
+
+Deploy the backend changes to Render and install the updated debug APK after review. Current changes were tested locally. Clear obsolete test notifications and exercise one device self-test plus a real persisted controlled responder invitation. Self-test notification taps should open the app without an acceptance workflow. Backend redeployment requires authorization.
+
+The temporary test database was stopped by the runner. Later Redis cleanup could not reach Docker Desktop because its daemon was unavailable.
+
 # Phase 19 incident lifecycle checks
 
 | Check | Evidence |
