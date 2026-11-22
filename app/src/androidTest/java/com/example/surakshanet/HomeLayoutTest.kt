@@ -49,6 +49,31 @@ class HomeLayoutTest {
     private fun clickable(node: AccessibilityNodeInfo): AccessibilityNodeInfo =
         generateSequence(node) { it.parent }.first { it.isClickable }
 
+    @Test fun maitriWelcomeButtonWorksInBothThemesOnSmallScreen() {
+        for (dark in listOf(false, true)) {
+            val starts = java.util.concurrent.atomic.AtomicInteger()
+            ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
+                scenario.onActivity { activity ->
+                    activity.setContent {
+                        Box(Modifier.height(500.dp)) {
+                            com.example.surakshanet.ui.MaitriWelcomeContent(dark) { starts.incrementAndGet() }
+                        }
+                    }
+                }
+                val scroll = awaitNode("welcome scroll") { it.isScrollable }
+                repeat(3) {
+                    scroll.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                    instrumentation.waitForIdleSync()
+                }
+                val button = clickable(awaitNode("Get started") { it.text?.toString() == "Get started" })
+                assertTrue(button.isVisibleToUser)
+                assertTrue(button.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                instrumentation.waitForIdleSync()
+                org.junit.Assert.assertEquals(1, starts.get())
+            }
+        }
+    }
+
     @Test fun keypadDeletesAndSubmitsOnceAndOpensRecovery() {
         val submitted = java.util.concurrent.atomic.AtomicReference<String>()
         val recovery = java.util.concurrent.atomic.AtomicBoolean()

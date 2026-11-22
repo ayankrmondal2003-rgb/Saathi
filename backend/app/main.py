@@ -14,6 +14,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.config import load_settings
 from app.routes import router, ws_router
+from app.circle_sharing import router as circle_router, cleanup as cleanup_circle
+from app.volunteer import router as volunteer_router
 from app.services.realtime import hub
 
 
@@ -38,6 +40,7 @@ def create_app(settings=None, *, initialize_firebase=True):
                 try:
                     async with app.state.sessions.begin() as db:
                         await tick(db, settings)
+                        await cleanup_circle(db)
                 except (SQLAlchemyError, OSError):
                     logging.getLogger("surakshanet").warning("Geofence batch unavailable")
 
@@ -106,6 +109,8 @@ def create_app(settings=None, *, initialize_firebase=True):
         return response
 
     app.include_router(router)
+    app.include_router(circle_router)
+    app.include_router(volunteer_router)
     app.include_router(ws_router)
 
     @app.get("/health")

@@ -170,6 +170,13 @@ class SafetyViewModel(app: Application) : AndroidViewModel(app) {
         save(updated)
     }
 
+    fun toggleSosAlert(id: String, enabled: Boolean) {
+        val updated = current.contacts.map {
+            if (it.id == id) it.copy(notifyOnSos = enabled, updatedAt = System.currentTimeMillis()) else it
+        }
+        save(updated)
+    }
+
     fun addOrUpdateContact(
         id: String?,
         name: String,

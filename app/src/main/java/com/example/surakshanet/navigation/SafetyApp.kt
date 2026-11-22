@@ -35,9 +35,9 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
 internal val tabs = listOf(
-    NavTab("Home", "SOS", Icons.Rounded.Shield),
-    NavTab("Responder", "Responder", Icons.Rounded.Radar),
-    NavTab("Contacts", "Contacts", Icons.Rounded.People),
+    NavTab("Home", "Home", Icons.Rounded.Home),
+    NavTab("Contacts", "Circle", Icons.Rounded.People),
+    NavTab("Responder", "Responder", Icons.Rounded.Shield),
     NavTab("Profile", "Profile", Icons.Rounded.Person)
 )
 
@@ -100,46 +100,94 @@ private fun SafetyNavigation(vm: SafetyViewModel, pendingInvitationId: String?, 
                     var synced by remember { mutableStateOf(false) }
                     var attempt by remember { mutableIntStateOf(0) }
                     var failure by remember { mutableStateOf<String?>(null) }
+                    var isColdStart by remember { mutableStateOf(false) }
                     LaunchedEffect(attempt) {
                         failure = null
+                        isColdStart = false
+                        val timer = kotlinx.coroutines.CoroutineScope(coroutineContext).launch {
+                            kotlinx.coroutines.delay(5000)
+                            isColdStart = true
+                        }
                         try {
                             com.example.surakshanet.network.BackendClient.api.profile(
                                 com.example.surakshanet.network.ExpectedAccount(identity.uid)
                             )
+                            timer.cancel()
                             synced = true
                         } catch (e: kotlinx.coroutines.CancellationException) {
+                            timer.cancel()
                             throw e
                         } catch (e: retrofit2.HttpException) {
+                            timer.cancel()
                             failure = when (e.code()) {
-                                401 -> "Your session expired. Sign in again."
-                                403 -> "This verified account needs access to the controlled test."
-                                else -> "Profile sync failed (HTTP ${e.code()}). Retry when the server is ready."
+                                401 -> "Firebase session expired (HTTP 401). Sign out and sign in again."
+                                403 -> "Backend test allowlist denial (HTTP 403). Contact admin to add your UID (${identity.uid}) to TEST_ACCOUNT_UIDS."
+                                else -> "Profile sync failed (HTTP ${e.code()}). Server returned an error."
                             }
                         } catch (e: java.io.IOException) {
-                            failure = "Unable to reach the profile service. Check the private network and retry."
+                            timer.cancel()
+                            failure = when {
+                                e is java.net.SocketTimeoutException ->
+                                    "Connection timed out (Render free tier may still be spinning up). Tap retry."
+                                else ->
+                                    "Unable to reach the backend service: ${e.localizedMessage ?: "Network error"}. Check internet connection and retry."
+                            }
                         }
                     }
                     if (!synced) {
                         Page("Account profile") {
-                            Text(failure ?: "Syncing your verified account…")
-                            if (failure != null) {
-                                Button(onClick = { attempt++ }) { Text("Retry profile sync") }
-                                TextButton(onClick = auth::logout) { Text("Sign out") }
+                            val p = maitriPalette()
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                if (failure == null) {
+                                    CircularProgressIndicator(color = p.accent)
+                                    Text(
+                                        text = if (isColdStart)
+                                            "Waking up Render backend service...\n(Free tier spin-up may take up to 60 seconds)"
+                                        else
+                                            "Syncing your verified account…",
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        color = p.primary
+                                    )
+                                } else {
+                                    Text(
+                                        text = failure!!,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        color = p.accent,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Button(
+                                        onClick = { attempt++ },
+                                        colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = androidx.compose.ui.graphics.Color.White)
+                                    ) { Text("Retry profile sync") }
+                                }
+                                TextButton(onClick = auth::logout) {
+                                    Text("Sign out", color = p.secondary)
+                                }
                             }
                         }
                         profileReady = false
                     }
                 }
                 val state by vm.state.collectAsStateWithLifecycle()
-                if (profileReady && state.user?.uid == identity?.uid && identity != null) {
-                    MainGraph(
-                        state = state,
-                        vm = vm,
-                        logout = auth::logout,
-                        isDemoMode = isDemoMode,
-                        pendingInvitationId = pendingInvitationId,
-                        onInvitationHandled = onInvitationHandled
-                    )
+                if (profileReady) {
+                    if (state.user?.uid == identity?.uid && identity != null) {
+                        MainGraph(
+                            state = state,
+                            vm = vm,
+                            logout = auth::logout,
+                            isDemoMode = isDemoMode,
+                            pendingInvitationId = pendingInvitationId,
+                            onInvitationHandled = onInvitationHandled
+                        )
+                    } else {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                 }
             }
             Gate.LOADING -> Unit
@@ -155,12 +203,16 @@ private fun SignedOut(state: AuthState, auth: AuthViewModel, isDemoMode: Boolean
     Box(Modifier.fillMaxSize()) {
         NavHost(nav, if (first) "Intro" else "Login", Modifier.fillMaxSize()) {
             composable("Intro") {
-                Onboarding {
+                MaitriWelcome {
                     prefs.edit().putBoolean("seen", true).apply()
                     nav.navigate("Login") { popUpTo("Intro") { inclusive = true } }
                 }
             }
-            listOf("Login", "Register", "Reset").forEach { route ->
+            composable("Login") {
+                LaunchedEffect(Unit) { auth.clearMessage() }
+                MaitriLogin(state, auth, isDemoMode)
+            }
+            listOf("Register", "Reset").forEach { route ->
                 composable(route) {
                     LaunchedEffect(Unit) { auth.clearMessage() }
                     AccountForm(route, auth, state, isDemoMode) { target ->
@@ -246,7 +298,7 @@ private fun MainGraph(
                     }
                     val onContactsClick = remember { { tab("Contacts") } }
 
-                    Home(
+                    MaitriHome(
                         state = state,
                         start = onStartIncident,
                         contacts = onContactsClick
@@ -269,15 +321,16 @@ private fun MainGraph(
                 ) {
                     val incident = state.incident
                     if (incident?.status == IncidentStatus.ACTIVE) {
-                        ActiveIncident(
+                        MaitriActiveSos(
                             incident = incident,
                             uid = state.user?.uid.orEmpty(),
                             contacts = state.contacts,
-                            alertStatuses = state.contactAlertStatuses
-                        ) {
-                            vm.end()
-                            nav.popBackStack()
-                        }
+                            alertStatuses = state.contactAlertStatuses,
+                            onEndSos = {
+                                vm.end()
+                                nav.popBackStack()
+                            }
+                        )
                     } else {
                         LaunchedEffect(Unit) { tab("Home") }
                     }
@@ -301,19 +354,49 @@ private fun MainGraph(
                     })
                 ) { backStackEntry ->
                     val invitationId = backStackEntry.arguments?.getString("invitationId")
-                    Incoming(invitationId = invitationId) {
-                        vm.respond(it)
-                        nav.popBackStack()
-                    }
+                    MaitriIncoming(
+                        invitationId = invitationId,
+                        onAccepted = { incId ->
+                            nav.navigate("ResponderJourney?incidentId=" + android.net.Uri.encode(incId)) {
+                                popUpTo("Incoming?invitationId={invitationId}") { inclusive = true }
+                            }
+                        },
+                        onDeclined = { nav.popBackStack() }
+                    )
                 }
                 composable("Incoming") {
-                    Incoming {
-                        vm.respond(it)
-                        nav.popBackStack()
-                    }
+                    MaitriIncoming(
+                        invitationId = null,
+                        onAccepted = { incId ->
+                            nav.navigate("ResponderJourney?incidentId=" + android.net.Uri.encode(incId)) {
+                                popUpTo("Incoming") { inclusive = true }
+                            }
+                        },
+                        onDeclined = { nav.popBackStack() }
+                    )
+                }
+                composable(
+                    route = "ResponderJourney?incidentId={incidentId}",
+                    arguments = listOf(androidx.navigation.navArgument("incidentId") {
+                        type = androidx.navigation.NavType.StringType
+                        nullable = false
+                    })
+                ) { backStackEntry ->
+                    val incId = backStackEntry.arguments?.getString("incidentId").orEmpty()
+                    MaitriResponderJourney(
+                        incidentId = incId,
+                        onBack = { nav.popBackStack() },
+                        onIncidentClosed = { tab("Home") }
+                    )
                 }
                 composable("Contacts") {
-                    Contacts(state.contacts, vm)
+                    MaitriCircle(contacts = state.contacts, vm = vm)
+                }
+                composable("VolunteerVerification") {
+                    MaitriVolunteer(
+                        onSkip = { nav.popBackStack() },
+                        onSubmitSuccess = { nav.popBackStack() }
+                    )
                 }
                 if (debug) {
                     composable("Diagnostics") {
@@ -343,7 +426,7 @@ private fun MainGraph(
                 }
             }
 
-            // Genuinely Floating Liquid Glass Dock
+            // SVG navigation: Home, Circle, Responder, Profile.
             AnimatedVisibility(
                 visible = isTabScreen,
                 enter = fadeIn(animationSpec = tween(220)) + slideInVertically(initialOffsetY = { it }, animationSpec = tween(260)),
@@ -351,16 +434,12 @@ private fun MainGraph(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(bottom = 12.dp)
             ) {
-                SurakshaFloatingNavBar(
-                    tabs = tabs,
+                MaitriBottomBar(
                     currentRoute = route,
                     onTabSelected = { target -> tab(target) },
                     modifier = Modifier
                         .onSizeChanged { dockHeight = with(density) { it.height.toDp() } }
-                        .padding(horizontal = 20.dp)
-                        .widthIn(max = 420.dp)
                 )
             }
         }

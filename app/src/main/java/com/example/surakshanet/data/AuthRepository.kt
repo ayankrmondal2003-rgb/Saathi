@@ -14,4 +14,16 @@ interface AuthRepository {
     suspend fun refresh()
     suspend fun reset(email: String)
     fun logout()
+    fun verifyPhone(
+        activity: android.app.Activity,
+        phone: String,
+        onCodeSent: (verificationId: String) -> Unit,
+        onCompleted: () -> Unit,
+        onFailed: (Exception) -> Unit
+    ) {
+        onFailed(UnsupportedOperationException("Phone authentication is not configured for this provider."))
+    }
+    suspend fun signInWithPhoneCode(verificationId: String, code: String) {
+        throw UnsupportedOperationException("Phone authentication is not configured for this provider.")
+    }
 }

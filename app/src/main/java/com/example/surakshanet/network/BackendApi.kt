@@ -128,6 +128,19 @@ data class IncidentResolutionResponseDto(
 )
 
 interface BackendApi {
+    @GET("api/trusted-contacts") suspend fun circleContacts(@Tag expected: ExpectedAccount): List<CircleContactDto>
+    @GET("api/circle-sharing/links") suspend fun circleLinks(@Tag expected: ExpectedAccount): List<CircleLinkDto>
+    @POST("api/circle-sharing/pairing-code") suspend fun circlePairingCode(@Body body: PairingRequestDto, @Tag expected: ExpectedAccount): PairingCodeDto
+    @POST("api/circle-sharing/links") suspend fun bindCircle(@Body body: BindCircleDto, @Tag expected: ExpectedAccount): StatusDto
+    @DELETE("api/circle-sharing/links/{id}") suspend fun revokeCircle(@Path("id") id: String, @Tag expected: ExpectedAccount): StatusDto
+    @GET("api/circle-sharing/requests/{key}") suspend fun circleRequest(@Path("key") key: String, @Tag expected: ExpectedAccount): CircleSessionDto
+    @GET("api/circle-sharing/sessions") suspend fun circleSessions(@Tag expected: ExpectedAccount): List<CircleSessionDto>
+    @POST("api/circle-sharing/sessions") suspend fun createCircleSession(@Header("Idempotency-Key") key: String, @Body body: CircleShareRequest, @Tag expected: ExpectedAccount): CircleSessionDto
+    @GET("api/circle-sharing/sessions/{id}") suspend fun circleSession(@Path("id") id: String, @Tag expected: ExpectedAccount): CircleSessionDto
+    @PUT("api/circle-sharing/sessions/{id}/location") suspend fun circleFix(@Path("id") id: String, @Body body: FixDto, @Tag expected: ExpectedAccount): StatusDto
+    @POST("api/circle-sharing/sessions/{id}/stop") suspend fun stopCircleSession(@Path("id") id: String, @Tag expected: ExpectedAccount): StatusDto
+    @POST("api/circle-sharing/sessions/{id}/opened") suspend fun openCircleSession(@Path("id") id: String, @Tag expected: ExpectedAccount): StatusDto
+
     @PUT("api/responders/location") suspend fun submitResponderFix(@Body fix: FixDto, @Tag expected: ExpectedAccount)
     @POST("api/incidents/{id}/location") suspend fun submitIncidentFix(@Path("id") id: String, @Body fix: FixDto, @Tag expected: ExpectedAccount)
     @GET("api/incidents/{id}/location") suspend fun incidentLocation(@Path("id") id: String, @Tag expected: ExpectedAccount? = null): IncidentLocationDto
@@ -177,7 +190,14 @@ object BackendClient {
             if (runCatching { FirebaseAuth.getInstance().currentUser?.uid }.getOrNull() != user.uid) throw IOException("Session changed")
             chain.proceed(request.newBuilder().header("Authorization", "Bearer $token").build())
         }
-        val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).addInterceptor(bearer).build()
+        val client = OkHttpClient.Builder()
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .addInterceptor(bearer)
+            .build()
         Retrofit.Builder().baseUrl(base).client(client).addConverterFactory(GsonConverterFactory.create()).build()
             .create(BackendApi::class.java)
     }

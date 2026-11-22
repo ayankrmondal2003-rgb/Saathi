@@ -35,4 +35,38 @@ class FirebaseAuthRepository(private val auth: FirebaseAuth) : AuthRepository {
     }
     override suspend fun reset(email: String) { auth.sendPasswordResetEmail(email).await() }
     override fun logout() = auth.signOut()
+
+    override fun verifyPhone(
+        activity: android.app.Activity,
+        phone: String,
+        onCodeSent: (verificationId: String) -> Unit,
+        onCompleted: () -> Unit,
+        onFailed: (Exception) -> Unit
+    ) {
+        val options = com.google.firebase.auth.PhoneAuthOptions.newBuilder(auth)
+            .setPhoneNumber(phone)
+            .setTimeout(60L, java.util.concurrent.TimeUnit.SECONDS)
+            .setActivity(activity)
+            .setCallbacks(object : com.google.firebase.auth.PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+                override fun onVerificationCompleted(credential: com.google.firebase.auth.PhoneAuthCredential) {
+                    auth.signInWithCredential(credential).addOnCompleteListener { task ->
+                        if (task.isSuccessful) onCompleted()
+                        else onFailed(task.exception ?: Exception("Phone sign-in failed"))
+                    }
+                }
+                override fun onVerificationFailed(e: com.google.firebase.FirebaseException) {
+                    onFailed(e)
+                }
+                override fun onCodeSent(id: String, token: com.google.firebase.auth.PhoneAuthProvider.ForceResendingToken) {
+                    onCodeSent(id)
+                }
+            })
+            .build()
+        com.google.firebase.auth.PhoneAuthProvider.verifyPhoneNumber(options)
+    }
+
+    override suspend fun signInWithPhoneCode(verificationId: String, code: String) {
+        val credential = com.google.firebase.auth.PhoneAuthProvider.getCredential(verificationId, code)
+        auth.signInWithCredential(credential).await()
+    }
 }

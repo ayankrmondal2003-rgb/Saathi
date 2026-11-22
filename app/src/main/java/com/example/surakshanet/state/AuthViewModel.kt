@@ -110,4 +110,63 @@ class AuthViewModel(private val repo: AuthRepository) : ViewModel() {
         cooldownJob?.cancel()
         mutable.value = AuthState(ready = true)
     }
+
+    private var phoneVerificationId: String? = null
+
+    fun sendPhoneOtp(activity: android.app.Activity?, phone: String, onPromptCode: () -> Unit) {
+        val clean = phone.trim()
+        if (clean.length < 10) {
+            message("Enter a valid phone number with country code.")
+            return
+        }
+        if (activity == null) {
+            message("Unable to start phone verification: Activity context required.")
+            return
+        }
+        mutable.update { it.copy(busy = true, message = null) }
+        try {
+            repo.verifyPhone(
+                activity = activity,
+                phone = clean,
+                onCodeSent = { id ->
+                    phoneVerificationId = id
+                    mutable.update { it.copy(busy = false, message = "Code sent. Enter the 6-digit code.") }
+                    onPromptCode()
+                },
+                onCompleted = {
+                    mutable.update { it.copy(busy = false, identity = repo.current, message = null) }
+                },
+                onFailed = { e ->
+                    val userMsg = when {
+                        e is FirebaseAuthException && e.errorCode == "ERROR_OPERATION_NOT_ALLOWED" ->
+                            "Phone authentication is not enabled in Firebase Console. Please use email sign-in."
+                        e is FirebaseTooManyRequestsException ->
+                            "SMS quota exceeded. Please try again later or use email sign-in."
+                        e.message?.contains("SHA-256", ignoreCase = true) == true || e.message?.contains("app verification", ignoreCase = true) == true ->
+                            "Firebase Phone Auth requires app SHA-256 and Play Integrity configured in Firebase Console."
+                        else -> e.localizedMessage ?: "Phone verification failed. Use email sign-in."
+                    }
+                    mutable.update { it.copy(busy = false, message = userMsg) }
+                }
+            )
+        } catch (e: Exception) {
+            mutable.update { it.copy(busy = false, message = e.localizedMessage ?: "Phone authentication is not available.") }
+        }
+    }
+
+    fun submitPhoneOtp(code: String) {
+        val id = phoneVerificationId
+        if (id.isNullOrBlank()) {
+            message("No active phone verification. Please request a new code.")
+            return
+        }
+        if (code.trim().length < 6) {
+            message("Enter the full 6-digit verification code.")
+            return
+        }
+        perform {
+            repo.signInWithPhoneCode(id, code.trim())
+            phoneVerificationId = null
+        }
+    }
 }
