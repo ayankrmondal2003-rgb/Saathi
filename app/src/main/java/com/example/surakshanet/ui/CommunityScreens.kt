@@ -521,7 +521,11 @@ fun ResponderTrackingView(
                 )
                 Text(
                     text = if (isClosed) "Incident closed · Tracking session finished"
-                    else "Real-time updates active via secure WebSocket",
+                    else when (trackingState.connectionState) {
+                        WsConnectionState.CONNECTED -> "Connected · check the latest fix timestamp"
+                        WsConnectionState.FAILED -> "Connection paused after repeated failures"
+                        else -> "Connecting to safety server"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.textSecondary
                 )
@@ -530,7 +534,8 @@ fun ResponderTrackingView(
                 text = when {
                     isClosed -> "CLOSED"
                     isRevoked -> "REVOKED"
-                    trackingState.connectionState == WsConnectionState.CONNECTED -> "LIVE"
+                    trackingState.connectionState == WsConnectionState.FAILED -> "OFFLINE"
+                    trackingState.connectionState == WsConnectionState.CONNECTED -> "CONNECTED"
                     trackingState.connectionState == WsConnectionState.RECONNECTING -> "RECONNECTING"
                     else -> "CONNECTING"
                 },
@@ -544,6 +549,11 @@ fun ResponderTrackingView(
             )
         }
     }
+
+    if (!isClosed && !isRevoked && trackingState.connectionState == WsConnectionState.FAILED) {
+        TextButton(onClick = { repo?.retryConnection() }) { Text("Retry tracking connection") }
+    }
+    trackingState.errorMessage?.let { Text(it, color = colors.emergency) }
 
     // Telemetry Stat Cards
     val loc = trackingState.latestLocation

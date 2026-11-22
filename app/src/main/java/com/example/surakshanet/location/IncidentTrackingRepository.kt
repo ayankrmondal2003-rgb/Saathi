@@ -106,13 +106,22 @@ class IncidentTrackingRepository(
         staleCheckJob = null
     }
 
+    fun retryConnection() {
+        if (_state.value.status == "ACTIVE" && client.state.value == WsConnectionState.FAILED) {
+            client.connect()
+        }
+    }
+
     suspend fun updateAssistanceStatus(newStatus: String): Boolean {
         return try {
-            api.updateResponderStatus(incidentId, ResponderStatusUpdateDto(newStatus))
-            _state.update { it.copy(myAssistanceStatus = newStatus) }
+            val response = api.updateResponderStatus(incidentId, ResponderStatusUpdateDto(newStatus))
+            check(response.status == newStatus)
+            _state.update { it.copy(myAssistanceStatus = response.status, errorMessage = null) }
             true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
-            _state.update { it.copy(errorMessage = "Failed to update status: ${e.message}") }
+            _state.update { it.copy(errorMessage = "Assistance status could not be confirmed. Check your connection and retry.") }
             false
         }
     }

@@ -212,7 +212,7 @@ class IncidentWebSocketClient(
         var failures = 0
         while (scope.isActive && !isClosedByUser.get()) {
             if (failures++ >= 6) {
-                _state.value = WsConnectionState.DISCONNECTED
+                _state.value = WsConnectionState.FAILED
                 break
             }
             val currentState = _state.value

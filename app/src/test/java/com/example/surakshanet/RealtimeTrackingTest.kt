@@ -12,6 +12,50 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class RealtimeTrackingTest {
     @Test
+    fun exhaustedReconnectsPauseUntilExplicitRetry() = runTest {
+        var attempts = 0
+        val client = IncidentWebSocketClient(
+            incidentId = "fixture",
+            okHttpClient = okhttp3.OkHttpClient(),
+            ticketProvider = { attempts++; throw java.io.IOException() },
+            scope = TestScope(StandardTestDispatcher(testScheduler))
+        )
+        client.connect()
+        testScheduler.advanceUntilIdle()
+        assertEquals(6, attempts)
+        assertEquals(WsConnectionState.FAILED, client.state.value)
+        client.connect()
+        testScheduler.advanceUntilIdle()
+        assertEquals(12, attempts)
+        assertEquals(WsConnectionState.FAILED, client.state.value)
+        client.disconnect()
+    }
+
+    @Test
+    fun assistanceStatusRequiresMatchingServerResponse() = runTest {
+        var response = "ACCEPTED"
+        var failure = false
+        val api = java.lang.reflect.Proxy.newProxyInstance(
+            BackendApi::class.java.classLoader, arrayOf(BackendApi::class.java)
+        ) { _, method, _ ->
+            check(method.name == "updateResponderStatus")
+            if (failure) throw java.io.IOException("private detail")
+            StatusDto(response)
+        } as BackendApi
+        val repo = IncidentTrackingRepository("fixture", apiProvider = { api },
+            scope = TestScope(StandardTestDispatcher(testScheduler)))
+        assertFalse(repo.updateAssistanceStatus("ON_THE_WAY"))
+        assertNull(repo.state.value.myAssistanceStatus)
+        response = "ON_THE_WAY"
+        assertTrue(repo.updateAssistanceStatus("ON_THE_WAY"))
+        assertEquals("ON_THE_WAY", repo.state.value.myAssistanceStatus)
+        failure = true
+        assertFalse(repo.updateAssistanceStatus("HELPING"))
+        assertEquals("ON_THE_WAY", repo.state.value.myAssistanceStatus)
+        assertFalse(repo.state.value.errorMessage.orEmpty().contains("private detail"))
+    }
+
+    @Test
     fun parsesFastApiLocationEnvelope() {
         val message = """{"protocol_version":"1.0","event_type":"LOCATION_UPDATED","incident_id":"fixture","sequence":7,"timestamp":"now","payload":{"latitude":1.25,"longitude":2.5,"accuracy_meters":3,"recorded_at":"now","received_at":"now","is_mock":true}}"""
         val update = RealtimeIncidentEvent.parse(message) as RealtimeIncidentEvent.LocationUpdatedEvent
