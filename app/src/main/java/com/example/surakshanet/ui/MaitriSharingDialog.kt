@@ -99,12 +99,16 @@ fun MaitriSharingDialog(kind: String, dismiss: () -> Unit) {
                 if (e.code() != 404) throw e
             }
         }
+        val newContacts = try {
+            BackendClient.api.circleContacts(tag)
+        } catch (_: Exception) {
+            emptyList()
+        }
         val newLinks = BackendClient.api.circleLinks(tag)
-        val newContacts = BackendClient.api.circleContacts(tag)
         val newSessions = BackendClient.api.circleSessions(tag)
         account()
-        links = newLinks
         contacts = newContacts
+        links = newLinks
         sessions = newSessions
         current = newSessions.firstOrNull { it.owner && it.kind == "TRIP" && it.status == "ACTIVE" }
     }
@@ -213,7 +217,14 @@ fun MaitriSharingDialog(kind: String, dismiss: () -> Unit) {
                             Text(link.name, Modifier.weight(1f))
                         }
                     }
-                    if (links.none { it.owner }) Text("Pair a trusted contact before sharing.")
+                    if (links.none { it.owner }) {
+                        Text("Pair a trusted contact before sharing.")
+                        if (!pairing) {
+                            TextButton(onClick = { pairing = true }) {
+                                Text("Open pairing setup")
+                            }
+                        }
+                    }
                     Row {
                         Checkbox(checked = consent, enabled = !busy && pending == null, onCheckedChange = { consent = it })
                         Text(if (kind == "TRIP") "I consent to share my precise location with these contacts for 30 minutes."
@@ -239,7 +250,7 @@ fun MaitriSharingDialog(kind: String, dismiss: () -> Unit) {
                         }
                     }) { Text(if (pending != null) "Retry unconfirmed request" else if (kind == "TRIP") "Confirm and start trip" else "Confirm check-in") }
                 }
-                TextButton(onClick = { pairing = !pairing }) { Text("Pair or revoke a trusted account") }
+                TextButton(onClick = { pairing = !pairing }) { Text(if (pairing) "Hide pairing setup" else "Pair or revoke a trusted account") }
                 if (pairing) {
                     Text("Recipient: enter the sender’s verified account email and explicitly consent. Share the temporary code privately with that person.")
                     OutlinedTextField(ownerEmail, { ownerEmail = it }, label = { Text("Sender account email") }, singleLine = true)
