@@ -58,7 +58,7 @@ fun Onboarding(done: () -> Unit) {
     )
 
     Page(
-        title = "Welcome to SurakshaNet",
+        title = "Welcome to Maitri",
         subtitle = "Step ${step + 1} of 3"
     ) {
         Box(
@@ -176,7 +176,7 @@ fun AccountForm(
             reset -> "Reset Password"
             else -> "Welcome Back"
         },
-        subtitle = "SurakshaNet Secure Access"
+        subtitle = "Maitri Secure Access"
     ) {
         Box(
             modifier = Modifier

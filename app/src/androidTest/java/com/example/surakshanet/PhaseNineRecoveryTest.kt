@@ -69,7 +69,7 @@ class PhaseNineRecoveryTest {
     }
 
     @Test fun installedLauncherUsesOfficialAdaptiveResource() {
-        assertEquals(R.mipmap.suraksha_launcher, context.applicationInfo.icon)
+        assertEquals(R.mipmap.maitri_launcher, context.applicationInfo.icon)
         val icon = context.packageManager.getApplicationIcon(context.packageName)
         assertTrue(icon is AdaptiveIconDrawable)
     }

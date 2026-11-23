@@ -1041,7 +1041,7 @@ fun SafetyReadinessSection() {
         click = {
             val posted = com.example.surakshanet.notification.NotificationHelper.showSosNotification(
                 context, java.util.UUID.randomUUID().toString(), "local-test",
-                "SurakshaNet practice notification", "Check this phone’s sound and vibration.", "TEST_ALERT")
+                "Maitri practice notification", "Check this phone’s sound and vibration.", "TEST_ALERT")
             testResult = if (posted) "Local notification posted." else "Check notification settings."
         }
     )
@@ -1269,7 +1269,7 @@ fun Profile(
                 Spacer(Modifier.width(14.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "SurakshaNet",
+                        text = "Maitri",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = colors.textPrimary

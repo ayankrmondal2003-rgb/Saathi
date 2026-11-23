@@ -289,7 +289,7 @@ fun LocationPanel(uid: String, diagnostics: Boolean = false) {
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                text = "Disclaimer: SurakshaNet cannot guarantee continuous tracking after manual force-stop, device shutdown, or aggressive manufacturer background termination.",
+                text = "Disclaimer: Maitri cannot guarantee continuous tracking after manual force-stop, device shutdown, or aggressive manufacturer background termination.",
                 style = MaterialTheme.typography.labelSmall,
                 color = colors.onWarningContainer,
                 modifier = Modifier.padding(10.dp)

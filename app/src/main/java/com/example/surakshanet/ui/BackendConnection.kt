@@ -32,8 +32,8 @@ fun BackendConnection() {
                 scope.launch {
                     status = try {
                         val health = BackendClient.api.health()
-                        if (health.status == "ok" && health.service == "SurakshaNet API") {
-                            "Server online and healthy · SurakshaNet API connected"
+                        if (health.status == "ok" && health.service in setOf("Maitri API", "SurakshaNet API")) {
+                            "Server online and healthy · Maitri API connected"
                         } else {
                             "Unexpected server response"
                         }

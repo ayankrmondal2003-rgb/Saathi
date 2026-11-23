@@ -56,7 +56,7 @@ fun Home(state: DemoState, start: (Boolean) -> Unit, contacts: () -> Unit) {
     val userName = state.user?.name?.ifBlank { "User" } ?: "User"
 
     Page(
-        title = "SurakshaNet",
+        title = "Maitri",
         subtitle = if (active) "SOS in progress" else "Personal safety"
     ) {
         // Readiness Status Hero Banner

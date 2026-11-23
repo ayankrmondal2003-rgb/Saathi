@@ -1,0 +1,6 @@
+<!-- Themed-icon layer (Android 13+): pin silhouette; the system tints it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <group android:translateX="-47.301" android:translateY="-107.734" android:scaleX="0.44541" android:scaleY="0.44541">
+        <path android:pathData="M227.432 300.25C250.313 300.25 269.653 308.07 279.459 326.418C289.538 344.766 288.448 367.023 279.731 383.867C271.015 400.711 254.671 416.051 236.421 423.57C230.701 425.977 224.436 425.977 218.716 423.57C200.465 416.051 183.849 400.711 175.133 383.867C166.416 367.023 165.327 344.766 175.405 326.418C185.211 308.07 204.551 300.25 227.432 300.25Z" android:fillColor="#FF000000" />
+    </group>
+</vector>

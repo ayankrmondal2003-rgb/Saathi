@@ -51,7 +51,7 @@ class SosFirebaseMessagingService : FirebaseMessagingService() {
             }
             "TEST_ALERT", "EMERGENCY_TEST_NOTIFICATION" -> {
                 val testId = data["notification_id"] ?: remoteMessage.messageId ?: UUID.randomUUID().toString()
-                val title = remoteMessage.notification?.title ?: "SurakshaNet Test Alert"
+                val title = remoteMessage.notification?.title ?: "Maitri alert"
                 val body = remoteMessage.notification?.body ?: "This is an authorized test notification."
                 NotificationHelper.showSosNotification(
                     context = applicationContext,

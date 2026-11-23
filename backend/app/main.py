@@ -89,7 +89,7 @@ def create_app(settings=None, *, initialize_firebase=True):
             if engine is not None:
                 await engine.dispose()
 
-    app = FastAPI(title="SurakshaNet Test API", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="Maitri API", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.settings = settings
     if settings.allowed_origins:
         app.add_middleware(CORSMiddleware, allow_origins=settings.allowed_origins,
@@ -115,7 +115,7 @@ def create_app(settings=None, *, initialize_firebase=True):
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "service": "SurakshaNet API"}
+        return {"status": "ok", "service": "Maitri API"}
 
     @app.get("/ready")
     async def ready():

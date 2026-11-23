@@ -195,7 +195,7 @@ class EmergencyContactsTest {
             recordedAtMillis = 1700000000000L,
             includeLocation = true
         )
-        assertTrue(msg.contains("SurakshaNet SOS: I may need urgent help."))
+        assertTrue(msg.contains("Maitri SOS: I may need urgent help."))
         assertTrue(msg.contains("https://maps.google.com/?q=28.613933,77.209022"))
         assertTrue(msg.contains("Location recorded at:"))
         assertTrue(msg.contains("112"))
@@ -210,7 +210,7 @@ class EmergencyContactsTest {
             includeLocation = true
         )
         assertEquals(
-            "SurakshaNet SOS: I may need urgent help. Location is currently unavailable. If you believe I am in immediate danger, contact emergency services (112).",
+            "Maitri SOS: I may need urgent help. Location is currently unavailable. If you believe I am in immediate danger, contact emergency services (112).",
             msgNullLoc
         )
 
@@ -221,7 +221,7 @@ class EmergencyContactsTest {
             includeLocation = false
         )
         assertEquals(
-            "SurakshaNet SOS: I may need urgent help. Location is currently unavailable. If you believe I am in immediate danger, contact emergency services (112).",
+            "Maitri SOS: I may need urgent help. Location is currently unavailable. If you believe I am in immediate danger, contact emergency services (112).",
             msgOptOut
         )
     }

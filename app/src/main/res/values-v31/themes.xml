@@ -1,6 +1,6 @@
 <resources>
-    <style name="Theme.SurakshaNet" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowSplashScreenBackground">@color/brand_plate</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/brand_foreground</item>
+    <style name="Theme.Maitri" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowSplashScreenBackground">@color/maitri_splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/maitri_launcher_foreground</item>
     </style>
 </resources>

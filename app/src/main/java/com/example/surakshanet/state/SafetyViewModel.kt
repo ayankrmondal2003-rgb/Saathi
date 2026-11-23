@@ -125,7 +125,7 @@ class SafetyViewModel(app: Application) : AndroidViewModel(app) {
             if (contact?.notifyOnClosure == true) {
                 alert.copy(
                     deliveryStatus = ContactDeliveryStatus.PROVIDER_ACCEPTED,
-                    messagePreview = "SurakshaNet SOS: Incident has been resolved. I am safe.",
+                    messagePreview = "Maitri SOS: Incident has been resolved. I am safe.",
                     updatedAt = System.currentTimeMillis()
                 )
             } else {

@@ -64,9 +64,9 @@ object SosContactNotifierHelper {
             }
             val ts = if (recordedAtMillis != null) df.format(Date(recordedAtMillis)) else "recent"
             val link = String.format(Locale.US, "https://maps.google.com/?q=%.6f,%.6f", latitude, longitude)
-            "SurakshaNet SOS: I may need urgent help. My last available location is: $link. Location recorded at: $ts. If you believe I am in immediate danger, contact emergency services (112)."
+            "Maitri SOS: I may need urgent help. My last available location is: $link. Location recorded at: $ts. If you believe I am in immediate danger, contact emergency services (112)."
         } else {
-            "SurakshaNet SOS: I may need urgent help. Location is currently unavailable. If you believe I am in immediate danger, contact emergency services (112)."
+            "Maitri SOS: I may need urgent help. Location is currently unavailable. If you believe I am in immediate danger, contact emergency services (112)."
         }
     }
 

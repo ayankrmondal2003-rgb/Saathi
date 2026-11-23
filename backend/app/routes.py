@@ -429,7 +429,7 @@ async def test_alert(device_id: str, request: Request, user=Depends(account), db
         "created_at": datetime.now(timezone.utc).isoformat(),
         "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
     }
-    title = "SurakshaNet Test Alert"
+    title = "Maitri alert"
     body = "This is an authorized test notification for your registered device."
     from starlette.concurrency import run_in_threadpool
     results = await run_in_threadpool(sender, list(tokens), title, body, payload, firebase_app)

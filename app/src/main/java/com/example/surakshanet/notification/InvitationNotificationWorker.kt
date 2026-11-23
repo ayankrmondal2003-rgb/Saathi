@@ -24,7 +24,7 @@ class InvitationNotificationWorker(context: Context, params: WorkerParameters) :
                 it.id == invitation && it.incidentId == incident && it.status == "PENDING"
             }
             if (pending && eligible() && NotificationHelper.showSosNotification(applicationContext, invitation,
-                    incident, "Nearby SOS simulation", "Open SurakshaNet to review the test invitation.",
+                    incident, "Nearby SOS simulation", "Open Maitri to review the invitation.",
                     "RESPONDER_INVITATION_CREATED")) {
                 SosFirebaseMessagingService.saveLastAlertTimestamp(applicationContext, System.currentTimeMillis())
             }

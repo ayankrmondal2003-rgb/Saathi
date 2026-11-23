@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Screen 01 light background (#FFF9FA); the splash icon is the launcher mark. -->
+    <color name="maitri_splash_background">#FFF9FA</color>
+</resources>

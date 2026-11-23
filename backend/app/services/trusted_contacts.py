@@ -25,9 +25,9 @@ def format_emergency_message(display_name: str, lat: float | None, lng: float | 
     if include_location and lat is not None and lng is not None:
         ts_str = recorded_at.strftime("%Y-%m-%d %H:%M:%S UTC") if recorded_at else "recent"
         loc_link = f"https://maps.google.com/?q={lat:.6f},{lng:.6f}"
-        return (f"SurakshaNet SOS: I may need urgent help. My last available location is: {loc_link}. "
+        return (f"Maitri SOS: I may need urgent help. My last available location is: {loc_link}. "
                 f"Recorded at: {ts_str}. If you believe I am in immediate danger, contact emergency services (112).")
-    return ("SurakshaNet SOS: I may need urgent help. Location is currently unavailable. "
+    return ("Maitri SOS: I may need urgent help. Location is currently unavailable. "
             "If you believe I am in immediate danger, contact emergency services (112).")
 
 
@@ -185,7 +185,7 @@ async def incident_contact_statuses(db, user_id: UUID, incident_id: UUID) -> lis
         "masked_phone": mask_phone(c["phone_number"]),
         "is_primary": c["is_primary"],
         "delivery_status": contact_alert_status(c["notify_on_sos"], by_contact.get(c["id"])),
-        "message_preview": "SurakshaNet SOS: I may need urgent help.",
+        "message_preview": "Maitri SOS: I may need urgent help.",
         "location_disclosed": c["include_location_link"],
         "tracking_granted": c["allow_live_tracking"],
         "updated_at": by_contact[c["id"]]["created_at"] if c["id"] in by_contact else now,

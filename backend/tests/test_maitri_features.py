@@ -722,7 +722,7 @@ def test_health_and_version_diagnostics(maitri_env):
     # 1. /health returns 200 with service title
     r_health = client.get("/health")
     assert r_health.status_code == 200
-    assert r_health.json() == {"status": "ok", "service": "SurakshaNet API"}
+    assert r_health.json() == {"status": "ok", "service": "Maitri API"}
 
     # 2. Database connectivity & PostGIS version check via client.portal
     async def check_postgis():
