@@ -127,6 +127,35 @@ data class IncidentResolutionResponseDto(
     @SerializedName("ended_at") val endedAt: String? = null
 )
 
+data class VolunteerStatusDto(
+    @SerializedName("status") val status: String,
+    @SerializedName("intent") val intent: String,
+    @SerializedName("has_govt_id") val hasGovtId: Boolean,
+    @SerializedName("has_address_proof") val hasAddressProof: Boolean,
+    @SerializedName("has_police_cert") val hasPoliceCert: Boolean,
+    @SerializedName("has_photo") val hasPhoto: Boolean,
+    @SerializedName("has_declaration") val hasDeclaration: Boolean,
+    @SerializedName("consent_declared") val consentDeclared: Boolean,
+    @SerializedName("secure_storage_ready") val secureStorageReady: Boolean,
+    @SerializedName("submitted_at") val submittedAt: String? = null,
+    @SerializedName("reviewer_notes") val reviewerNotes: String? = null
+)
+
+data class VolunteerIntentRequestDto(
+    @SerializedName("intent") val intent: String
+)
+
+data class VolunteerConsentRequestDto(
+    @SerializedName("consent_declared") val consentDeclared: Boolean
+)
+
+data class VolunteerDocUploadDto(
+    @SerializedName("doc_type") val docType: String,
+    @SerializedName("file_name") val fileName: String,
+    @SerializedName("file_size_bytes") val fileSizeBytes: Long,
+    @SerializedName("mime_type") val mimeType: String
+)
+
 interface BackendApi {
     @GET("api/trusted-contacts") suspend fun circleContacts(@Tag expected: ExpectedAccount): List<CircleContactDto>
     @GET("api/circle-sharing/links") suspend fun circleLinks(@Tag expected: ExpectedAccount): List<CircleLinkDto>
@@ -162,6 +191,12 @@ interface BackendApi {
     @GET("api/security/safety-pin/status") suspend fun safetyPinStatus(@Tag expected: ExpectedAccount? = null): SafetyPinStatusDto
     @POST("api/security/safety-pin/recover") suspend fun recoverSafetyPin(@Body request: SafetyPinRecoveryDto, @Tag expected: ExpectedAccount? = null): StatusDto
     @POST("api/incidents/{id}/resolve") suspend fun resolveIncident(@Path("id") id: String, @Body request: IncidentResolutionRequestDto, @Tag expected: ExpectedAccount? = null): IncidentResolutionResponseDto
+
+    @GET("api/volunteer/status") suspend fun volunteerStatus(@Tag expected: ExpectedAccount? = null): VolunteerStatusDto
+    @POST("api/volunteer/intent") suspend fun setVolunteerIntent(@Body body: VolunteerIntentRequestDto, @Tag expected: ExpectedAccount): StatusDto
+    @POST("api/volunteer/consent") suspend fun setVolunteerConsent(@Body body: VolunteerConsentRequestDto, @Tag expected: ExpectedAccount): StatusDto
+    @POST("api/volunteer/upload-document") suspend fun uploadVolunteerDocument(@Body body: VolunteerDocUploadDto, @Tag expected: ExpectedAccount): StatusDto
+    @POST("api/volunteer/submit") suspend fun submitVolunteerApplication(@Tag expected: ExpectedAccount): StatusDto
 }
 
 object BackendClient {
