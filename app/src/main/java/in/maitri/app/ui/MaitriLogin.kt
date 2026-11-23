@@ -209,10 +209,10 @@ internal fun MaitriLoginContent(
     onContinueWithPhone: () -> Unit,
     onSubmitEmail: () -> Unit,
     onForgotPassword: () -> Unit,
-    onContinueWithGoogle: () -> Unit = {},
     isBusy: Boolean,
     message: String?,
-    isDemoMode: Boolean = false
+    isDemoMode: Boolean = false,
+    onContinueWithGoogle: () -> Unit = {}
 ) {
     val focusManager = LocalFocusManager.current
 
