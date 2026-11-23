@@ -136,6 +136,9 @@ class SafetyViewModel(app: Application) : AndroidViewModel(app) {
 
     fun enable(enabled: Boolean) = updatePreferences(Responder(enabled))
     fun available(value: Boolean) = updatePreferences(current.responder.copy(available = current.responder.enabled && value))
+    fun updateUserProfile(user: UserProfile) {
+        mutable.value = current.copy(user = user)
+    }
     private fun updatePreferences(responder: Responder) {
         val user = current.user ?: return
         profiles.savePreferences(user.uid, responder)

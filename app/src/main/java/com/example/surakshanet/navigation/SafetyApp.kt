@@ -406,23 +406,47 @@ private fun MainGraph(
                     }
                 }
                 composable("Profile") {
-                    state.user?.let {
-                        Profile(
-                            user = it,
-                            logout = {
-                                val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
-                                scope.launch {
-                                    com.example.surakshanet.notification.DeviceRepository.get(context).unregisterDevice()
-                                }
-                                if (state.incident?.status == IncidentStatus.ACTIVE) {
-                                    android.widget.Toast.makeText(context, "Signing out stops local sharing. Your server incident remains open until closure is confirmed.", android.widget.Toast.LENGTH_LONG).show()
-                                }
-                                logout()
-                            },
-                            diagnostics = if (debug) ({ nav.navigate("Diagnostics") }) else null,
-                            isDemoMode = isDemoMode
-                        )
-                    }
+                    MaitriSettings(
+                        user = state.user,
+                        onNavigate = { target -> nav.navigate(target) },
+                        onLogout = {
+                            val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
+                            scope.launch {
+                                com.example.surakshanet.notification.DeviceRepository.get(context).unregisterDevice()
+                            }
+                            if (state.incident?.status == IncidentStatus.ACTIVE) {
+                                android.widget.Toast.makeText(context, "Signing out stops local sharing. Your server incident remains open until closure is confirmed.", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                            logout()
+                        }
+                    )
+                }
+                composable("EditProfile") {
+                    MaitriEditProfile(
+                        user = state.user,
+                        onBack = { nav.popBackStack() },
+                        onProfileUpdated = { updated -> vm.updateUserProfile(updated) }
+                    )
+                }
+                composable("Permissions") {
+                    MaitriPermissions(
+                        onBack = { nav.popBackStack() }
+                    )
+                }
+                composable("TestVibration") {
+                    MaitriVibration(
+                        onBack = { nav.popBackStack() }
+                    )
+                }
+                composable("SafetyPin") {
+                    MaitriPin(
+                        onBack = { nav.popBackStack() }
+                    )
+                }
+                composable("Language") {
+                    MaitriLanguage(
+                        onBack = { nav.popBackStack() }
+                    )
                 }
             }
 
