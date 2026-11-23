@@ -1,0 +1,17 @@
+<!-- Static geometry from the approved dark screen 14 crop. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="390dp" android:height="788dp" android:viewportWidth="390" android:viewportHeight="788">
+    <group android:translateX="-2612" android:translateY="-1000">
+        <path android:pathData="M2612,972 h390 v844 h-390 Z" android:fillColor="#19151B"/>
+        <path android:pathData="M2658,1038 h0 a22,22 0,0 1 22,22 v0 a22,22 0,0 1 -22,22 h-0 a22,22 0,0 1 -22,-22 v-0 a22,22 0,0 1 22,-22 Z" android:fillColor="#28212A"/>
+        <path android:pathData="M2660.75 1053.58L2654.33 1060L2660.75 1066.42" android:strokeColor="#FAEFF5" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+        <path android:pathData="M2658,1116 h298 a22,22 0,0 1 22,22 v28 a22,22 0,0 1 -22,22 h-298 a22,22 0,0 1 -22,-22 v-28 a22,22 0,0 1 22,-22 Z" android:fillColor="#36232F"/>
+        <path android:pathData="M2655.5 1146.17H2660.17L2662.5 1142.67H2669.5L2671.83 1146.17H2676.5V1162.5H2655.5V1146.17Z" android:strokeColor="#FF9CBE" android:strokeWidth="1.98333" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+        <path android:pathData="M2670.67 1153.17C2670.67 1155.74 2668.58 1157.83 2666 1157.83C2663.42 1157.83 2661.33 1155.74 2661.33 1153.17C2661.33 1150.59 2663.42 1148.5 2666 1148.5C2668.58 1148.5 2670.67 1150.59 2670.67 1153.17Z" android:strokeColor="#FF9CBE" android:strokeWidth="1.98333" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+        <path android:pathData="M2650,1233 h314 a14,14 0,0 1 14,14 v14 a14,14 0,0 1 -14,14 h-314 a14,14 0,0 1 -14,-14 v-14 a14,14 0,0 1 14,-14 Z" android:fillColor="#28212A"/>
+        <path android:pathData="M2650,1301 h314 a14,14 0,0 1 14,14 v14 a14,14 0,0 1 -14,14 h-314 a14,14 0,0 1 -14,-14 v-14 a14,14 0,0 1 14,-14 Z" android:fillColor="#28212A"/>
+        <path android:pathData="M2650,1369 h314 a14,14 0,0 1 14,14 v14 a14,14 0,0 1 -14,14 h-314 a14,14 0,0 1 -14,-14 v-14 a14,14 0,0 1 14,-14 Z" android:fillColor="#28212A"/>
+        <path android:pathData="M2650,1437 h314 a14,14 0,0 1 14,14 v14 a14,14 0,0 1 -14,14 h-314 a14,14 0,0 1 -14,-14 v-14 a14,14 0,0 1 14,-14 Z" android:fillColor="#28212A"/>
+        <path android:pathData="M2652,1536 h310 a16,16 0,0 1 16,16 v40 a16,16 0,0 1 -16,16 h-310 a16,16 0,0 1 -16,-16 v-40 a16,16 0,0 1 16,-16 Z" android:fillColor="#28212A"/>
+        <path android:pathData="M2662,1716 h290 a26,26 0,0 1 26,26 v0 a26,26 0,0 1 -26,26 h-290 a26,26 0,0 1 -26,-26 v-0 a26,26 0,0 1 26,-26 Z" android:fillColor="#FF9CBE"/>
+    </group>
+</vector>

@@ -1,0 +1,63 @@
+package com.example.surakshanet
+
+import com.example.surakshanet.network.invitationFailure
+import com.example.surakshanet.network.staleResponderFix
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.junit.Assert.*
+import org.junit.Test
+import retrofit2.HttpException
+import retrofit2.Response
+import java.io.File
+
+/** Checkpoint A wiring: screen 06 decisions, the Responder tab and recoverable GPS conflicts. */
+class MaitriCheckpointATest {
+    private val ui = "src/main/java/com/example/surakshanet/ui"
+    private fun http(code: Int, detail: String) = HttpException(Response.error<Any>(code,
+        """{"detail":"$detail"}""".toResponseBody("application/json".toMediaType())))
+
+    @Test fun incomingScreenUsesServerConfirmedDecisionsAndServerReasons() {
+        val source = File("$ui/MaitriIncoming.kt").readText()
+        assertTrue(source.contains("confirmedInvitationResponse(decision)"))
+        assertTrue(source.contains("invitationFailure(e)"))
+        // The previous local mapping blamed location freshness for every 403 and "already answered" for every 409.
+        assertFalse(source.contains("Responder location must be fresh"))
+        assertFalse(source.contains("Invitation already answered."))
+    }
+
+    @Test fun forbiddenAndConflictReasonsStayDistinct() {
+        val radius = invitationFailure(http(403, "Fresh matching responder location within the active radius required"))
+        val unavailable = invitationFailure(http(403, "Responder unavailable"))
+        val inactive = invitationFailure(http(409, "Incident is inactive"))
+        val answered = invitationFailure(http(409, "Invitation already answered"))
+        assertEquals(4, setOf(radius, unavailable, inactive, answered).size)
+        assertTrue(unavailable.contains("availability"))
+        assertTrue(inactive.contains("no longer active"))
+    }
+
+    @Test fun onlyTheMarkedMonotonicConflictIsRecoverable() {
+        assertTrue(staleResponderFix(409, "STALE_OR_DUPLICATE_LOCATION"))
+        assertFalse(staleResponderFix(409, null))
+        assertFalse(staleResponderFix(422, "STALE_OR_DUPLICATE_LOCATION"))
+        // The dashboard advances past the rejected timestamp and keeps collecting fixes.
+        val dashboard = File("$ui/TestResponderDashboard.kt").readText()
+        assertTrue(dashboard.contains("lastSubmittedTimestamp = maxOf(lastSubmittedTimestamp, fix.timestampMillis)"))
+    }
+
+    @Test fun responderTabAlwaysRendersAScreen() {
+        val graph = File("src/main/java/com/example/surakshanet/navigation/SafetyApp.kt").readText()
+        assertTrue(graph.contains("} else ResponderUnavailable()"))
+        assertFalse("Toast durations use named constants", Regex("""Toast\.makeText\([^)]*, 0\)""").containsMatchIn(graph))
+    }
+
+    @Test fun emergencyArtworkKeepsOnlyStaticCopy() {
+        // Outlined text left in the 06-08 drawables is fixed copy (titles, buttons, tabs, "Illustrative map").
+        // Sample place names, distances and ETAs from the design must not be painted by artwork.
+        val expected = mapOf("06" to 14, "07" to 8, "08" to 8, "responder" to 3)
+        for (theme in listOf("light", "dark")) for ((screen, count) in expected) {
+            val xml = File("src/main/res/drawable/maitri_${theme}_$screen.xml").readText()
+            val glyphs = Regex("""pathData="([^"]*)"""").findAll(xml).count { it.groupValues[1].length >= 1000 }
+            assertEquals("$theme-$screen glyph paths", count, glyphs)
+        }
+    }
+}

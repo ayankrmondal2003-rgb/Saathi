@@ -30,11 +30,11 @@ import androidx.compose.ui.unit.sp
 import com.example.surakshanet.R
 
 enum class VolunteerDocType(val title: String, val subtitle: String, val icon: ImageVector) {
-    GOVT_ID("Government-issued identity proof", "Aadhaar, Passport, Voter ID, or DL", Icons.Rounded.Badge),
-    ADDRESS_PROOF("Address proof", "Electricity bill, Rent agreement, etc.", Icons.Rounded.Home),
-    POLICE_CERT("Police character certificate", "Issued within last 6 months", Icons.Rounded.Security),
-    PHOTO("Recent photograph", "Clear passport-style photo", Icons.Rounded.PhotoCamera),
-    DECLARATION("Signed volunteer declaration", "Download template, sign and upload", Icons.Rounded.Description)
+    GOVT_ID("Government issued identity proof", "Upload document", Icons.Rounded.Badge),
+    ADDRESS_PROOF("Address proof", "Upload document", Icons.Rounded.Home),
+    POLICE_CERT("Police character certificate", "Upload document", Icons.Rounded.Security),
+    PHOTO("Recent photograph", "Upload photo", Icons.Rounded.Image),
+    DECLARATION("Signed volunteer declaration", "Upload document", Icons.Rounded.Description)
 }
 
 data class SelectedDocument(
@@ -213,7 +213,7 @@ internal fun MaitriVolunteerContent(
 
             // Title & Subtitle
             Text(
-                text = "Volunteer Verification",
+                text = "Be there for someone.",
                 color = p.primary,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -221,7 +221,7 @@ internal fun MaitriVolunteerContent(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "Help protect your local community in an emergency.",
+                text = "Join maitri as a volunteer and help your\ncommunity feel safer.",
                 color = p.secondary,
                 fontSize = 12.sp,
                 modifier = Modifier.fillMaxWidth()
@@ -300,7 +300,7 @@ internal fun MaitriVolunteerContent(
 
             // Section: Required documents
             Text(
-                text = "Required documents",
+                text = "Volunteer verification",
                 color = p.primary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -308,7 +308,7 @@ internal fun MaitriVolunteerContent(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "Upload the following 5 documents to complete your verification.",
+                text = "All 5 documents are required.",
                 color = p.secondary,
                 fontSize = 11.sp,
                 modifier = Modifier.fillMaxWidth()
@@ -369,7 +369,7 @@ internal fun MaitriVolunteerContent(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = if (isUploaded) Icons.Rounded.Check else Icons.Rounded.ArrowUpward,
+                                imageVector = if (isUploaded) Icons.Rounded.Check else Icons.Rounded.FileUpload,
                                 contentDescription = "Upload",
                                 tint = p.accent,
                                 modifier = Modifier.size(16.dp)
@@ -424,13 +424,23 @@ internal fun MaitriVolunteerContent(
                 }
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "I declare that all information provided is true and I agree to act as a community responder in accordance with Maitri guidelines.",
+                    text = "I consent to document verification and agree to\nthe Volunteer Declaration.",
                     color = p.secondary,
                     fontSize = 11.sp,
                     lineHeight = 15.sp,
                     modifier = Modifier.weight(1f)
                 )
             }
+
+            Spacer(Modifier.height(14.dp))
+            // Counts documents actually selected on this device; nothing is uploaded until secure storage exists.
+            Text(
+                text = "${selectedDocs.size} of ${VolunteerDocType.entries.size} documents selected",
+                color = p.secondary,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             if (statusMessage != null) {
                 Spacer(Modifier.height(12.dp))
@@ -470,15 +480,7 @@ internal fun MaitriVolunteerContent(
 
             Spacer(Modifier.height(24.dp))
 
-            // Home Gesture Bar (134 x 5, rx 2.5)
-            Box(
-                modifier = Modifier
-                    .width(134.dp)
-                    .height(5.dp)
-                    .clip(RoundedCornerShape(2.5.dp))
-                    .background(p.primary)
-            )
-
+            // The SVG frame's home indicator belongs to the device chrome, not the app.
             Spacer(Modifier.height(16.dp))
         }
     }

@@ -32,6 +32,8 @@ import com.example.surakshanet.ui.*
 import com.example.surakshanet.ui.theme.surakshaColors
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
+import com.example.surakshanet.network.*
+import com.example.surakshanet.location.LocalTrackingRepository
 import kotlinx.coroutines.launch
 
 internal val tabs = listOf(
@@ -95,8 +97,12 @@ private fun SafetyNavigation(vm: SafetyViewModel, pendingInvitationId: String?, 
             Gate.VERIFY -> Box(Modifier.fillMaxSize()) { Verification(account, auth) }
             Gate.SIGNED_OUT -> SignedOut(account, auth, isDemoMode)
             Gate.HOME -> {
-                var profileReady = true
-                if (!isDemoMode && identity != null && com.example.surakshanet.BuildConfig.API_BASE_URL.isNotBlank()) {
+                if (isDemoMode || identity == null || com.example.surakshanet.BuildConfig.API_BASE_URL.isBlank()) {
+                    Page("Account profile") {
+                        Text("Account synchronization is unavailable.")
+                        TextButton(onClick = auth::logout) { Text("Sign out") }
+                    }
+                } else {
                     var synced by remember { mutableStateOf(false) }
                     var attempt by remember { mutableIntStateOf(0) }
                     var failure by remember { mutableStateOf<String?>(null) }
@@ -169,23 +175,21 @@ private fun SafetyNavigation(vm: SafetyViewModel, pendingInvitationId: String?, 
                                 }
                             }
                         }
-                        profileReady = false
-                    }
-                }
-                val state by vm.state.collectAsStateWithLifecycle()
-                if (profileReady) {
-                    if (state.user?.uid == identity?.uid && identity != null) {
-                        MainGraph(
-                            state = state,
-                            vm = vm,
-                            logout = auth::logout,
-                            isDemoMode = isDemoMode,
-                            pendingInvitationId = pendingInvitationId,
-                            onInvitationHandled = onInvitationHandled
-                        )
                     } else {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        val state by vm.state.collectAsStateWithLifecycle()
+                        if (state.user?.uid == identity.uid) {
+                            MainGraph(
+                                state = state,
+                                vm = vm,
+                                logout = auth::logout,
+                                isDemoMode = isDemoMode,
+                                pendingInvitationId = pendingInvitationId,
+                                onInvitationHandled = onInvitationHandled
+                            )
+                        } else {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                            }
                         }
                     }
                 }
@@ -205,27 +209,19 @@ private fun SignedOut(state: AuthState, auth: AuthViewModel, isDemoMode: Boolean
             composable("Intro") {
                 MaitriWelcome {
                     prefs.edit().putBoolean("seen", true).apply()
-                    nav.navigate("Login") { popUpTo("Intro") { inclusive = true } }
+                    nav.navigate("Login") { launchSingleTop = true }
                 }
             }
             composable("Login") {
                 LaunchedEffect(Unit) { auth.clearMessage() }
                 MaitriLogin(state, auth, isDemoMode)
             }
-            listOf("Register", "Reset").forEach { route ->
-                composable(route) {
-                    LaunchedEffect(Unit) { auth.clearMessage() }
-                    AccountForm(route, auth, state, isDemoMode) { target ->
-                        if (target == "Login") nav.popBackStack() else nav.navigate(target)
-                    }
-                }
-            }
         }
     }
 }
 
 @Composable
-private fun MainGraph(
+internal fun MainGraph(
     state: DemoState,
     vm: SafetyViewModel,
     logout: () -> Unit,
@@ -234,7 +230,10 @@ private fun MainGraph(
     onInvitationHandled: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val debug = context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+    val uid = requireNotNull(state.user).uid
+    val sync = remember(context) { LocalTrackingRepository.get(context).sync }
+    var authorizedJourney by remember(uid) { mutableStateOf<String?>(null) }
+    var confirmedActive by remember(uid) { mutableStateOf<String?>(null) }
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
@@ -245,24 +244,28 @@ private fun MainGraph(
     fun tab(target: String) {
         if (target == currentSelectedRoute) return
         nav.navigate(target) {
-            popUpTo(nav.graph.findStartDestination().id) {
-                saveState = true
-            }
+            popUpTo(nav.graph.findStartDestination().id)
             launchSingleTop = true
-            restoreState = true
         }
     }
 
     LaunchedEffect(pendingInvitationId) {
         if (!pendingInvitationId.isNullOrBlank()) {
-            nav.navigate("Incoming?invitationId=$pendingInvitationId") {
+            tab("Responder")
+            nav.navigate("Incoming?invitationId=" + android.net.Uri.encode(pendingInvitationId)) {
                 launchSingleTop = true
             }
             onInvitationHandled()
         }
     }
 
-    val isTabScreen = route in tabRoutes && state.user != null
+    val dockRoute = when {
+        route == "Active" -> "Home"
+        route?.startsWith("ResponderJourney?") == true -> "Responder"
+        route?.startsWith("Incoming?") == true -> "Responder"
+        else -> route
+    }
+    val isTabScreen = dockRoute in tabRoutes && state.user != null
     val navBarBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val density = LocalDensity.current
     var dockHeight by remember { mutableStateOf(92.dp) }
@@ -288,12 +291,40 @@ private fun MainGraph(
                 }
             ) {
                 composable("Home") {
-                    val onStartIncident = remember(state.incident?.status, state.user?.uid) {
-                        { share: Boolean ->
-                            val fresh = state.incident?.status != IncidentStatus.ACTIVE
+                    var localPractice by rememberSaveable { mutableStateOf(false) }
+                    if (localPractice) {
+                        AlertDialog(onDismissRequest = { localPractice = false },
+                            title = { Text("Local practice session") },
+                            text = { Text("This practice session is on this device only.") },
+                            confirmButton = { TextButton(onClick = { vm.end(); localPractice = false }) { Text("End practice") } })
+                    }
+                    var requested by rememberSaveable { mutableStateOf(false) }
+                    val syncState by sync.status.collectAsStateWithLifecycle()
+                    val id = sync.getActiveIncidentId(uid)
+                    LaunchedEffect(requested, id, syncState, state.incident?.status) {
+                        if (requested && id != null && state.incident?.status == IncidentStatus.ACTIVE) {
+                            try {
+                                val snapshot = BackendClient.api.snapshot(id, ExpectedAccount(uid))
+                                if (snapshot.incidentId == id && snapshot.status == "ACTIVE" && sync.getActiveIncidentId(uid) == id) {
+                                    confirmedActive = id
+                                    nav.navigate("Active") { launchSingleTop = true }
+                                } else android.widget.Toast.makeText(context, "Incident is no longer active", android.widget.Toast.LENGTH_SHORT).show()
+                            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                            catch (e: Exception) { android.widget.Toast.makeText(context, "Could not confirm the incident", android.widget.Toast.LENGTH_SHORT).show() }
+                            requested = false
+                        }
+                    }
+                    val onStartIncident: (Boolean) -> Unit = { share ->
+                        if (state.incident?.status != IncidentStatus.ACTIVE) {
                             vm.start(share)
-                            if (fresh) state.user?.let { startDemoTracking(context, it.uid) }
-                            nav.navigate("Active") { launchSingleTop = true }
+                            startDemoTracking(context, uid)
+                        }
+                        val session = LocalTrackingRepository.get(context).session.value
+                        if (sync.isShared(uid, session.id)) requested = true else localPractice = true
+                    }
+                    if (requested && id == null) {
+                        LaunchedEffect(syncState) {
+                            android.widget.Toast.makeText(context, if (syncState.uid == uid) syncState.message else "Waiting for incident confirmation", android.widget.Toast.LENGTH_SHORT).show()
                         }
                     }
                     val onContactsClick = remember { { tab("Contacts") } }
@@ -320,12 +351,13 @@ private fun MainGraph(
                     }
                 ) {
                     val incident = state.incident
-                    if (incident?.status == IncidentStatus.ACTIVE) {
+                    if (incident?.status == IncidentStatus.ACTIVE && confirmedActive != null && confirmedActive == sync.getActiveIncidentId(uid)) {
                         MaitriActiveSos(
                             incident = incident,
+                            incidentId = requireNotNull(confirmedActive),
                             uid = state.user?.uid.orEmpty(),
-                            contacts = state.contacts,
-                            alertStatuses = state.contactAlertStatuses,
+                            onAccessLost = { nav.popBackStack() },
+                            onSetPin = { nav.navigate("SafetyPin") { launchSingleTop = true } },
                             onEndSos = {
                                 vm.end()
                                 nav.popBackStack()
@@ -337,13 +369,13 @@ private fun MainGraph(
                 }
                 composable("Responder") {
                     if (!isDemoMode && com.example.surakshanet.BuildConfig.API_BASE_URL.isNotBlank()) {
-                        TestResponderDashboard(requireNotNull(state.user).uid) { invitation ->
+                        TestResponderDashboard(uid, onApply = { nav.navigate("VolunteerVerification") }, onResumeJourney = { id ->
+                            authorizedJourney = id
+                            nav.navigate("ResponderJourney?incidentId=" + android.net.Uri.encode(id))
+                        }) { invitation ->
                             nav.navigate("Incoming?invitationId=" + android.net.Uri.encode(invitation))
                         }
-                    } else {
-                        val onIncoming = remember { { nav.navigate("Incoming") } }
-                        ResponderDashboard(state.responder, vm::enable, vm::available, onIncoming)
-                    }
+                    } else ResponderUnavailable()
                 }
                 composable(
                     route = "Incoming?invitationId={invitationId}",
@@ -354,22 +386,27 @@ private fun MainGraph(
                     })
                 ) { backStackEntry ->
                     val invitationId = backStackEntry.arguments?.getString("invitationId")
-                    MaitriIncoming(
-                        invitationId = invitationId,
+                    var match by remember(invitationId) { mutableStateOf<InvitationDto?>(null) }
+                    LaunchedEffect(invitationId) {
+                        try {
+                            match = BackendClient.api.invitations(ExpectedAccount(uid)).firstOrNull {
+                                it.id == invitationId && it.canOpenIncoming()
+                            }
+                        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                        catch (e: Exception) { /* Return to the inbox for retry. */ }
+                        if (match == null) {
+                            android.widget.Toast.makeText(context, "Invitation unavailable", android.widget.Toast.LENGTH_SHORT).show()
+                            nav.popBackStack()
+                        }
+                    }
+                    val invitation = match
+                    if (invitation == null) CircularProgressIndicator() else MaitriIncoming(
+                        invitation = invitation,
+                        uid = uid,
                         onAccepted = { incId ->
+                            authorizedJourney = incId
                             nav.navigate("ResponderJourney?incidentId=" + android.net.Uri.encode(incId)) {
                                 popUpTo("Incoming?invitationId={invitationId}") { inclusive = true }
-                            }
-                        },
-                        onDeclined = { nav.popBackStack() }
-                    )
-                }
-                composable("Incoming") {
-                    MaitriIncoming(
-                        invitationId = null,
-                        onAccepted = { incId ->
-                            nav.navigate("ResponderJourney?incidentId=" + android.net.Uri.encode(incId)) {
-                                popUpTo("Incoming") { inclusive = true }
                             }
                         },
                         onDeclined = { nav.popBackStack() }
@@ -383,10 +420,12 @@ private fun MainGraph(
                     })
                 ) { backStackEntry ->
                     val incId = backStackEntry.arguments?.getString("incidentId").orEmpty()
-                    MaitriResponderJourney(
+                    if (incId != authorizedJourney) {
+                        LaunchedEffect(Unit) { nav.popBackStack() }
+                    } else MaitriResponderJourney(
                         incidentId = incId,
-                        onBack = { nav.popBackStack() },
-                        onIncidentClosed = { tab("Home") }
+                        uid = uid,
+                        onIncidentClosed = { authorizedJourney = null; nav.popBackStack() }
                     )
                 }
                 composable("Contacts") {
@@ -397,13 +436,6 @@ private fun MainGraph(
                         onSkip = { nav.popBackStack() },
                         onSubmitSuccess = { nav.popBackStack() }
                     )
-                }
-                if (debug) {
-                    composable("Diagnostics") {
-                        Page("GPS Diagnostics") {
-                            LocationPanel(state.user?.uid.orEmpty(), true)
-                        }
-                    }
                 }
                 composable("Profile") {
                     MaitriSettings(
@@ -440,6 +472,7 @@ private fun MainGraph(
                 }
                 composable("SafetyPin") {
                     MaitriPin(
+                        uid = state.user?.uid,
                         onBack = { nav.popBackStack() }
                     )
                 }
@@ -460,7 +493,7 @@ private fun MainGraph(
                     .navigationBarsPadding()
             ) {
                 MaitriBottomBar(
-                    currentRoute = route,
+                    currentRoute = dockRoute,
                     onTabSelected = { target -> tab(target) },
                     modifier = Modifier
                         .onSizeChanged { dockHeight = with(density) { it.height.toDp() } }

@@ -127,4 +127,156 @@ class MaitriHomeTest {
             assertEquals("Contacts", selected)
         }
     }
+
+    @Test fun emergencyArtworkRendersAndIncomingDecisionsRemainIndependent() {
+        unlocked()
+        val accepts = AtomicInteger()
+        val declines = AtomicInteger()
+        ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
+            for (dark in listOf(false, true)) {
+                scenario.onActivity { activity ->
+                    activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    activity.setTurnScreenOn(true)
+                    val assets = if (dark) listOf(R.drawable.maitri_dark_06, R.drawable.maitri_dark_07, R.drawable.maitri_dark_08)
+                    else listOf(R.drawable.maitri_light_06, R.drawable.maitri_light_07, R.drawable.maitri_light_08)
+                    assets.forEach { id ->
+                        val art = requireNotNull(activity.getDrawable(id))
+                        val bitmap = android.graphics.Bitmap.createBitmap(390, 816, android.graphics.Bitmap.Config.ARGB_8888)
+                        art.setBounds(0, 0, bitmap.width, bitmap.height)
+                        art.draw(android.graphics.Canvas(bitmap))
+                        assertTrue(bitmap.getPixel(195, 200) != 0)
+                        bitmap.recycle()
+                    }
+                    activity.setContent {
+                        SurakshaNetTheme {
+                            MaitriIncomingContent(MaitriPalette(dark), "Nearby emergency", "Distance unavailable",
+                                "ETA unavailable", false, null, { accepts.incrementAndGet() }, { declines.incrementAndGet() })
+                        }
+                    }
+                }
+                for (label in listOf("Accept", "Decline")) {
+                    val action = node { it.contentDescription?.toString() == label }
+                    assertTrue(action.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                    instrumentation.waitForIdleSync()
+                }
+            }
+        }
+        assertEquals(2, accepts.get())
+        assertEquals(2, declines.get())
+    }
+
+    @Test fun profileRowsDispatchTheirOwnDestinationsInBothThemes() {
+        unlocked()
+        val context = instrumentation.targetContext
+        val strings = MaitriLocale.localized(context).resources
+        val actual = java.util.concurrent.atomic.AtomicReference("")
+        val routes = mapOf(R.string.settings_edit to "EditProfile", R.string.settings_permissions to "Permissions",
+            R.string.settings_vibrations to "TestVibration", R.string.settings_pins to "SafetyPin",
+            R.string.settings_language to "Language")
+        ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
+            for (dark in listOf(false, true)) {
+                scenario.onActivity { activity ->
+                    activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    activity.setContent {
+                        val controller = androidx.compose.runtime.remember(dark) {
+                            val testContext = object : android.content.ContextWrapper(activity) {
+                                override fun getSharedPreferences(name: String, mode: Int) =
+                                    super.getSharedPreferences("test_profile_" + name, mode)
+                            }
+                            com.example.surakshanet.ui.theme.ThemeController(testContext).apply {
+                                setMode(if (dark) com.example.surakshanet.ui.theme.ThemeMode.DARK else com.example.surakshanet.ui.theme.ThemeMode.LIGHT)
+                            }
+                        }
+                        androidx.compose.runtime.CompositionLocalProvider(
+                            com.example.surakshanet.ui.theme.LocalThemeController provides controller
+                        ) { MaitriSettings(null, actual::set, {}) }
+                    }
+                }
+                for ((id, destination) in routes) {
+                    actual.set("")
+                    click(strings.getString(id))
+                    assertEquals(destination, actual.get())
+                }
+                click(strings.getString(R.string.settings_themes))
+                for (id in listOf(R.string.settings_light, R.string.settings_dark, R.string.settings_system)) {
+                    node { it.text?.toString() == strings.getString(id) }
+                }
+                click(strings.getString(R.string.settings_close))
+            }
+        }
+    }
+
+    @Test fun translatedSettingsResolveForEverySavedLanguage() {
+        val context = instrumentation.targetContext
+        val prefs = context.getSharedPreferences("maitri_language_prefs", 0)
+        val oldCode = prefs.getString("selected_language", null)
+        val manager = if (android.os.Build.VERSION.SDK_INT >= 33)
+            context.getSystemService(android.app.LocaleManager::class.java) else null
+        val oldLocales = if (android.os.Build.VERSION.SDK_INT >= 33) manager?.applicationLocales else null
+        try {
+            val expected = mapOf("en" to "Language", "hi" to "भाषा", "bn" to "ভাষা",
+                "mr" to "भाषा", "ta" to "மொழி", "te" to "భాష")
+            for ((code, title) in expected) {
+                MaitriLocale.save(context, code)
+                assertEquals(code, prefs.getString("selected_language", null))
+                val fresh = context.createConfigurationContext(android.content.res.Configuration(context.resources.configuration))
+                assertEquals(code, MaitriLocale.code(fresh))
+                val localized = MaitriLocale.localized(fresh)
+                assertEquals(title, localized.getString(R.string.settings_language))
+                if (code != "en") {
+                    assertNotEquals("Save language", localized.getString(R.string.settings_save))
+                    assertNotEquals("Gentle", localized.getString(R.string.settings_gentle))
+                }
+            }
+        } finally {
+            prefs.edit().putString("selected_language", oldCode).commit()
+            if (android.os.Build.VERSION.SDK_INT >= 33 && oldLocales != null) manager?.applicationLocales = oldLocales
+        }
+    }
+
+    @Test fun vibrationControlsPlayAllThreePatterns() {
+        unlocked()
+        val context = instrumentation.targetContext
+        @Suppress("DEPRECATION")
+        val motor = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as android.os.Vibrator
+        org.junit.Assume.assumeTrue(motor.hasVibrator())
+        val strings = MaitriLocale.localized(context).resources
+        ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                activity.setContent { SurakshaNetTheme { MaitriVibration(onBack = {}) } }
+            }
+            for (id in listOf(R.string.settings_gentle, R.string.settings_steady, R.string.settings_strong)) {
+                click(strings.getString(id))
+                val button = node { candidate ->
+                    candidate.text?.toString() == strings.getString(R.string.settings_vibration) &&
+                        generateSequence(candidate) { it.parent }.any { it.isClickable }
+                }
+                assertTrue(generateSequence(button) { it.parent }.first { it.isClickable }.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                node { it.text?.toString() == strings.getString(R.string.settings_playing) }
+                node { it.text?.toString() == strings.getString(R.string.settings_ready) }
+            }
+        }
+    }
+
+    @Test fun profileEditAndBackUseTheProductionGraph() {
+        unlocked()
+        ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val user = com.example.surakshanet.data.UserProfile("test", "Test User", "test@example.org",
+                    null, null, com.example.surakshanet.data.Responder())
+                val vm = com.example.surakshanet.state.SafetyViewModel(activity.application)
+                activity.setContent {
+                    SurakshaNetTheme {
+                        com.example.surakshanet.navigation.MainGraph(DemoState(user = user), vm, {}, false)
+                    }
+                }
+            }
+            click("Profile")
+            click("Edit")
+            node { it.text?.toString() == "Full name" }
+            scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+            node { it.text?.toString() == "Edit" }
+        }
+    }
 }

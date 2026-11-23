@@ -507,11 +507,21 @@ def test_moving_geofence_and_responder_invitation(maitri_env):
     assert invitation is not None
     invitation_id = invitation["id"]
 
+    help_url = f"/api/incidents/{incident_id}/request-help"
+    responder = {"X-Test-Actor": "RESPONDER_B"}
+    assert client.post(help_url, headers=responder).status_code == 404
+    assert client.post(help_url, headers={"X-Test-Actor": "VICTIM_A"}).status_code == 403
+
     # 5. Responder B accepts invitation
     accept_res = client.post(f"/api/responders/invitations/{invitation_id}/response",
                              headers={"X-Test-Actor": "RESPONDER_B"}, json={"decision": "ACCEPTED"})
     assert accept_res.status_code == 200
     assert accept_res.json()["status"] == "ACCEPTED"
+
+    help_response = client.post(help_url, headers=responder)
+    assert help_response.status_code == 200
+    assert help_response.json() == {"queued": 0}
+    assert client.post(help_url, headers=responder).json() == {"queued": 0}
 
     # 6. Accepted responder B now has authorized access to incident location
     r_loc = client.get(f"/api/incidents/{incident_id}/location", headers={"X-Test-Actor": "RESPONDER_B"})
@@ -722,3 +732,89 @@ def test_health_and_version_diagnostics(maitri_env):
     version = client.portal.call(check_postgis)
     assert version is not None
     assert len(version) > 0
+
+
+# ==============================================================================
+# CHECKPOINT C: SCREEN 14 PROFILE DETAILS AND SCREEN 13 PIN MANAGEMENT
+# ==============================================================================
+def test_profile_details_partial_update_keeps_responder_state(maitri_env):
+    client, _, _, _ = maitri_env
+    b = {"X-Test-Actor": "RESPONDER_B"}
+    assert client.put("/api/users/me", headers=b, json={
+        "display_name": "Responder B", "responder_opt_in": True, "responder_available": True}).status_code == 200
+
+    saved = client.patch("/api/users/me", headers=b, json={
+        "display_name": "  Responder Bee ", "phone_number": "+91 98765 43210", "city": " Pune "})
+    assert saved.status_code == 200
+    body = saved.json()
+    assert (body["display_name"], body["phone_number"], body["city"]) == ("Responder Bee", "+91 98765 43210", "Pune")
+    assert body["responder_opt_in"] is True and body["responder_available"] is True
+
+    # Omitted fields are untouched; blank optional fields clear the stored value.
+    cleared = client.patch("/api/users/me", headers=b, json={"phone_number": "", "city": "   "}).json()
+    assert (cleared["display_name"], cleared["phone_number"], cleared["city"]) == ("Responder Bee", None, None)
+    assert client.get("/api/users/me", headers=b).json()["phone_number"] is None
+
+    for bad in ({"display_name": "   "}, {"display_name": None}, {"phone_number": "12"},
+                {"phone_number": "call me"}, {"city": "x" * 129}, {"responder_available": False},
+                {"email": "other@example.invalid"}):
+        assert client.patch("/api/users/me", headers=b, json=bad).status_code == 422, bad
+
+    # One account cannot see another account's contact details.
+    assert client.get("/api/users/me", headers={"X-Test-Actor": "VICTIM_A"}).json()["phone_number"] is None
+
+
+def test_safety_pin_change_and_recovery_contract(maitri_env):
+    client, _, _, _ = maitri_env
+    a = {"X-Test-Actor": "VICTIM_A"}
+    assert client.get("/api/security/safety-pin/status", headers=a).json()["has_primary_pin"] is False
+    for weak in ("111111", "123456", "654321"):
+        assert client.post("/api/security/safety-pin/setup", headers=a,
+                           json={"pin": weak, "confirm_pin": weak}).status_code == 422
+    assert client.post("/api/security/safety-pin/setup", headers=a,
+                       json={"pin": "839162", "confirm_pin": "839162"}).json()["status"] == "CONFIGURED"
+    again = client.post("/api/security/safety-pin/setup", headers=a, json={"pin": "839162", "confirm_pin": "839162"})
+    assert again.status_code == 409 and again.json()["detail"] == "PIN already enrolled. Use PIN change or recovery."
+
+    wrong = client.post("/api/security/safety-pin/change", headers=a,
+                        json={"current_pin": "774921", "new_pin": "520847", "confirm_pin": "520847"})
+    assert wrong.status_code == 403 and wrong.json()["detail"].startswith("Current PIN is incorrect.")
+    assert client.post("/api/security/safety-pin/change", headers=a,
+                       json={"current_pin": "839162", "new_pin": "520847", "confirm_pin": "520847"}).json()["status"] == "UPDATED"
+
+    stale = client.post("/api/security/safety-pin/recover", headers={**a, "X-Test-Auth-Age": "900"},
+                        json={"new_pin": "406183", "confirm_pin": "406183"})
+    assert stale.status_code == 403 and stale.json()["detail"] == "Sign in again to recover your Safety PIN"
+    # A just-changed PIN cannot be immediately recovered (prevents takeover by a stolen session).
+    assert client.post("/api/security/safety-pin/recover", headers=a,
+                       json={"new_pin": "406183", "confirm_pin": "406183"}).status_code == 429
+
+    incident_id = create_test_sos_incident(client, "VICTIM_A")
+    closed = client.post(f"/api/incidents/{incident_id}/resolve", headers=a, json={"pin": "520847"})
+    assert closed.status_code == 200 and closed.json()["status"] == "CLOSED"
+
+
+# ==============================================================================
+# CHECKPOINT D: TRUSTED CONTACT DELIVERY IS NEVER OVERSTATED
+# ==============================================================================
+def test_trusted_contact_status_is_truthful_and_owner_scoped(maitri_env):
+    client, _, _, _ = maitri_env
+    a = {"X-Test-Actor": "VICTIM_A"}
+    assert client.post("/api/trusted-contacts", headers=a, json={
+        "display_name": "Sister C", "phone_number": "+91 98765 43210", "label": "Sister",
+        "is_primary": True, "notify_on_sos": True, "allow_live_tracking": False}).status_code == 201
+    incident_id = create_test_sos_incident(client, "VICTIM_A")
+
+    # Before dispatch nothing has been sent, and nothing claims otherwise.
+    before = client.get(f"/api/incidents/{incident_id}/trusted-contacts", headers=a).json()
+    assert [s["delivery_status"] for s in before] == ["NOT_SENT"]
+
+    sent = client.post(f"/api/incidents/{incident_id}/trusted-contacts/alert", headers=a).json()
+    assert [s["delivery_status"] for s in sent["statuses"]] == ["NO_SMS_PROVIDER"]
+    after = client.get(f"/api/incidents/{incident_id}/trusted-contacts", headers=a).json()
+    assert [s["delivery_status"] for s in after] == ["NO_SMS_PROVIDER"]
+    assert all(s["delivery_status"] != "PROVIDER_ACCEPTED" for s in before + after)
+
+    # Another account cannot probe this incident's alert state.
+    assert client.get(f"/api/incidents/{incident_id}/trusted-contacts",
+                      headers={"X-Test-Actor": "UNAUTHORIZED_USER_D"}).status_code == 404

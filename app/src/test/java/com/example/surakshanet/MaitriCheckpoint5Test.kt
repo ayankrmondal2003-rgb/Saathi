@@ -30,7 +30,7 @@ class MaitriCheckpoint5Test {
         assertTrue(types.contains(VolunteerDocType.PHOTO))
         assertTrue(types.contains(VolunteerDocType.DECLARATION))
 
-        assertEquals("Government-issued identity proof", VolunteerDocType.GOVT_ID.title)
+        assertEquals("Government issued identity proof", VolunteerDocType.GOVT_ID.title) // SVG 04 wording
         assertEquals("Address proof", VolunteerDocType.ADDRESS_PROOF.title)
         assertEquals("Police character certificate", VolunteerDocType.POLICE_CERT.title)
         assertEquals("Recent photograph", VolunteerDocType.PHOTO.title)

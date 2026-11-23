@@ -30,6 +30,7 @@ users = Table("users", metadata, pk(), Column("firebase_uid", String(128), nulla
     Column("responder_opt_in", Boolean, nullable=False, server_default=text("false")),
     Column("responder_available", Boolean, nullable=False, server_default=text("false")),
     Column("account_status", String, nullable=False, server_default="ACTIVE"),
+    Column("phone_number", String(32)), Column("city", String(128)),
     stamp("created_at", True), stamp("updated_at", True),
     CheckConstraint("account_status IN ('ACTIVE','SUSPENDED')"),
     CheckConstraint("NOT responder_available OR responder_opt_in"))
@@ -130,4 +131,6 @@ notification_outbox = Table("notification_outbox", metadata, pk(),
     Column("event_type", String(64), nullable=False),
     Column("delivery_status", String(32), nullable=False, server_default="PENDING"),
     stamp("created_at", True),
-    Column("attempt_count", Integer, nullable=False, server_default="0"))
+    Column("attempt_count", Integer, nullable=False, server_default="0"),
+    # Created by migration 0003 (ADD COLUMN IF NOT EXISTS); declared here so services can write it.
+    Column("failure_reason", String))

@@ -114,11 +114,13 @@ internal fun MaitriCircleContent(
             .background(p.background)
     ) {
         Column(
+            // Same insets as screen 02: below the status bar (edge-to-edge) and above the floating dock.
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .verticalScroll(scrollState)
                 .padding(horizontal = 24.dp)
-                .padding(top = 28.dp, bottom = 120.dp),
+                .padding(top = 22.dp, bottom = LocalFloatingNavBarPadding.current.coerceAtLeast(120.dp)),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Header: Logo + YOUR TRUSTED CIRCLE
@@ -136,16 +138,16 @@ internal fun MaitriCircleContent(
                 Spacer(modifier = Modifier.width(14.dp))
                 Column {
                     Text(
-                        text = "YOUR TRUSTED",
+                        text = "YOUR PEOPLE, CLOSE BY",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 1.6.sp,
                         color = p.accent
                     )
                     Text(
-                        text = "CIRCLE",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
+                        text = "Your circle",
+                        fontSize = 25.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = p.primary
                     )
                 }
@@ -161,14 +163,14 @@ internal fun MaitriCircleContent(
             ) {
                 Column {
                     Text(
-                        text = "Keep 3-5 trusted people close.",
-                        fontSize = 15.sp,
+                        text = "Keep your people close",
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = p.primary
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Add family, friends, or neighbors who can act fast when you need help.",
+                        text = "Save the people you'd reach when you need help.\nSMS alerts are not connected yet.",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Normal,
                         color = p.secondary,
@@ -188,14 +190,13 @@ internal fun MaitriCircleContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "TRUSTED CONTACTS",
-                    fontSize = 11.sp,
+                    text = "Saved contacts",
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 1.2.sp,
-                    color = p.secondary
+                    color = p.primary
                 )
                 Text(
-                    text = "${contacts.size} / 5 added",
+                    text = if (contacts.size == 1) "1 person" else "${contacts.size} people",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
                     color = p.secondary
@@ -292,14 +293,14 @@ internal fun MaitriCircleContent(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Auto-alert during SOS",
+                            text = "Choose who gets your SOS",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = p.primary
                         )
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            text = "When SOS is triggered, your trusted circle receives immediate SMS alerts with your real-time location. Make sure their numbers are verified.",
+                            text = "Turn alerts on for the people you want\nto notify in an emergency.",
                             fontSize = 11.sp,
                             color = p.secondary,
                             lineHeight = 15.sp
@@ -332,7 +333,7 @@ internal fun MaitriCircleContent(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Add trusted contact",
+                        text = "Add contact",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = if (isDark) Color(0xFF40303A) else Color.White
@@ -554,25 +555,10 @@ private fun ContactCardItem(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        if (contact.isPrimary) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(palette.card)
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "PRIMARY",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = palette.accent
-                                )
-                            }
-                        }
                     }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "${contact.label} • ${contact.phoneNumber}",
+                        text = if (contact.isPrimary) "${contact.label} · Primary contact" else contact.label,
                         fontSize = 11.sp,
                         color = palette.secondary,
                         maxLines = 1,
@@ -633,7 +619,7 @@ private fun ContactCardItem(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     Text(
-                        text = if (contact.notifyOnSos) "SOS alert: ON" else "SOS alert: OFF",
+                        text = if (contact.notifyOnSos) "SOS alerts on" else "SOS alerts off",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
                         color = if (contact.notifyOnSos) palette.primary else palette.secondary

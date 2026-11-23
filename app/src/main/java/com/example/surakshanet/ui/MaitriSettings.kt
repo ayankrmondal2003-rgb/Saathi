@@ -1,0 +1,129 @@
+package com.example.surakshanet.ui
+
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.Role
+import com.example.surakshanet.R
+import com.example.surakshanet.R.string as S
+import com.example.surakshanet.data.UserProfile
+import com.example.surakshanet.ui.theme.LocalThemeController
+import com.example.surakshanet.ui.theme.ThemeMode
+
+@Composable
+fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: () -> Unit,
+                   modifier: Modifier = Modifier) {
+    val p = maitriPalette()
+    val context = LocalContext.current
+    val strings = settingsResources()
+    val theme = LocalThemeController.current
+    val themeNames = mapOf(ThemeMode.SYSTEM to S.settings_system, ThemeMode.LIGHT to S.settings_light, ThemeMode.DARK to S.settings_dark)
+    var dialog by remember { mutableStateOf<Int?>(null) }
+    val language = java.util.Locale.forLanguageTag(settingsLanguageCode())
+    fun appSettings() = context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        Uri.fromParts("package", context.packageName, null)))
+
+    SettingsBoard(if (p.dark) R.drawable.maitri_dark_09 else R.drawable.maitri_light_09, 729, modifier,
+        footer = {
+            TextButton(onClick = onLogout, modifier = Modifier.padding(horizontal = 24.dp)) {
+                Text(strings.getString(S.settings_logout), color = p.accent)
+            }
+            Spacer(Modifier.height(LocalFloatingNavBarPadding.current))
+        }) {
+        SettingsText(strings.getString(S.settings_eyebrow), 84, 58, 282, 22, 10, p.accent, true)
+        SettingsText(strings.getString(S.settings_profile), 84, 80, 284, 36, 25, p.primary, true)
+        SettingsText(strings.getString(S.settings_your_profile), 40, 156, 222, 28, 18, p.primary, true)
+        SettingsText(strings.getString(S.settings_details), 40, 186, 222, 23, 11, p.secondary)
+        SettingsText(strings.getString(S.settings_edit), 299, 166, 50, 38, 12, p.accent, true, true) { onNavigate("EditProfile") }
+        BoardAction(24, 144, 275, 82, strings.getString(S.settings_your_profile)) { onNavigate("EditProfile") }
+        SettingsText(strings.getString(S.settings_safety), 24, 249, 342, 28, 18, p.primary, true)
+        SettingsText(strings.getString(S.settings_comfort), 24, 478, 342, 28, 18, p.primary, true)
+        ProfileRow(285, 58, S.settings_permissions, S.settings_permissions_sub) { onNavigate("Permissions") }
+        ProfileRow(343, 58, S.settings_vibrations, S.settings_vibrations_sub, strings.getString(S.settings_test)) { onNavigate("TestVibration") }
+        ProfileRow(401, 58, S.settings_pins, S.settings_pins_sub) { onNavigate("SafetyPin") }
+        ProfileRow(510, 52, S.settings_language, S.settings_language_sub, language.getDisplayLanguage(language).replaceFirstChar { it.titlecase(language) }) { onNavigate("Language") }
+        ProfileRow(562, 52, S.settings_themes, S.settings_themes_sub, strings.getString(themeNames.getValue(theme.themeMode))) { dialog = S.settings_themes }
+        ProfileRow(614, 52, S.settings_notifications, S.settings_notifications_sub) {
+            try {
+                context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
+            } catch (_: android.content.ActivityNotFoundException) { appSettings() }
+        }
+        ProfileRow(666, 52, S.settings_privacy, S.settings_privacy_sub) { dialog = S.settings_privacy }
+        SettingsText(strings.getString(S.settings_help), 74, 721, 290, 36, 13, p.secondary, action = { dialog = S.settings_help })
+        BoardAction(24, 721, 50, 36, strings.getString(S.settings_help)) { dialog = S.settings_help }
+    }
+
+    dialog?.let { id ->
+        AlertDialog(onDismissRequest = { dialog = null }, title = { Text(strings.getString(id)) },
+            text = {
+                if (id == S.settings_themes) Column {
+                    themeNames.forEach { (mode, name) ->
+                        TextButton(onClick = { theme.setMode(mode); dialog = null }) { Text(strings.getString(name)) }
+                    }
+                } else Text(strings.getString(if (id == S.settings_help) S.settings_help_body else S.settings_privacy_body))
+            }, confirmButton = {
+                TextButton(onClick = {
+                    dialog = null
+                    if (id == S.settings_privacy) appSettings()
+                }) { Text(strings.getString(if (id == S.settings_privacy) S.settings_manage else S.settings_close)) }
+            })
+    }
+}
+
+@Composable
+private fun ProfileRow(y: Int, height: Int, title: Int, detail: Int, value: String? = null, onClick: () -> Unit) {
+    val strings = settingsResources()
+    val p = maitriPalette()
+    Box(settingsSlot(24, y, 342, height).clickable(role = Role.Button, onClick = onClick)) {
+        Column(Modifier.align(Alignment.CenterStart).padding(start = 56.dp, end = if (value == null) 26.dp else 83.dp)) {
+            Text(strings.getString(title), color = p.primary, fontSize = 14.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(3.dp))
+            Text(strings.getString(detail), color = p.secondary, fontSize = 10.sp, lineHeight = 12.sp, maxLines = 2)
+        }
+        if (value != null) Text(value, Modifier.align(Alignment.CenterEnd).padding(end = if (title == S.settings_vibrations) 24.dp else 36.dp),
+            color = if (title == S.settings_vibrations) p.accent else p.secondary, fontSize = 11.sp)
+    }
+}
+@Preview(widthDp = 390, heightDp = 844)
+@Composable
+private fun MaitriSettingsLightPreview() {
+    com.example.surakshanet.ui.theme.SurakshaNetTheme {
+        MaitriSettings(
+            user = null,
+            onNavigate = {},
+            onLogout = {}
+        )
+    }
+}
+
+@Preview(widthDp = 390, heightDp = 844, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun MaitriSettingsDarkPreview() {
+    com.example.surakshanet.ui.theme.SurakshaNetTheme {
+        MaitriSettings(
+            user = null,
+            onNavigate = {},
+            onLogout = {}
+        )
+    }
+}

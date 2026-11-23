@@ -17,6 +17,11 @@ import com.example.surakshanet.ui.theme.SurakshaNetTheme
 class MainActivity : ComponentActivity() {
     private val pendingInvitationId = mutableStateOf<String?>(null)
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(if (android.os.Build.VERSION.SDK_INT < 33)
+            com.example.surakshanet.ui.MaitriLocale.localized(newBase) else newBase)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NotificationHelper.createEmergencyNotificationChannel(this)

@@ -154,6 +154,44 @@ async def set_primary_contact(db, user_id: UUID, contact_id: UUID) -> dict:
     return dict(updated)
 
 
+NO_SMS_PROVIDER = "NO_SMS_PROVIDER"
+
+
+def contact_alert_status(notify_on_sos: bool, outbox_row) -> str:
+    """Public status derived from recorded outbox state only; never reports delivery that did not happen."""
+    if not notify_on_sos:
+        return "NOT_REQUESTED"
+    if outbox_row is None:
+        return "NOT_SENT"
+    if outbox_row["failure_reason"] == NO_SMS_PROVIDER:
+        return NO_SMS_PROVIDER
+    return outbox_row["delivery_status"]
+
+
+async def incident_contact_statuses(db, user_id: UUID, incident_id: UUID) -> list[dict]:
+    owned = await db.scalar(select(incidents.c.id).where(
+        incidents.c.id == incident_id, incidents.c.victim_user_id == user_id))
+    if owned is None:
+        raise HTTPException(404, "Incident not found or unauthorized")
+    rows = (await db.execute(select(notification_outbox.c.contact_id, notification_outbox.c.delivery_status,
+        notification_outbox.c.failure_reason, notification_outbox.c.created_at).where(
+        notification_outbox.c.incident_id == incident_id,
+        notification_outbox.c.event_type == "TRUSTED_CONTACT_SOS_ALERT"))).mappings().all()
+    by_contact = {r["contact_id"]: r for r in rows}
+    now = datetime.now(timezone.utc)
+    return [{
+        "contact_id": c["id"],
+        "display_name": c["display_name"],
+        "masked_phone": mask_phone(c["phone_number"]),
+        "is_primary": c["is_primary"],
+        "delivery_status": contact_alert_status(c["notify_on_sos"], by_contact.get(c["id"])),
+        "message_preview": "SurakshaNet SOS: I may need urgent help.",
+        "location_disclosed": c["include_location_link"],
+        "tracking_granted": c["allow_live_tracking"],
+        "updated_at": by_contact[c["id"]]["created_at"] if c["id"] in by_contact else now,
+    } for c in await list_contacts(db, user_id)]
+
+
 async def dispatch_incident_alerts(db, user_id: UUID, incident_id: UUID) -> dict:
     inc = (await db.execute(select(incidents).where(
         incidents.c.id == incident_id,
@@ -192,11 +230,6 @@ async def dispatch_incident_alerts(db, user_id: UUID, incident_id: UUID) -> dict
         # Check for grant if live tracking allowed
         grant_created = False
         if c["allow_live_tracking"]:
-            # Check if contact phone matches an existing user
-            recipient_id = await db.scalar(select(users.c.id).where(
-                users.c.account_status == "ACTIVE"
-            ).limit(1)) # placeholder or linked user
-
             existing_grant = await db.scalar(select(trusted_contact_grants.c.id).where(
                 trusted_contact_grants.c.incident_id == incident_id,
                 trusted_contact_grants.c.contact_id == c["id"]
@@ -219,14 +252,17 @@ async def dispatch_incident_alerts(db, user_id: UUID, incident_id: UUID) -> dict
             notification_outbox.c.event_type == "TRUSTED_CONTACT_SOS_ALERT"
         ))
 
-        delivery_status = "PROVIDER_ACCEPTED"
+        # No SMS provider is integrated. Record the attempt as not sent instead of claiming provider acceptance;
+        # FAILED rows are never picked up by the outbox worker.
+        delivery_status = NO_SMS_PROVIDER
         if not existing_outbox:
             await db.execute(notification_outbox.insert().values(
                 incident_id=incident_id,
                 recipient_user_id=user_id,
                 contact_id=c["id"],
                 event_type="TRUSTED_CONTACT_SOS_ALERT",
-                delivery_status=delivery_status,
+                delivery_status="FAILED",
+                failure_reason=NO_SMS_PROVIDER,
                 created_at=now
             ))
 

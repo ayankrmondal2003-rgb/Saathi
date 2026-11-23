@@ -21,12 +21,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.surakshanet.R
 import com.example.surakshanet.network.BackendClient
 import com.example.surakshanet.network.DecisionDto
 import com.example.surakshanet.network.ExpectedAccount
 import com.google.firebase.auth.FirebaseAuth
+import com.example.surakshanet.network.canOpenIncoming
+import com.example.surakshanet.network.confirmedInvitationResponse
+import com.example.surakshanet.network.invitationFailure
 import kotlinx.coroutines.launch
-import retrofit2.HttpException
 
 /**
  * Screen 06 — Incoming SOS Request Dialog.
@@ -34,10 +37,11 @@ import retrofit2.HttpException
  */
 @Composable
 fun MaitriIncoming(
-    invitationId: String?,
-    approxLocality: String = "Kolkata, Sector V",
-    approxDistance: String = "Approx. 450 m away",
-    estimatedEta: String = "Estimated arrival ~ 3-4 mins",
+    invitation: com.example.surakshanet.network.InvitationDto,
+    uid: String,
+    approxLocality: String = "Nearby emergency",
+    approxDistance: String = "Distance unavailable",
+    estimatedEta: String = "Arrival time unavailable",
     onAccepted: (incidentId: String) -> Unit,
     onDeclined: () -> Unit
 ) {
@@ -48,13 +52,13 @@ fun MaitriIncoming(
 
     fun submitDecision(decision: String) {
         if (isSubmitting) return
-        if (invitationId.isNullOrBlank()) {
+        if (!invitation.canOpenIncoming()) {
             errorMessage = "Invalid invitation ID."
             return
         }
 
         val currentUser = runCatching { FirebaseAuth.getInstance().currentUser }.getOrNull()
-        if (currentUser == null) {
+        if (currentUser?.uid != uid) {
             errorMessage = "Sign in required to respond to SOS requests."
             return
         }
@@ -64,32 +68,19 @@ fun MaitriIncoming(
 
         scope.launch {
             try {
-                val account = ExpectedAccount(currentUser.uid)
-                val response = BackendClient.api.respond(invitationId, DecisionDto(decision), account)
-                if (response.status == "EXPIRED") {
-                    errorMessage = "This emergency invitation has expired."
-                    return@launch
+                // Only a server-confirmed decision changes screens; EXPIRED is reported, never treated as success.
+                val status = confirmedInvitationResponse(decision) {
+                    BackendClient.api.respond(invitation.id, DecisionDto(decision), ExpectedAccount(uid))
                 }
-
-                if (decision == "ACCEPTED") {
-                    // Fetch incident ID from invitations inbox
-                    val inbox = runCatching { BackendClient.api.invitations(account) }.getOrNull()
-                    val match = inbox?.find { it.id == invitationId }
-                    val incidentId = match?.incidentId ?: invitationId
-                    onAccepted(incidentId)
-                } else {
-                    onDeclined()
+                when {
+                    status == "EXPIRED" -> errorMessage = "This emergency invitation has expired."
+                    decision == "ACCEPTED" -> onAccepted(invitation.incidentId)
+                    else -> onDeclined()
                 }
-            } catch (e: HttpException) {
-                errorMessage = when (e.code()) {
-                    403 -> "Responder location must be fresh and within active recruitment area."
-                    404 -> "Emergency incident no longer available."
-                    409 -> "Invitation already answered."
-                    422 -> "Invalid invitation parameters."
-                    else -> "Unable to respond (HTTP ${e.code()})."
-                }
-            } catch (e: Exception) {
-                errorMessage = "Network error: ${e.localizedMessage ?: "Unable to contact server"}."
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) {
+                // Shared mapping uses the server's detail (e.g. outside radius vs unavailable vs incident inactive).
+                errorMessage = invitationFailure(e)
             } finally {
                 isSubmitting = false
             }
@@ -104,7 +95,8 @@ fun MaitriIncoming(
         isSubmitting = isSubmitting,
         errorMessage = errorMessage,
         onAccept = { submitDecision("ACCEPTED") },
-        onDecline = { submitDecision("DECLINED") }
+        onDecline = { submitDecision("DECLINED") },
+        dismissError = { errorMessage = null }
     )
 }
 
@@ -117,206 +109,32 @@ internal fun MaitriIncomingContent(
     isSubmitting: Boolean,
     errorMessage: String?,
     onAccept: () -> Unit,
-    onDecline: () -> Unit
+    onDecline: () -> Unit,
+    dismissError: () -> Unit = {}
 ) {
-    val isDark = p.dark
-
-    // Scrim overlay covering the full 390x844 viewport
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.55f))
-            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {},
-        contentAlignment = Alignment.Center
-    ) {
-        // Modal Card strictly matching 341x395dp, rx=27.5dp in light-06.svg / dark-06.svg
-        Box(
-            modifier = Modifier
-                .width(342.dp)
-                .wrapContentHeight()
-                .clip(RoundedCornerShape(28.dp))
-                .background(p.surface)
-                .border(1.dp, p.divider, RoundedCornerShape(28.dp))
-                .padding(horizontal = 20.dp, vertical = 24.dp)
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Top Icon Circle (44x44dp, rx=22dp)
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(p.card),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Emergency,
-                        contentDescription = "Emergency Alert",
-                        tint = p.accent,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Heading: "Nearby SOS Request"
-                Text(
-                    text = "Nearby SOS Request",
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = p.primary,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Subtitle: "Someone needs help nearby"
-                Text(
-                    text = "Someone needs urgent help nearby.",
-                    fontSize = 12.sp,
-                    color = p.secondary,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // Locality / Distance Box (310x98dp, rx=18dp)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(p.background)
-                        .border(1.dp, p.divider.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
-                        .padding(14.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Rounded.LocationOn,
-                                contentDescription = null,
-                                tint = p.accent,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = approxLocality,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = p.primary
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "•  $approxDistance",
-                                fontSize = 11.sp,
-                                color = p.secondary
-                            )
-                        }
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Rounded.Schedule,
-                                contentDescription = null,
-                                tint = p.secondary,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = estimatedEta,
-                                fontSize = 11.sp,
-                                color = p.secondary
-                            )
-                        }
-
-                        Text(
-                            text = "Precise victim coordinates will be disclosed only after acceptance.",
-                            fontSize = 10.sp,
-                            color = p.secondary.copy(alpha = 0.85f),
-                            lineHeight = 14.sp
-                        )
-                    }
-                }
-
-                if (errorMessage != null) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = errorMessage,
-                        fontSize = 11.sp,
-                        color = p.accent,
-                        textAlign = TextAlign.Center,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Action Buttons Row (each 148x48dp, rx=24dp)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Accept Action Button (Left)
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(if (isSubmitting) p.accent.copy(alpha = 0.6f) else p.accent)
-                            .clickable(enabled = !isSubmitting, onClick = onAccept),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isSubmitting) {
-                            CircularProgressIndicator(
-                                color = Color.White,
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text(
-                                text = "Accept",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isDark) Color(0xFF40303A) else Color.White
-                            )
-                        }
-                    }
-
-                    // Decline Action Button (Right)
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(p.card)
-                            .clickable(enabled = !isSubmitting, onClick = onDecline),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Decline",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = p.accent
-                        )
-                    }
-                }
-            }
-        }
+    EmergencyBoard(if (p.dark) R.drawable.maitri_dark_06 else R.drawable.maitri_light_06,
+        "Someone needs help. Only accept if you can respond safely.", 816) {
+        BoardLabel(86, 410, 252, approxLocality, p.primary, 15)
+        BoardLabel(86, 434, 252, "Location private until accepted", p.secondary)
+        BoardLabel(54, 466, 154, estimatedEta, p.accent)
+        BoardLabel(215, 466, 132, approxDistance, p.primary)
+        BoardAction(40, 548, 148, 48, "Accept", !isSubmitting, onAccept)
+        BoardAction(202, 548, 148, 48, "Decline", !isSubmitting, onDecline)
     }
+    if (errorMessage != null) androidx.compose.material3.AlertDialog(
+        onDismissRequest = dismissError, title = { Text("Invitation update") },
+        text = { Text(errorMessage) }, confirmButton = {
+            androidx.compose.material3.TextButton(onClick = dismissError) { Text("Close") }
+        })
 }
-
-// ---------------------------------------------------------------------------
-// Previews for Screen 06 (Light & Dark)
-// ---------------------------------------------------------------------------
-
 @Preview(name = "Screen 06 — Incoming SOS Light", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
 fun MaitriIncomingLightPreview() {
     MaitriIncomingContent(
         p = MaitriPalette(dark = false),
-        approxLocality = "Kolkata, Sector V",
-        approxDistance = "Approx. 450 m away",
-        estimatedEta = "Estimated arrival ~ 3-4 mins",
+        approxLocality = "Nearby emergency",
+        approxDistance = "Distance unavailable",
+        estimatedEta = "ETA unavailable",
         isSubmitting = false,
         errorMessage = null,
         onAccept = {},
@@ -329,9 +147,9 @@ fun MaitriIncomingLightPreview() {
 fun MaitriIncomingDarkPreview() {
     MaitriIncomingContent(
         p = MaitriPalette(dark = true),
-        approxLocality = "Kolkata, Sector V",
-        approxDistance = "Approx. 450 m away",
-        estimatedEta = "Estimated arrival ~ 3-4 mins",
+        approxLocality = "Nearby emergency",
+        approxDistance = "Distance unavailable",
+        estimatedEta = "ETA unavailable",
         isSubmitting = false,
         errorMessage = null,
         onAccept = {},

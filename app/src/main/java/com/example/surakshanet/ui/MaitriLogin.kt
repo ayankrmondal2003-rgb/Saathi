@@ -258,7 +258,7 @@ internal fun MaitriLoginContent(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "Log in or sign up to keep your circle close.",
+                text = "A little peace of mind starts here.",
                 color = p.secondary,
                 fontSize = 12.sp,
                 modifier = Modifier.fillMaxWidth()
@@ -433,7 +433,7 @@ internal fun MaitriLoginContent(
                         .background(p.divider)
                 )
                 Text(
-                    text = "or use email address",
+                    text = "or use email & password",
                     color = p.secondary,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(horizontal = 10.dp)
@@ -633,7 +633,7 @@ internal fun MaitriLoginContent(
 
             // Terms & Privacy notice
             Text(
-                text = "By continuing, you agree to the Terms of Service and Privacy Policy.",
+                text = "By continuing, you agree to the Terms of Service\nand Privacy Policy.",
                 color = p.secondary,
                 fontSize = 10.sp,
                 textAlign = TextAlign.Center,
@@ -642,15 +642,7 @@ internal fun MaitriLoginContent(
 
             Spacer(Modifier.height(24.dp))
 
-            // Home Gesture bar (134 x 5, rx 2.5)
-            Box(
-                modifier = Modifier
-                    .width(134.dp)
-                    .height(5.dp)
-                    .clip(RoundedCornerShape(2.5.dp))
-                    .background(p.primary)
-            )
-
+            // The SVG frame's home indicator belongs to the device chrome, not the app.
             Spacer(Modifier.height(12.dp))
         }
     }

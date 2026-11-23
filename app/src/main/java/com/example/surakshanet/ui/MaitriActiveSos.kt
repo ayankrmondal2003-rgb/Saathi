@@ -1,6 +1,7 @@
 package com.example.surakshanet.ui
 
 import android.os.SystemClock
+import com.example.surakshanet.R
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,6 +36,8 @@ import com.example.surakshanet.data.EmergencyContact
 import com.example.surakshanet.data.SosIncident
 import com.example.surakshanet.location.LocalTrackingRepository
 import com.example.surakshanet.network.BackendClient
+import com.example.surakshanet.network.MISSING_PRIMARY_PIN
+import com.example.surakshanet.network.pinFailure
 import com.example.surakshanet.network.ExpectedAccount
 import com.example.surakshanet.network.IncidentResolutionRequestDto
 import com.example.surakshanet.network.IncidentSnapshotDto
@@ -51,9 +54,10 @@ import retrofit2.HttpException
 fun MaitriActiveSos(
     incident: SosIncident,
     uid: String,
-    contacts: List<EmergencyContact> = emptyList(),
-    alertStatuses: List<ContactAlertStatus> = emptyList(),
-    onEndSos: () -> Unit
+    incidentId: String,
+    onAccessLost: () -> Unit,
+    onEndSos: () -> Unit,
+    onSetPin: () -> Unit = {}
 ) {
     val p = maitriPalette()
     val context = LocalContext.current
@@ -62,54 +66,49 @@ fun MaitriActiveSos(
     val tracking = remember(context) { LocalTrackingRepository.get(context) }
     var snapshot by remember(uid, incident.started) { mutableStateOf<IncidentSnapshotDto?>(null) }
     var showPinDialog by rememberSaveable { mutableStateOf(false) }
-    var pinValue by rememberSaveable { mutableStateOf("") }
+    var pinValue by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
     var isVerifyingPin by remember { mutableStateOf(false) }
 
-    // Media states (Voice & Camera) with explicit consent & runtime permissions
-    var isRecordingAudio by rememberSaveable { mutableStateOf(false) }
-    var hasPhotoEvidence by rememberSaveable { mutableStateOf(false) }
-
-    val audioPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            isRecordingAudio = !isRecordingAudio
-            val msg = if (isRecordingAudio) "Secure audio recording started" else "Audio recording stopped and encrypted"
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(context, "Microphone permission required for voice notes", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            hasPhotoEvidence = true
-            Toast.makeText(context, "Photo evidence captured and encrypted locally", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(context, "Camera permission required to capture evidence", Toast.LENGTH_SHORT).show()
-        }
+    var delivery by remember(uid, incident.started) { mutableStateOf<List<com.example.surakshanet.network.ContactDeliveryDto>?>(null) }
+    var updated by remember { mutableStateOf(false) }
+    fun openCapture(action: String) {
+        try { context.startActivity(android.content.Intent(action)) }
+        catch (_: android.content.ActivityNotFoundException) { Toast.makeText(context, "No capture app available", Toast.LENGTH_SHORT).show() }
+        catch (_: SecurityException) { Toast.makeText(context, "Capture permission unavailable", Toast.LENGTH_SHORT).show() }
     }
 
     // Poll live incident snapshot every 5s while active
-    val activeIncidentId = tracking.sync.getActiveIncidentId(uid)
     LaunchedEffect(uid, incident.started) {
         while (true) {
             val id = tracking.sync.getActiveIncidentId(uid)
-            if (id != null) {
+            if (id == incidentId) {
                 try {
                     val confirmed = BackendClient.api.snapshot(id, ExpectedAccount(uid))
+                    check(confirmed.incidentId == incidentId && tracking.sync.getActiveIncidentId(uid) == incidentId)
                     snapshot = confirmed
                     if (confirmed.status == "CLOSED") {
                         tracking.sync.clearActiveIncident(uid)
                         onEndSos()
                         break
                     }
-                } catch (e: Exception) {
-                    // Non-fatal snapshot error
+                    if (confirmed.status != "ACTIVE" || confirmed.requesterMembership?.role != "OWNER") {
+                        onAccessLost()
+                        break
+                    }
+                    delivery = BackendClient.api.contactDelivery(id, ExpectedAccount(uid))
+                    updated = true
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (e: Exception) {
+                    updated = false
+                    if (e is HttpException && e.code() in listOf(401, 403, 404, 410)) {
+                        onAccessLost()
+                        break
+                    }
                 }
+            } else {
+                onAccessLost()
+                break
             }
             delay(5000)
         }
@@ -128,24 +127,10 @@ fun MaitriActiveSos(
         String.format("%02d:%02d", mins, secs)
     }
 
-    val responderCount = snapshot?.respondersSummary?.acceptedCount ?: 0
-    val responderText = when (responderCount) {
-        0 -> "Searching for nearby responders..."
-        1 -> "1 nearby responder on the way"
-        else -> "$responderCount nearby responders on the way"
-    }
-
-    val circleAlertCount = if (alertStatuses.isNotEmpty()) {
-        alertStatuses.count { it.deliveryStatus != ContactDeliveryStatus.FAILED }
-    } else {
-        contacts.count { it.notifyOnSos }
-    }
-    val circleText = "$circleAlertCount trusted contacts alerted via SMS"
-
     // End SOS via PIN Resolution
     fun verifyPinAndEnd() {
-        if (pinValue.length < 4) {
-            pinError = "PIN must be at least 4 digits."
+        if (pinValue.length != 6) {
+            pinError = "PIN must be 6 digits."
             return
         }
 
@@ -155,50 +140,59 @@ fun MaitriActiveSos(
         scope.launch {
             try {
                 val activeId = tracking.sync.getActiveIncidentId(uid)
-                if (activeId != null && com.example.surakshanet.BuildConfig.API_BASE_URL.isNotBlank()) {
-                    BackendClient.api.resolveIncident(
-                        id = activeId,
-                        request = IncidentResolutionRequestDto(pin = pinValue, reason = "USER_RESOLVED"),
-                        expected = ExpectedAccount(uid)
-                    )
+                if (activeId != incidentId) {
+                    pinError = "Unable to confirm this incident."
+                    return@launch
+                }
+                val result = BackendClient.api.resolveIncident(
+                    id = activeId,
+                    request = IncidentResolutionRequestDto(pin = pinValue, reason = "USER_RESOLVED"),
+                    expected = ExpectedAccount(uid)
+                )
+                if (tracking.sync.getActiveIncidentId(uid) != incidentId || result.incidentId != activeId || result.status != "CLOSED" || result.resolutionStatus != "CONFIRMED") {
+                    pinError = "Closure has not been confirmed."
+                    return@launch
                 }
                 tracking.sync.clearActiveIncident(uid)
                 showPinDialog = false
                 Toast.makeText(context, "Incident safely resolved.", Toast.LENGTH_SHORT).show()
                 onEndSos()
-            } catch (e: HttpException) {
-                pinError = when (e.code()) {
-                    401, 403 -> "Incorrect Safety PIN. Incident remains active."
-                    429 -> "Too many failed attempts. Temporary cooldown in effect."
-                    else -> "Failed to resolve incident (HTTP ${e.code()})."
-                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
-                // If offline or demo mode, allow safe local resolution
-                tracking.sync.clearActiveIncident(uid)
-                showPinDialog = false
-                Toast.makeText(context, "Incident closed locally.", Toast.LENGTH_SHORT).show()
-                onEndSos()
+                // Shared mapping keeps closure, enrollment and lockout messages consistent with screen 13.
+                pinError = pinFailure(e)
             } finally {
                 isVerifyingPin = false
             }
         }
     }
 
-    MaitriActiveSosContent(
-        p = p,
-        timerString = timerString,
-        responderText = responderText,
-        circleText = circleText,
-        isRecordingAudio = isRecordingAudio,
-        hasPhotoEvidence = hasPhotoEvidence,
-        onEndSosClick = { showPinDialog = true },
-        onVoiceNoteClick = {
-            audioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
-        },
-        onCameraPhotoClick = {
-            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+    EmergencyBoard(if (p.dark) R.drawable.maitri_dark_08 else R.drawable.maitri_light_08,
+        "SOS is active. Circle notified.") {
+        val location = snapshot?.lastLocation
+        BoardLabel(24, 98, 330, if (location != null && updated) "Location last recorded ${location.recordedAt}" else "Awaiting current location", p.secondary)
+        if (location != null && updated) {
+            BoardLabel(52, 215, 260, "Last reported location", p.primary, 14)
+            BoardLabel(52, 239, 260, "${location.latitude}, ${location.longitude}", p.secondary)
         }
-    )
+        BoardAction(282, 56, 84, 48, "End SOS") { showPinDialog = true; pinValue = ""; pinError = null }
+        BoardLabel(24, 405, 342, snapshot?.let { "${it.respondersSummary.acceptedCount} responders accepted" } ?: "Checking responders…", p.primary, 16)
+        Column(Modifier.offset(40.dp, 412.dp).size(310.dp, 80.dp).verticalScroll(rememberScrollState())) {
+            snapshot?.activeResponders.orEmpty().forEach { responder ->
+                Text("${responder.responderId} · ${responder.assistanceStatus.replace('_', ' ')}",
+                    color = p.primary, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
+            }
+        }
+        Row(Modifier.offset(30.dp, 549.dp).width(330.dp).horizontalScroll(rememberScrollState())) {
+            val statuses = delivery
+            if (statuses.isNullOrEmpty()) Text(if (statuses == null) "Delivery unconfirmed" else "No notifications recorded", color = p.secondary)
+            else statuses.forEach { Text("${it.name} · ${com.example.surakshanet.network.contactDeliveryLabel(it.status)}", Modifier.width(166.dp), color = p.primary, fontSize = 12.sp) }
+        }
+        BoardAction(24, 638, 165, 64, "Voice recorder") { openCapture(android.provider.MediaStore.Audio.Media.RECORD_SOUND_ACTION) }
+        BoardAction(201, 638, 165, 64, "Open camera") { openCapture(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA) }
+        BoardLabel(66, 719, 280, if (updated) "Updates connected · $timerString" else "Awaiting server update · $timerString", p.secondary)
+    }
 
     // Safety PIN Resolution Modal
     if (showPinDialog) {
@@ -228,12 +222,18 @@ fun MaitriActiveSos(
                             color = p.accent,
                             fontWeight = FontWeight.Medium
                         )
+                        if (pinError == MISSING_PRIMARY_PIN) {
+                            TextButton(onClick = { showPinDialog = false; onSetPin() }) {
+                                Text(settingsResources().getString(com.example.surakshanet.R.string.pin_set_from_sos), color = p.accent)
+                            }
+                        }
                     }
 
                     OutlinedTextField(
                         value = pinValue,
                         onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) pinValue = it },
-                        label = { Text("4-6 Digit PIN") },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        label = { Text("6-digit PIN") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -243,7 +243,7 @@ fun MaitriActiveSos(
             confirmButton = {
                 Button(
                     onClick = { verifyPinAndEnd() },
-                    enabled = !isVerifyingPin && pinValue.length >= 4,
+                    enabled = !isVerifyingPin && pinValue.length == 6,
                     colors = ButtonDefaults.buttonColors(containerColor = p.accent)
                 ) {
                     if (isVerifyingPin) {
@@ -265,446 +265,3 @@ fun MaitriActiveSos(
     }
 }
 
-@Composable
-internal fun MaitriActiveSosContent(
-    p: MaitriPalette,
-    timerString: String,
-    responderText: String,
-    circleText: String,
-    isRecordingAudio: Boolean,
-    hasPhotoEvidence: Boolean,
-    onEndSosClick: () -> Unit,
-    onVoiceNoteClick: () -> Unit,
-    onCameraPhotoClick: () -> Unit
-) {
-    val isDark = p.dark
-
-    // Pulsing animation for the active beacon
-    val infiniteTransition = rememberInfiniteTransition(label = "sos_pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.35f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_scale"
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(p.background)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp)
-                .padding(top = 28.dp, bottom = 110.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Header Row: Live indicator + "SOS is active" | "End SOS" button (84x36dp, rx=18dp)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Pulsing Red Dot
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFDC2626))
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "SOS is active",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = p.primary
-                        )
-                        Text(
-                            text = "Duration: $timerString",
-                            fontSize = 11.sp,
-                            color = p.accent,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                // End SOS Button (84x36dp, rx=18dp)
-                Box(
-                    modifier = Modifier
-                        .size(width = 84.dp, height = 36.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(p.card)
-                        .clickable(onClick = onEndSosClick),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "End SOS",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = p.accent
-                    )
-                }
-            }
-
-            // Live Map Card (342x252dp, rx=24dp)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(252.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(if (isDark) Color(0xFF211D26) else Color(0xFFF5EDF1))
-                    .border(1.dp, p.divider, RoundedCornerShape(24.dp))
-            ) {
-                // Map layout matching light-08.svg / dark-08.svg
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val roadColor = if (isDark) Color(0xFF2A2530) else Color(0xFFEADFE7)
-                    val parkColor = if (isDark) Color(0xFF24362F) else Color(0xFFDFEBE1)
-                    val centerPt = Offset(size.width / 2f, size.height / 2f)
-
-                    // Draw blocks
-                    drawRoundRect(
-                        color = roadColor,
-                        topLeft = Offset(40f, 30f),
-                        size = androidx.compose.ui.geometry.Size(120f, 110f),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(20f)
-                    )
-                    drawRoundRect(
-                        color = parkColor,
-                        topLeft = Offset(320f, 20f),
-                        size = androidx.compose.ui.geometry.Size(240f, 120f),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(30f)
-                    )
-                    drawRoundRect(
-                        color = roadColor,
-                        topLeft = Offset(40f, 260f),
-                        size = androidx.compose.ui.geometry.Size(130f, 90f),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(20f)
-                    )
-                    drawRoundRect(
-                        color = roadColor,
-                        topLeft = Offset(300f, 230f),
-                        size = androidx.compose.ui.geometry.Size(260f, 90f),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(20f)
-                    )
-
-                    // Moving 1 km recruitment radius geofence ring
-                    drawCircle(
-                        color = if (isDark) Color(0xFFFF9CBE).copy(alpha = 0.2f) else Color(0xFFB82055).copy(alpha = 0.15f),
-                        radius = 180f * pulseScale,
-                        center = centerPt
-                    )
-                    drawCircle(
-                        color = if (isDark) Color(0xFFFF9CBE).copy(alpha = 0.45f) else Color(0xFFB82055).copy(alpha = 0.35f),
-                        radius = 110f,
-                        center = centerPt,
-                        style = Stroke(width = 2.5f)
-                    )
-
-                    // Victim center beacon marker
-                    drawCircle(
-                        color = if (isDark) Color(0xFFFF9CBE) else Color(0xFFB82055),
-                        radius = 20f,
-                        center = centerPt
-                    )
-                    drawCircle(
-                        color = Color.White,
-                        radius = 8f,
-                        center = centerPt
-                    )
-                }
-
-                // Floating Status Chip
-                Box(
-                    modifier = Modifier
-                        .padding(14.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isDark) Color(0xFF28212A) else Color.White)
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFDC2626))
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "BROADCASTING LOCATION",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = p.primary
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Incident Status Summary Card (342x90dp, rx=18dp)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(p.surface)
-                    .border(1.dp, p.divider, RoundedCornerShape(18.dp))
-                    .padding(horizontal = 18.dp, vertical = 12.dp)
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Row 1: Responders accepted
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Rounded.DirectionsRun,
-                                contentDescription = null,
-                                tint = p.accent,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Responders accepted",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = p.primary
-                            )
-                        }
-                        Text(
-                            text = responderText,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = p.accent,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    // Divider line (310x1dp)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(p.divider)
-                    )
-
-                    // Row 2: Circle notified
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Rounded.Shield,
-                                contentDescription = null,
-                                tint = p.accent,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Circle notified",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = p.primary
-                            )
-                        }
-                        Text(
-                            text = circleText,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = p.secondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Quick Media Buttons (165x42dp each, rx=15dp)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Voice Note Button
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(42.dp)
-                        .clip(RoundedCornerShape(15.dp))
-                        .background(if (isRecordingAudio) p.card else p.surface)
-                        .border(1.dp, if (isRecordingAudio) p.accent else p.divider, RoundedCornerShape(15.dp))
-                        .clickable(onClick = onVoiceNoteClick),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Rounded.Mic,
-                            contentDescription = null,
-                            tint = if (isRecordingAudio) p.accent else p.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (isRecordingAudio) "Recording..." else "Voice note",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (isRecordingAudio) p.accent else p.primary
-                        )
-                    }
-                }
-
-                // Camera Photo Button
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(42.dp)
-                        .clip(RoundedCornerShape(15.dp))
-                        .background(if (hasPhotoEvidence) p.card else p.surface)
-                        .border(1.dp, if (hasPhotoEvidence) p.accent else p.divider, RoundedCornerShape(15.dp))
-                        .clickable(onClick = onCameraPhotoClick),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Rounded.CameraAlt,
-                            contentDescription = null,
-                            tint = if (hasPhotoEvidence) p.accent else p.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (hasPhotoEvidence) "Photo saved" else "Camera photo",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (hasPhotoEvidence) p.accent else p.primary
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Live-Update Footer Tiles (165x64dp each, rx=18dp)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Tile 1: Live GPS active
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(64.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(p.card)
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Rounded.GpsFixed,
-                            contentDescription = null,
-                            tint = p.accent,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                text = "Live GPS",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = p.primary
-                            )
-                            Text(
-                                text = "Real-time updates",
-                                fontSize = 10.sp,
-                                color = p.secondary
-                            )
-                        }
-                    }
-                }
-
-                // Tile 2: Safety PIN required
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(64.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(p.card)
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Rounded.Lock,
-                            contentDescription = null,
-                            tint = p.accent,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                text = "Safety PIN",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = p.primary
-                            )
-                            Text(
-                                text = "Required to stop",
-                                fontSize = 10.sp,
-                                color = p.secondary
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Previews for Screen 08 (Light & Dark)
-// ---------------------------------------------------------------------------
-
-@Preview(name = "Screen 08 — Active SOS Light", widthDp = 390, heightDp = 844, showBackground = true)
-@Composable
-fun MaitriActiveSosLightPreview() {
-    MaitriActiveSosContent(
-        p = MaitriPalette(dark = false),
-        timerString = "00:42",
-        responderText = "1 nearby responder on the way",
-        circleText = "2 contacts alerted via SMS",
-        isRecordingAudio = false,
-        hasPhotoEvidence = false,
-        onEndSosClick = {},
-        onVoiceNoteClick = {},
-        onCameraPhotoClick = {}
-    )
-}
-
-@Preview(name = "Screen 08 — Active SOS Dark", widthDp = 390, heightDp = 844, showBackground = true)
-@Composable
-fun MaitriActiveSosDarkPreview() {
-    MaitriActiveSosContent(
-        p = MaitriPalette(dark = true),
-        timerString = "00:42",
-        responderText = "1 nearby responder on the way",
-        circleText = "2 contacts alerted via SMS",
-        isRecordingAudio = false,
-        hasPhotoEvidence = false,
-        onEndSosClick = {},
-        onVoiceNoteClick = {},
-        onCameraPhotoClick = {}
-    )
-}

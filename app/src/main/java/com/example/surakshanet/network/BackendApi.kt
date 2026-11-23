@@ -15,7 +15,12 @@ import java.util.concurrent.TimeUnit
 
 data class HealthDto(@SerializedName("status") val status: String, @SerializedName("service") val service: String)
 data class ProfileDto(@SerializedName("display_name") val name: String, @SerializedName("email") val email: String,
-                      @SerializedName("responder_opt_in") val optedIn: Boolean, @SerializedName("responder_available") val available: Boolean)
+                      @SerializedName("responder_opt_in") val optedIn: Boolean, @SerializedName("responder_available") val available: Boolean,
+                      @SerializedName("phone_number") val phoneNumber: String? = null, @SerializedName("city") val city: String? = null)
+/** Screen 14 partial update. Responder flags are never sent, so editing details cannot change availability. */
+data class ProfileDetailsRequest(@SerializedName("display_name") val name: String,
+                                 @SerializedName("phone_number") val phoneNumber: String,
+                                 @SerializedName("city") val city: String)
 data class ProfileRequest(@SerializedName("display_name") val name: String, @SerializedName("responder_opt_in") val optedIn: Boolean,
                           @SerializedName("responder_available") val available: Boolean)
 data class FixDto(@SerializedName("latitude") val latitude: Double, @SerializedName("longitude") val longitude: Double,
@@ -27,6 +32,10 @@ data class IncidentLocationDto(@SerializedName("latitude") val latitude: Double?
     @SerializedName("is_mock") val mock: Boolean?, @SerializedName("is_test") val test: Boolean)
 data class InvitationDto(@SerializedName("id") val id: String, @SerializedName("incident_id") val incidentId: String,
     @SerializedName("expires_at") val expiresAt: String, @SerializedName("status") val status: String)
+internal fun InvitationDto.canOpenIncoming(now: java.time.Instant = java.time.Instant.now()): Boolean =
+    id.isNotBlank() && incidentId.isNotBlank() && status == "PENDING" &&
+        runCatching { java.time.Instant.parse(expiresAt).isAfter(now) }.getOrDefault(false)
+
 data class DecisionDto(@SerializedName("decision") val decision: String)
 data class StatusDto(@SerializedName("status") val status: String)
 data class TestIncidentRequest(@SerializedName("is_test") val test: Boolean = true,
@@ -177,8 +186,11 @@ interface BackendApi {
     @POST("api/responders/invitations/{id}/response") suspend fun respond(@Path("id") id: String, @Body decision: DecisionDto, @Tag account: ExpectedAccount? = null): StatusDto
 
     @GET("health") suspend fun health(): HealthDto
+    @POST("api/incidents/{id}/request-help") suspend fun requestHelp(@Path("id") id: String, @Tag expected: ExpectedAccount): RecruitmentDto
+    @GET("api/incidents/{id}/trusted-contacts") suspend fun contactDelivery(@Path("id") id: String, @Tag expected: ExpectedAccount): List<ContactDeliveryDto>
     @GET("api/users/me") suspend fun profile(@Tag expected: ExpectedAccount? = null): ProfileDto
     @PUT("api/users/me") suspend fun profile(@Body request: ProfileRequest, @Tag expected: ExpectedAccount): ProfileDto
+    @PATCH("api/users/me") suspend fun profileDetails(@Body request: ProfileDetailsRequest, @Tag expected: ExpectedAccount): ProfileDto
     @POST("api/incidents") suspend fun createTest(@Header("Idempotency-Key") key: String, @Body request: TestIncidentRequest, @Tag expected: ExpectedAccount): IncidentDto
     @POST("api/devices/register") suspend fun registerDevice(@Body request: DeviceRegistrationDto, @Tag expected: ExpectedAccount): StatusDto
     @DELETE("api/devices/{token}") suspend fun unregisterDevice(@Path("token") token: String): retrofit2.Response<Unit>
