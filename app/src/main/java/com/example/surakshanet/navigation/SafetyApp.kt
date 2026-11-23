@@ -429,7 +429,7 @@ internal fun MainGraph(
                     )
                 }
                 composable("Contacts") {
-                    MaitriCircle(contacts = state.contacts, vm = vm)
+                    MaitriCircle(contacts = state.contacts, vm = vm, message = state.contactsMessage)
                 }
                 composable("VolunteerVerification") {
                     MaitriVolunteer(

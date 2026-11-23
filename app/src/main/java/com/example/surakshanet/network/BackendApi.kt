@@ -187,6 +187,8 @@ interface BackendApi {
 
     @GET("health") suspend fun health(): HealthDto
     @POST("api/incidents/{id}/request-help") suspend fun requestHelp(@Path("id") id: String, @Tag expected: ExpectedAccount): RecruitmentDto
+    /** Records circle alerts for the owner's confirmed incident. Idempotent server-side (one outbox row per contact). */
+    @POST("api/incidents/{id}/trusted-contacts/alert") suspend fun alertCircle(@Path("id") id: String, @Tag expected: ExpectedAccount): com.google.gson.JsonObject
     @GET("api/incidents/{id}/trusted-contacts") suspend fun contactDelivery(@Path("id") id: String, @Tag expected: ExpectedAccount): List<ContactDeliveryDto>
     @GET("api/users/me") suspend fun profile(@Tag expected: ExpectedAccount? = null): ProfileDto
     @PUT("api/users/me") suspend fun profile(@Body request: ProfileRequest, @Tag expected: ExpectedAccount): ProfileDto
@@ -220,7 +222,10 @@ object BackendClient {
             .build()
     }
 
-    val api: BackendApi by lazy {
+    val api: BackendApi by lazy { retrofit.create(BackendApi::class.java) }
+    val contacts: TrustedContactApi by lazy { retrofit.create(TrustedContactApi::class.java) }
+
+    private val retrofit: Retrofit by lazy {
         val base = BuildConfig.API_BASE_URL.toHttpUrl()
         require(base.isHttps && base.username.isEmpty() && base.password.isEmpty() && base.query == null && base.fragment == null)
         val bearer = Interceptor { chain ->
@@ -246,6 +251,5 @@ object BackendClient {
             .addInterceptor(bearer)
             .build()
         Retrofit.Builder().baseUrl(base).client(client).addConverterFactory(GsonConverterFactory.create()).build()
-            .create(BackendApi::class.java)
     }
 }

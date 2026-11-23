@@ -6,6 +6,12 @@ import com.example.surakshanet.location.LocalTrackingRepository
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.CancellationException
+import com.google.firebase.auth.FirebaseAuth
+import com.example.surakshanet.BuildConfig
+import com.example.surakshanet.network.*
 import com.example.surakshanet.data.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,6 +21,46 @@ class SafetyViewModel(app: Application) : AndroidViewModel(app) {
     private val tracking = LocalTrackingRepository.get(app)
     private val profiles: UserProfileRepository = LocalUserProfileRepository(app.getSharedPreferences("local_profiles", 0))
     private val repository: ContactRepository = LocalContactRepository(app.getSharedPreferences("trusted_contacts", 0))
+    private val contactSyncPrefs = app.getSharedPreferences("trusted_contacts_sync", 0)
+    private val contactMutex = Mutex()
+
+    /** Server circle API, only for the signed-in account; demo and offline-only builds stay local. */
+    private fun contactRemote(uid: String): TrustedContactApi? {
+        if (BuildConfig.API_BASE_URL.isBlank()) return null
+        val signedIn = runCatching { FirebaseAuth.getInstance().currentUser?.uid }.getOrNull()
+        return if (signedIn == uid) BackendClient.contacts else null
+    }
+
+    private fun applyServerContacts(uid: String, server: List<TrustedContactDto>, message: String? = null) {
+        val list = server.map { it.toContact(uid) }
+        repository.save(uid, list)
+        if (current.user?.uid == uid) mutable.value = current.copy(contacts = list, contactsMessage = message ?: current.contactsMessage)
+    }
+
+    /** Loads the server circle; on first sync uploads contacts that were only saved on this phone. */
+    fun refreshContacts() {
+        val uid = current.user?.uid ?: return
+        val api = contactRemote(uid) ?: return
+        viewModelScope.launch {
+            contactMutex.withLock {
+                val account = ExpectedAccount(uid)
+                try {
+                    var server = api.list(account)
+                    val local = current.contacts
+                    if (server.isEmpty() && local.isNotEmpty() && !contactSyncPrefs.getBoolean("migrated.$uid", false))
+                        server = uploadLocalContacts(api, account, local)
+                    contactSyncPrefs.edit().putBoolean("migrated.$uid", true).apply()
+                    applyServerContacts(uid, server)
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) {
+                    if (current.user?.uid == uid) mutable.value = current.copy(contactsMessage =
+                        "Couldn't load your circle from the server. Contacts shown here may not be used for SOS alerts.")
+                }
+            }
+        }
+    }
+
+    fun clearContactsMessage() { mutable.value = current.copy(contactsMessage = null) }
     private val mutable = MutableStateFlow(DemoState())
     val state = mutable.asStateFlow()
     private val current get() = mutable.value
@@ -47,6 +93,7 @@ class SafetyViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 DemoState(profile, repository.load(identity.uid), incident = restored, responder = profile.responder)
             }
+        refreshContacts()
     }
 
     fun start(share: Boolean) {
@@ -149,8 +196,28 @@ class SafetyViewModel(app: Application) : AndroidViewModel(app) {
     }
     private fun save(items: List<EmergencyContact>) {
         val uid = current.user?.uid ?: return
+        val before = current.contacts
         repository.save(uid, items)
         mutable.value = current.copy(contacts = items)
+        val api = contactRemote(uid) ?: return
+        viewModelScope.launch {
+            contactMutex.withLock {
+                val account = ExpectedAccount(uid)
+                try {
+                    applyServerContacts(uid, pushContactChanges(api, account, contactChanges(before, items)))
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) {
+                    // Show what the server actually holds; if it is unreachable, undo the unsaved edit.
+                    val message = contactSyncFailure(e)
+                    try { applyServerContacts(uid, api.list(account), message) }
+                    catch (e2: CancellationException) { throw e2 }
+                    catch (_: Exception) {
+                        repository.save(uid, before)
+                        if (current.user?.uid == uid) mutable.value = current.copy(contacts = before, contactsMessage = message)
+                    }
+                }
+            }
+        }
     }
 
     fun remove(id: String) {

@@ -39,9 +39,17 @@ fun MaitriCircle(
     vm: SafetyViewModel? = null,
     onAddOrUpdateContact: ((id: String?, name: String, phone: String, label: String, isPrimary: Boolean, notifyOnSos: Boolean) -> String?)? = null,
     onRemoveContact: ((String) -> Unit)? = null,
-    onToggleSosAlert: ((String, Boolean) -> Unit)? = null
+    onToggleSosAlert: ((String, Boolean) -> Unit)? = null,
+    message: String? = null
 ) {
     val p = maitriPalette()
+    val context = LocalContext.current
+    LaunchedEffect(message) {
+        if (message != null) {
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            vm?.clearContactsMessage()
+        }
+    }
     MaitriCircleContent(
         contacts = contacts,
         p = p,

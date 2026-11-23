@@ -65,6 +65,7 @@ fun MaitriActiveSos(
 
     val tracking = remember(context) { LocalTrackingRepository.get(context) }
     var snapshot by remember(uid, incident.started) { mutableStateOf<IncidentSnapshotDto?>(null) }
+    var circleAlerted by rememberSaveable(uid, incidentId) { mutableStateOf(false) }
     var showPinDialog by rememberSaveable { mutableStateOf(false) }
     var pinValue by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
@@ -95,6 +96,11 @@ fun MaitriActiveSos(
                     if (confirmed.status != "ACTIVE" || confirmed.requesterMembership?.role != "OWNER") {
                         onAccessLost()
                         break
+                    }
+                    // Alert the server-side circle once the owner's incident is confirmed; retried until it succeeds.
+                    if (!circleAlerted) {
+                        BackendClient.api.alertCircle(id, ExpectedAccount(uid))
+                        circleAlerted = true
                     }
                     delivery = BackendClient.api.contactDelivery(id, ExpectedAccount(uid))
                     updated = true

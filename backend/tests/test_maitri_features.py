@@ -860,3 +860,35 @@ def test_only_approved_volunteers_are_invited_or_can_accept(maitri_env):
     client.portal.call(set_status, "REJECTED")
     refused = client.post(f"/api/responders/invitations/{invitation['id']}/response", headers=b, json={"decision": "ACCEPTED"})
     assert refused.status_code == 403 and refused.json()["detail"] == "Volunteer approval required"
+
+
+# ==============================================================================
+# RELEASE PHASE 1: APP-SHAPED CIRCLE SYNC FEEDS SOS ALERT DISPATCH
+# ==============================================================================
+def test_app_circle_sync_contract_feeds_alert_dispatch(maitri_env):
+    client, _, _, _ = maitri_env
+    a = {"X-Test-Actor": "VICTIM_A"}
+
+    def body(name, phone, primary, sos=True):
+        # Exactly the keys TrustedContactWriteDto sends (the schema forbids extras).
+        return {"display_name": name, "phone_number": phone, "label": "Emergency Contact", "is_primary": primary,
+                "notify_on_sos": sos, "include_location_link": True, "notify_on_closure": True,
+                "allow_live_tracking": False, "preferred_channel": "SMS"}
+
+    asha = client.post("/api/trusted-contacts", headers=a, json=body("Asha", "+91 90000 00001", True)).json()
+    ravi = client.post("/api/trusted-contacts", headers=a, json=body("Ravi", "+91 90000 00002", False)).json()
+    # Full-body update (app sends every field) turns Ravi's SOS alerts off.
+    updated = client.put(f"/api/trusted-contacts/{ravi['id']}", headers=a, json=body("Ravi K", "+91 90000 00002", False, sos=False))
+    assert updated.status_code == 200 and updated.json()["notify_on_sos"] is False
+    assert client.post(f"/api/trusted-contacts/{ravi['id']}/primary", headers=a).json()["is_primary"] is True
+    listed = {c["display_name"]: c for c in client.get("/api/trusted-contacts", headers=a).json()}
+    assert listed["Ravi K"]["is_primary"] and not listed["Asha"]["is_primary"]
+
+    incident_id = create_test_sos_incident(client, "VICTIM_A")
+    statuses = {s["display_name"]: s["delivery_status"]
+                for s in client.post(f"/api/incidents/{incident_id}/trusted-contacts/alert", headers=a).json()["statuses"]}
+    assert statuses == {"Asha": "NO_SMS_PROVIDER"}   # only contacts with SOS alerts on, honestly not sent
+    # Dispatch is idempotent: the app may call it again after a reconnect.
+    again = client.post(f"/api/incidents/{incident_id}/trusted-contacts/alert", headers=a)
+    assert again.status_code == 200
+    assert client.delete(f"/api/trusted-contacts/{asha['id']}", headers=a).status_code == 204

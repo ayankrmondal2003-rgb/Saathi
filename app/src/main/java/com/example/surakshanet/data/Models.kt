@@ -105,5 +105,7 @@ data class DemoState(
     val incident: SosIncident? = null,
     val responder: Responder = Responder(),
     val contactAlertStatuses: List<ContactAlertStatus> = emptyList(),
-    val lastAlertBatchDispatchedAt: Long? = null
+    val lastAlertBatchDispatchedAt: Long? = null,
+    /** Result of the last circle sync with the server, shown once on screen 05. */
+    val contactsMessage: String? = null
 )
