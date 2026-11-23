@@ -35,7 +35,7 @@ async def invite(db, params, *, recipient=None):
             WHERE i.id=:id AND {FRESH} AND u.id<>i.victim_user_id AND u.account_status='ACTIVE'
               AND u.firebase_uid = ANY(CAST(:allowed AS text[]))
               AND EXISTS (SELECT 1 FROM users owner WHERE owner.id=i.victim_user_id AND owner.firebase_uid = ANY(CAST(:allowed AS text[])))
-              AND u.email_verified AND u.responder_opt_in AND u.responder_available
+              AND (u.email_verified OR u.phone_verified) AND u.responder_opt_in AND u.responder_available
               AND EXISTS (SELECT 1 FROM volunteer_applications va WHERE va.user_id=u.id AND va.status='APPROVED')
               AND l.recorded_at >= clock_timestamp()-make_interval(secs => :age)
               AND l.accuracy_meters <= :accuracy AND l.is_mock=i.location_is_mock {restrict}

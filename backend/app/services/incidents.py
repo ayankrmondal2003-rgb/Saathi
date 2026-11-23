@@ -91,7 +91,8 @@ async def is_authorized_participant(db, incident_id, user_id):
     if victim_id is None:
         return False
     if victim_id == user_id:
-        return bool(await db.scalar(select(users.c.email_verified).where(users.c.id == user_id, users.c.account_status == "ACTIVE")))
+        return bool(await db.scalar(select(users.c.email_verified | users.c.phone_verified).where(
+            users.c.id == user_id, users.c.account_status == "ACTIVE")))
 
     # Check if authorized responder
     grant = responders.join(invitations, (responders.c.incident_id == invitations.c.incident_id) &

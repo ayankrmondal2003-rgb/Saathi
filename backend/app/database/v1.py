@@ -27,6 +27,7 @@ def point(name, nullable=False):
 users = Table("users", metadata, pk(), Column("firebase_uid", String(128), nullable=False, unique=True),
     Column("display_name", String(256), nullable=False), Column("email", String(320), nullable=False),
     Column("email_verified", Boolean, nullable=False),
+    Column("phone_verified", Boolean, nullable=False, server_default=text("false")),
     Column("responder_opt_in", Boolean, nullable=False, server_default=text("false")),
     Column("responder_available", Boolean, nullable=False, server_default=text("false")),
     Column("account_status", String, nullable=False, server_default="ACTIVE"),

@@ -8,7 +8,7 @@ import kotlinx.coroutines.tasks.await
 
 class FirebaseAuthRepository(private val auth: FirebaseAuth) : AuthRepository {
     override val current get() = auth.currentUser?.let {
-        Identity(it.uid, it.displayName.orEmpty(), it.email.orEmpty(), it.isEmailVerified,
+        Identity(it.uid, it.displayName.orEmpty(), it.email.orEmpty(), accountVerified(it.isEmailVerified, it.phoneNumber),
             it.metadata?.creationTimestamp, it.phoneNumber)
     }
 

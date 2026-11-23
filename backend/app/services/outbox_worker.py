@@ -110,7 +110,7 @@ async def fetch_item_context(db, item: dict) -> dict:
             v.expires_at AS invitation_expires_at,
             v.invited_at AS invitation_invited_at,
             u.account_status AS user_status,
-            u.email_verified AS user_email_verified,
+            (u.email_verified OR u.phone_verified) AS user_email_verified,
             u.responder_opt_in AS user_opt_in,
             u.responder_available AS user_available,
             COALESCE(array_agg(d.fcm_token) FILTER (WHERE d.fcm_token IS NOT NULL AND d.is_active), '{}') AS active_tokens
@@ -120,7 +120,7 @@ async def fetch_item_context(db, item: dict) -> dict:
         JOIN users u ON u.id = o.recipient_user_id
         LEFT JOIN devices d ON d.user_id = u.id AND d.is_active = true
         WHERE o.id = :id AND o.attempt_count = :attempt AND o.delivery_status = 'SENDING'
-        GROUP BY i.status, i.is_test, v.status, v.expires_at, v.invited_at, u.account_status, u.email_verified, u.responder_opt_in, u.responder_available
+        GROUP BY i.status, i.is_test, v.status, v.expires_at, v.invited_at, u.account_status, u.email_verified, u.phone_verified, u.responder_opt_in, u.responder_available
     """
     row = (await db.execute(text(query), {"id": item["id"], "attempt": item["attempt_count"]})).mappings().first()
     return dict(row) if row else {}

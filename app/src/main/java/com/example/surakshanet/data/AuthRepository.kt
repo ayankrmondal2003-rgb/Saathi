@@ -5,6 +5,12 @@ import kotlinx.coroutines.flow.Flow
 data class Identity(val uid: String, val name: String, val email: String,
                     val verified: Boolean, val createdAt: Long?, val phone: String? = null)
 
+/**
+ * Matches the server rule in backend/app/core.py: a verified email, or a phone number. Firebase only
+ * attaches a phone number to an account after it has been confirmed by OTP.
+ */
+fun accountVerified(emailVerified: Boolean, phone: String?): Boolean = emailVerified || !phone.isNullOrBlank()
+
 interface AuthRepository {
     val sessions: Flow<Identity?>
     val current: Identity?
