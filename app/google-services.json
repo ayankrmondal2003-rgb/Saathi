@@ -12,7 +12,12 @@
           "package_name": "com.example.surakshanet"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "710446729837-rs77rnt04m66i6r2euo9eq6bobm9gj5u.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBDyHXxtJ_RTzs7F9NsBIyF4yRCxunTu_A"
@@ -20,7 +25,57 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "710446729837-rs77rnt04m66i6r2euo9eq6bobm9gj5u.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:710446729837:android:af992e2bef45be8055cd64",
+        "android_client_info": {
+          "package_name": "in.maitri.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "710446729837-6mpjnjahapkjbn5lcl5kl7uuivo12ecs.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "in.maitri.app",
+            "certificate_hash": "898a9db1ed29ae4de7c9e94ca1884e0ac2b25d3a"
+          }
+        },
+        {
+          "client_id": "710446729837-fi7poerpc6rh8jj9s6te8vvvikjvgdub.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "in.maitri.app",
+            "certificate_hash": "d45a841b329f1f4c27bd4558aa3b61f33297edae"
+          }
+        },
+        {
+          "client_id": "710446729837-rs77rnt04m66i6r2euo9eq6bobm9gj5u.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBDyHXxtJ_RTzs7F9NsBIyF4yRCxunTu_A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "710446729837-rs77rnt04m66i6r2euo9eq6bobm9gj5u.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

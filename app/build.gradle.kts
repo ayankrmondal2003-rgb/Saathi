@@ -12,21 +12,31 @@ plugins {
 }
 
 
-/** Optional ArcGIS Location Platform key for Esri basemap tiles; kept in local.properties, never committed. */
-fun esriApiKey(): String {
+/** local.properties is never committed; it holds machine paths, backend URLs, keys and signing passwords. */
+fun localProperties(): Properties {
     val local = Properties()
     val file = rootProject.file("local.properties")
     if (file.isFile) file.inputStream().use { local.load(it) }
+    return local
+}
+
+/** Gradle property first, then local.properties; [legacy] keeps pre-rename SurakshaNet keys working. */
+fun localSetting(name: String, legacy: String? = null): String {
+    val local = localProperties()
+    return providers.gradleProperty(name).orNull ?: local.getProperty(name)
+        ?: legacy?.let { providers.gradleProperty(it).orNull ?: local.getProperty(it) } ?: ""
+}
+
+/** Optional ArcGIS Location Platform key for Esri basemap tiles; kept in local.properties, never committed. */
+fun esriApiKey(): String {
+    val local = localProperties()
     val key = providers.gradleProperty("maitriEsriApiKey").orNull ?: local.getProperty("maitriEsriApiKey", "")
     require(key.matches(Regex("[A-Za-z0-9._-]*"))) { "maitriEsriApiKey contains unexpected characters" }
     return "\"" + key + "\""
 }
 
-fun backendUrl(property: String): String {
-    val local = Properties()
-    val file = rootProject.file("local.properties")
-    if (file.isFile) file.inputStream().use { local.load(it) }
-    val url = providers.gradleProperty(property).orNull ?: local.getProperty(property, "")
+fun backendUrl(property: String, legacy: String): String {
+    val url = localSetting(property, legacy)
     if (url.isNotEmpty()) {
         val uri = runCatching { URI(url) }.getOrNull()
         require(uri != null && uri.scheme == "https" && uri.host != null &&
@@ -39,13 +49,13 @@ fun backendUrl(property: String): String {
 }
 
 android {
-    namespace = "com.example.surakshanet"
+    namespace = "in.maitri.app"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.example.surakshanet"
+        applicationId = "in.maitri.app"
         minSdk = 26
         targetSdk = 37
         versionCode = 1
@@ -55,10 +65,26 @@ android {
         buildConfigField("String", "ESRI_API_KEY", esriApiKey())
     }
 
+    // Upload key for Play App Signing. Passwords come only from local.properties (or -P), never from the repo.
+    val keystorePassword = localSetting("maitriKeystorePassword")
+    val keyPassword = localSetting("maitriKeyPassword")
+    val keystoreFile = file(localSetting("maitriKeystorePath").ifBlank {
+        System.getProperty("user.home") + "/keys/maitri-upload.jks" })
+    val canSignRelease = keystorePassword.isNotEmpty() && keyPassword.isNotEmpty() && keystoreFile.isFile
+    signingConfigs {
+        if (canSignRelease) create("upload") {
+            storeFile = keystoreFile
+            storePassword = keystorePassword
+            keyAlias = localSetting("maitriKeyAlias").ifBlank { "maitri" }
+            this.keyPassword = keyPassword
+        }
+    }
+
     buildTypes {
-        debug { buildConfigField("String", "API_BASE_URL", backendUrl("surakshaDevApiUrl")) }
+        debug { buildConfigField("String", "API_BASE_URL", backendUrl("maitriDevApiUrl", "surakshaDevApiUrl")) }
         release {
-            buildConfigField("String", "API_BASE_URL", backendUrl("surakshaProdApiUrl"))
+            buildConfigField("String", "API_BASE_URL", backendUrl("maitriProdApiUrl", "surakshaProdApiUrl"))
+            if (canSignRelease) signingConfig = signingConfigs.getByName("upload")
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
@@ -88,6 +114,10 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
     implementation("com.google.firebase:firebase-auth")
+    // Google Sign-In on screen 03 through Credential Manager.
+    implementation("androidx.credentials:credentials:1.5.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("com.google.firebase:firebase-messaging")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
@@ -141,15 +171,15 @@ abstract class GenerateBrandResources : DefaultTask() {
 
 androidComponents.onVariants { variant ->
     val generator = tasks.register<GenerateBrandResources>("generate${variant.name.replaceFirstChar { it.uppercase() }}BrandResources") {
-        master.set(layout.projectDirectory.file("src/main/res/drawable-nodpi/suraksha_logo.png"))
+        master.set(layout.projectDirectory.file("src/main/res/drawable-nodpi/maitri_brand_master.png"))
     }
     variant.sources.res?.addGeneratedSourceDirectory(generator, GenerateBrandResources::images)
 }
 
 // Import once. Normal builds use the approved artwork from the resource tree.
-tasks.register("importSurakshaLogo") {
-    val archive = providers.gradleProperty("surakshaLogoArchive")
-    val destination = layout.projectDirectory.file("src/main/res/drawable-nodpi/suraksha_logo.png")
+tasks.register("importMaitriLogo") {
+    val archive = providers.gradleProperty("maitriLogoArchive")
+    val destination = layout.projectDirectory.file("src/main/res/drawable-nodpi/maitri_brand_master.png")
     doLast {
         val output = destination.asFile
         require(!output.exists()) { "Official artwork already imported" }

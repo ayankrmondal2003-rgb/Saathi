@@ -250,8 +250,8 @@ To make the live Render backend match the verified local test server:
            backend/tests/test_maitri_features.py \\
            backend/tests/run_maitri_server_tests.py \\
            backend/test-maitri-server.ps1 \\
-           app/src/main/java/com/example/surakshanet/network/BackendApi.kt \\
-           app/src/main/java/com/example/surakshanet/ui/MaitriSharingDialog.kt
+           app/src/main/java/in/maitri/app/network/BackendApi.kt \\
+           app/src/main/java/in/maitri/app/ui/MaitriSharingDialog.kt
 
    git commit -m "Deploy circle sharing, volunteer verification, safety guard, and server test suite"
    git push origin master
