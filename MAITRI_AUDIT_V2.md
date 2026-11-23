@@ -174,3 +174,18 @@ Visual fidelity:
 - 06–14 match the crops in both themes.
 - 01–05 need a spacing/typography pass and extracted SVG icons instead of Material icons.
 - Font identity is unresolved.
+
+## Release phase 1 progress (branch `maitri-release`)
+
+| Item | Commit | Now |
+|---|---|---|
+| R5 Only approved volunteers invited; acceptance re-checks approval | `56f4ce0` | works (approval itself still needs the admin panel, R7) |
+| R3 Circle add/edit/remove/toggle/primary saved server-first; phone-only contacts uploaded once; failures revert and say "won't be used for SOS alerts"; screen 08 records circle alerts on a confirmed incident | `1819e62` | works for persistence and dispatch; delivery still blocked by R4 (no SMS provider) |
+| 03 Phone OTP accounts accepted by the backend (migration 0011 `phone_verified`); Android gate uses the same rule; email pairing can no longer match phone-only accounts | `efdc70d` | works (country picker still missing) |
+
+Tests at `efdc70d`:
+- Android JVM 136/136.
+- Device 26/26 on SM-E625F.
+- Isolated backend 116/116 (Alembic head 0011).
+
+Found during phase 1, not yet fixed: `SafetyViewModel` still builds local `contactAlertStatuses` marked `PROVIDER_ACCEPTED` (test alert and closure). No screen displays them, but they should be removed in phase D.
