@@ -33,6 +33,7 @@ class MaitriCheckpointATest {
         assertEquals(4, setOf(radius, unavailable, inactive, answered).size)
         assertTrue(unavailable.contains("availability"))
         assertTrue(inactive.contains("no longer active"))
+        assertTrue(invitationFailure(http(403, "Volunteer approval required")).contains("must be approved"))
     }
 
     @Test fun onlyTheMarkedMonotonicConflictIsRecoverable() {

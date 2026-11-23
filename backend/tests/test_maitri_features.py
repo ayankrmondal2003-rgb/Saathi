@@ -818,3 +818,45 @@ def test_trusted_contact_status_is_truthful_and_owner_scoped(maitri_env):
     # Another account cannot probe this incident's alert state.
     assert client.get(f"/api/incidents/{incident_id}/trusted-contacts",
                       headers={"X-Test-Actor": "UNAUTHORIZED_USER_D"}).status_code == 404
+
+
+# ==============================================================================
+# RELEASE PHASE 1: ONLY APPROVED VOLUNTEERS RECEIVE OR ACCEPT SOS REQUESTS
+# ==============================================================================
+def test_only_approved_volunteers_are_invited_or_can_accept(maitri_env):
+    client, sessions, settings, prefix = maitri_env
+    b = {"X-Test-Actor": "RESPONDER_B"}
+    client.put("/api/users/me", headers=b,
+               json={"display_name": "Responder B", "responder_opt_in": True, "responder_available": True})
+    assert client.put("/api/responders/location", headers=b, json=make_fix(lat=28.6150)).status_code == 204
+    uid = prefix + ACTORS["RESPONDER_B"]["uid"]
+
+    async def set_status(status):
+        async with sessions.begin() as db:
+            await db.execute(text("""UPDATE volunteer_applications SET status=:s
+                WHERE user_id=(SELECT id FROM users WHERE firebase_uid=:uid)"""), {"s": status, "uid": uid})
+
+    async def run_tick():
+        async with sessions.begin() as db:
+            await tick(db, settings)
+
+    # Under review: in range, opted in and available, but not invited.
+    client.portal.call(set_status, "UNDER_REVIEW")
+    first = create_test_sos_incident(client, "VICTIM_A")
+    client.portal.call(run_tick)
+    assert [i for i in client.get("/api/responders/invitations", headers=b).json() if i["incident_id"] == first] == []
+
+    # Approved: invited on the next evaluation (clear the geofence's re-evaluation throttle for this incident).
+    client.portal.call(set_status, "APPROVED")
+
+    async def allow_reevaluation():
+        async with sessions.begin() as db:
+            await db.execute(text("UPDATE incidents SET evaluated_at=NULL, evaluated_center=NULL WHERE id=:id"), {"id": first})
+    client.portal.call(allow_reevaluation)
+    client.portal.call(run_tick)
+    invitation = next(i for i in client.get("/api/responders/invitations", headers=b).json() if i["incident_id"] == first)
+
+    # Approval revoked before answering: acceptance is refused.
+    client.portal.call(set_status, "REJECTED")
+    refused = client.post(f"/api/responders/invitations/{invitation['id']}/response", headers=b, json={"decision": "ACCEPTED"})
+    assert refused.status_code == 403 and refused.json()["detail"] == "Volunteer approval required"

@@ -46,6 +46,8 @@ async def world():
             # Public alembic_version must not be selected through search_path.
             await db.execute(text("CREATE TABLE alembic_version(version_num varchar(32) PRIMARY KEY)"))
             await db.run_sync(migrate)
+            from tests.conftest import install_test_volunteer_approval
+            await install_test_volunteer_approval(db)
         app = create_app(settings,initialize_firebase=False)
         app.state.sessions = sessions
         def who(request: Request):

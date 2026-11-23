@@ -245,6 +245,9 @@ async def respond(invitation_id: UUID, body: Decision, request: Request, user=De
     if body.decision == "ACCEPTED":
         if not user.responder_opt_in or not user.responder_available:
             raise HTTPException(403, "Responder unavailable")
+        # Re-checked at acceptance: approval may be revoked after the invitation was sent.
+        if await db.scalar(text("SELECT status FROM volunteer_applications WHERE user_id=:id"), {"id": user.id}) != "APPROVED":
+            raise HTTPException(403, "Volunteer approval required")
         settings = request.app.state.settings
         eligible = await db.scalar(select(locations.c.user_id).select_from(locations.join(incidents,
             func.ST_DWithin(locations.c.location, incidents.c.latest_location, incidents.c.radius_meters))).where(

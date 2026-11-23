@@ -39,6 +39,7 @@ internal fun invitationFailure(error: Exception, debug: Boolean = false): String
             "Fresh matching responder location required" -> "Update your responder location and try again."
             "Fresh matching responder location within the active radius required" -> "Update your location. You must be inside the current alert radius to accept."
             "Responder unavailable" -> "Enable responder availability before accepting."
+            "Volunteer approval required" -> "Your volunteer application must be approved before you can accept SOS requests."
             else -> "Your account is ineligible for this invitation."
         }
         404 -> "Invitation unavailable for this account."
