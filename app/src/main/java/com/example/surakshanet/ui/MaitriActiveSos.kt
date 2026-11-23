@@ -178,10 +178,9 @@ fun MaitriActiveSos(
         "SOS is active. Circle notified.") {
         val location = snapshot?.lastLocation
         BoardLabel(24, 98, 330, if (location != null && updated) "Location last recorded ${location.recordedAt}" else "Awaiting current location", p.secondary)
-        if (location != null && updated) {
-            BoardLabel(52, 215, 260, "Last reported location", p.primary, 14)
-            BoardLabel(52, 239, 260, "${location.latitude}, ${location.longitude}", p.secondary)
-        }
+        // Live Esri map over the crop's map area (342 x 252 at 24,136), pinned at the server-confirmed location.
+        EsriMap(location?.takeIf { updated }?.let { it.latitude to it.longitude }, "Your last reported location",
+            "Awaiting your location", Modifier.offset(24.dp, (136 - 28).dp).size(342.dp, 252.dp))
         BoardAction(282, 56, 84, 48, "End SOS") { showPinDialog = true; pinValue = ""; pinError = null }
         BoardLabel(24, 405, 342, snapshot?.let { "${it.respondersSummary.acceptedCount} responders accepted" } ?: "Checking responders…", p.primary, 16)
         Column(Modifier.offset(40.dp, 412.dp).size(310.dp, 80.dp).verticalScroll(rememberScrollState())) {

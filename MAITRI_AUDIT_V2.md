@@ -189,3 +189,17 @@ Tests at `efdc70d`:
 - Isolated backend 116/116 (Alembic head 0011).
 
 Found during phase 1, not yet fixed: `SafetyViewModel` still builds local `contactAlertStatuses` marked `PROVIDER_ACCEPTED` (test alert and closure). No screen displays them, but they should be removed in phase D.
+
+### Maps (Esri World Street Map), commit after `e4cc31c`
+
+Status:
+- **07:** live map pinned at the server-reported location, with the exact design marker. Shows "≈ N m/km straight-line" only when the responder's own fix is under 5 minutes old. No ETA, because no routing service is configured; "Open in Maps" hands routing to the device's maps app.
+- **08:** live map pinned at the owner's server-confirmed location, otherwise "Awaiting your location". No responder pins, because the server does not share responder positions.
+- **06:** keeps the illustrative artwork, because the server withholds location before acceptance.
+
+Attribution: "Powered by Esri" plus the service's copyright text is always visible; the full text opens on tap.
+
+Open items:
+- **API key:** tiles currently load from Esri's public endpoint. Commercial/production use needs an ArcGIS Location Platform key, set as `maitriEsriApiKey` in `local.properties` (never committed). With a key, the app switches to `ibasemaps-api.arcgis.com` with `?token=`; verify that endpoint once a key exists.
+- **Dark theme:** World Street Map has no dark variant, so tiles are dimmed instead.
+- **Privacy:** tile requests send the viewed area (tile coordinates) and the device IP to Esri. Disclose this in the privacy policy and the Data Safety form (Phase F).

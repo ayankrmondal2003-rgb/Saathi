@@ -56,7 +56,8 @@ class MaitriAllScreensCaptureTest {
             p(), { _, _, _, _, _, _ -> null }, {}, { _, _ -> }) } },
         "06" to { MaitriIncomingContent(p(), "Nearby emergency", "Distance unavailable", "Arrival time unavailable",
             false, null, {}, {}) },
-        "07" to { MaitriResponderJourneyBoard(p(), null, null, false, {}, {}, {}, {}) },
+        // Synthetic test coordinate (New Delhi), as used by the backend suite; renders the live Esri map and pin.
+        "07" to { MaitriResponderJourneyBoard(p(), "ON_THE_WAY", 28.6139 to 77.2090, false, {}, {}, {}, {}, distanceMeters = 650.0) },
         "08" to { MaitriActiveSos(SosIncident(SystemClock.elapsedRealtime()), "capture-no-session", "capture-no-incident", {}, {}) },
         "09" to { Docked("Profile") { MaitriSettings(null, {}, {}) } },
         "10" to { MaitriLanguage(onBack = {}) },

@@ -38,6 +38,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.CancellationException
 
 @Composable
@@ -93,6 +94,23 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
     val fix = listOfNotNull(confirmed.lastLocation, live.latestLocation).maxByOrNull {
         runCatching { java.time.Instant.parse(it.recordedAt).toEpochMilli() }.getOrDefault(0L)
     }
+    // The responder's own recent fix, only for a labelled straight-line distance (no routing service, no ETA).
+    var own by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    LaunchedEffect(fix?.recordedAt) {
+        val permitted = androidx.core.content.ContextCompat.checkSelfPermission(context,
+            android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+            androidx.core.content.ContextCompat.checkSelfPermission(context,
+            android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!permitted) { own = null; return@LaunchedEffect }
+        own = try {
+            @Suppress("MissingPermission")
+            val last: android.location.Location? = com.google.android.gms.location.LocationServices
+                .getFusedLocationProviderClient(context).lastLocation.await()
+            last?.takeIf { System.currentTimeMillis() - it.time < 5 * 60_000 }?.let { it.latitude to it.longitude }
+        } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+    }
+    val distance = if (fix != null && own != null)
+        straightLineMeters(own!!.first, own!!.second, fix.latitude, fix.longitude) else null
     fun dial() {
         try { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:112"))) }
         catch (_: android.content.ActivityNotFoundException) { message = "Dialer unavailable" }
@@ -116,7 +134,8 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
         }
     }
     MaitriResponderJourneyBoard(p, confirmed.requesterMembership?.assistanceStatus, fix?.let { it.latitude to it.longitude },
-        busy, onStatus = { chooseStatus = true }, onMaps = ::openMaps, onHelp = ::requestHelp, onDial = ::dial)
+        busy, onStatus = { chooseStatus = true }, onMaps = ::openMaps, onHelp = ::requestHelp, onDial = ::dial,
+        distanceMeters = distance)
     if (chooseStatus) AlertDialog(onDismissRequest = { chooseStatus = false }, title = { Text("Responder status") },
         text = { Column {
             for (status in listOf("ON_THE_WAY", "HELPING", "UNABLE_TO_HELP", "LEFT_INCIDENT")) {
@@ -141,14 +160,20 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
 @Composable
 internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: String?, coordinates: Pair<Double, Double>?,
                                          busy: Boolean, onStatus: () -> Unit, onMaps: () -> Unit,
-                                         onHelp: () -> Unit, onDial: () -> Unit) {
+                                         onHelp: () -> Unit, onDial: () -> Unit, distanceMeters: Double? = null) {
     EmergencyBoard(if (p.dark) R.drawable.maitri_dark_07 else R.drawable.maitri_light_07,
         "On your way. Keep both of you safe. Request more responders before you approach.") {
         BoardLabel(84, 59, 270, "RESPONDER · " + (assistanceStatus ?: "AUTHORIZED").replace('_', ' '), p.accent, 11)
         BoardAction(24, 51, 342, 65, "Update responder status", !busy, onStatus)
+        // Live Esri map over the crop's map area (342 x 320 at 24,140).
+        EsriMap(coordinates, "Person in need", "Awaiting location", Modifier.offset(24.dp, (140 - 28).dp).size(342.dp, 320.dp))
         BoardLabel(40, 489, 308, "Person in need", p.primary, 16)
         BoardLabel(40, 515, 308, coordinates?.let { "${it.first}, ${it.second}" } ?: "Awaiting location", p.secondary)
-        BoardLabel(40, 546, 306, if (coordinates != null) "Open last reported location in Maps" else "Distance and ETA unavailable", p.accent)
+        BoardLabel(40, 546, 306, when {
+            coordinates == null -> "Distance and ETA unavailable"
+            distanceMeters != null -> straightLineLabel(distanceMeters) + " · Open in Maps"
+            else -> "Open last reported location in Maps"
+        }, p.accent)
         BoardAction(24, 476, 342, 104, "Open last reported location in Maps", coordinates != null, onMaps)
         BoardAction(24, 654, 226, 48, "Bring in help", !busy, onHelp)
         BoardAction(262, 654, 104, 48, "Call emergency services", onClick = onDial)
