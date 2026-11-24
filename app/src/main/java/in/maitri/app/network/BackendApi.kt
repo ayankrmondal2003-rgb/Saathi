@@ -34,7 +34,8 @@ data class IncidentLocationDto(@SerializedName("latitude") val latitude: Double?
     @SerializedName("is_mock") val mock: Boolean?, @SerializedName("is_test") val test: Boolean)
 data class InvitationDto(@SerializedName("id") val id: String, @SerializedName("incident_id") val incidentId: String,
     @SerializedName("expires_at") val expiresAt: String, @SerializedName("status") val status: String,
-    @SerializedName("distance_band") val distanceBand: String? = null)
+    @SerializedName("distance_band") val distanceBand: String? = null,
+    @SerializedName("is_test") val isTest: Boolean = false)
 internal fun InvitationDto.canOpenIncoming(now: java.time.Instant = java.time.Instant.now()): Boolean =
     id.isNotBlank() && incidentId.isNotBlank() && status == "PENDING" &&
         runCatching { java.time.Instant.parse(expiresAt).isAfter(now) }.getOrDefault(false)

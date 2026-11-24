@@ -48,6 +48,7 @@ fun MaitriIncoming(
     onDeclined: () -> Unit
 ) {
     val p = maitriPalette()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var isSubmitting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -70,6 +71,8 @@ fun MaitriIncoming(
 
         scope.launch {
             try {
+                // Accepting needs a location under 2 minutes old inside the alert radius: send the current one first.
+                if (decision == "ACCEPTED") `in`.maitri.app.network.ResponderLocation.reportNow(context, uid)
                 // Only a server-confirmed decision changes screens; EXPIRED is reported, never treated as success.
                 val status = confirmedInvitationResponse(decision) {
                     BackendClient.api.respond(invitation.id, DecisionDto(decision), ExpectedAccount(uid))

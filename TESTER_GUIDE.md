@@ -54,6 +54,7 @@ Please try these with a friend who also has Maitri, and note anything confusing 
 | 8 | **Profile › Language** — try Hindi, Bengali, Marathi, Tamil or Telugu | The app switches language |
 | 9 | Phone **Settings › Display › Font size** at the largest | Text gets bigger and nothing is cut off |
 | 10 | **Responder** tab — *Yes, I'd like to help*, upload documents | Your volunteer application is submitted for review |
+| 11 | Approved volunteers: turn **Available for nearby requests** on and tap **Get requests when Maitri is closed** | After choosing *Allow all the time*, you get nearby SOS requests even with Maitri closed |
 
 The translations were drafted by machine. If you read one of those languages, wrong or awkward wording is very
 useful feedback.

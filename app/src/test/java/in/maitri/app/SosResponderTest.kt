@@ -35,9 +35,13 @@ class SosResponderTest {
         val manifest = File("src/main/AndroidManifest.xml").readText()
         assertTrue(manifest.contains("android.permission.RECORD_AUDIO"))
         assertTrue(manifest.contains("android.permission.USE_FULL_SCREEN_INTENT"))
-        // Photos go through the camera app, contacts through the picker, and nothing tracks location in the background.
+        // Photos go through the camera app and contacts through the picker. Background location is requested only for
+        // volunteers who are Available and choose "Allow all the time" (ResponderLocation), never for anything else.
         assertFalse(manifest.contains("android.permission.CAMERA\""))
         assertFalse(manifest.contains("READ_CONTACTS"))
-        assertFalse(manifest.contains("ACCESS_BACKGROUND_LOCATION"))
+        assertTrue(manifest.contains("ACCESS_BACKGROUND_LOCATION"))
+        val usedBy = File("src/main/java").walkTopDown().filter { it.extension == "kt" && "ACCESS_BACKGROUND_LOCATION" in it.readText() }
+            .map { it.name }.toSet()
+        assertEquals(setOf("ResponderLocation.kt", "TestResponderDashboard.kt"), usedBy)
     }
 }

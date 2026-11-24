@@ -23,12 +23,15 @@ class InvitationNotificationWorker(context: Context, params: WorkerParameters) :
         } == true
         if (!eligible()) return Result.success()
         try {
-            val pending = BackendClient.api.invitations(ExpectedAccount(uid)).any {
+            val item = BackendClient.api.invitations(ExpectedAccount(uid)).firstOrNull {
                 it.id == invitation && it.incidentId == incident && it.status == "PENDING"
             }
-            if (pending && eligible() && NotificationHelper.showSosNotification(applicationContext, invitation,
-                    incident, tr("Nearby SOS simulation"), tr("Open Maitri to review the invitation."),
-                    "RESPONDER_INVITATION_CREATED")) {
+            // Only a distance band before accepting, never coordinates. "Practice" only for real test SOS.
+            val title = if (item?.isTest == true) tr("Practice SOS nearby") else tr("Someone needs help")
+            val body = item?.distanceBand?.let { tr("{0} away · Tap to respond if you can do so safely.", tr(it)) }
+                ?: tr("Nearby · Tap to respond if you can do so safely.")
+            if (item != null && eligible() && NotificationHelper.showSosNotification(applicationContext, invitation,
+                    incident, title, body, "RESPONDER_INVITATION_CREATED")) {
                 SosFirebaseMessagingService.saveLastAlertTimestamp(applicationContext, System.currentTimeMillis())
             }
             return Result.success()

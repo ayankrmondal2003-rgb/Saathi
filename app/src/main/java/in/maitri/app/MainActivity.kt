@@ -45,6 +45,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Available volunteers: the server learns where they are now, so they're reachable for the next ~30 minutes.
+        `in`.maitri.app.network.ResponderLocation.onForeground(this)
+    }
+
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         setIntent(intent)

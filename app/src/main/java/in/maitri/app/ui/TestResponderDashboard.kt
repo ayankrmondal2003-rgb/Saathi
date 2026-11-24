@@ -47,12 +47,34 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         permitted = context.locationAllowed()
     }
+    var backgroundAllowed by remember { mutableStateOf(`in`.maitri.app.network.ResponderLocation.backgroundAllowed(context)) }
+    var explainBackground by remember { mutableStateOf(false) }
+    val backgroundPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        backgroundAllowed = `in`.maitri.app.network.ResponderLocation.backgroundAllowed(context)
+        `in`.maitri.app.network.ResponderLocation.schedule(context, uid)
+    }
+    // Coming back from the system settings page also updates the state.
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            backgroundAllowed = `in`.maitri.app.network.ResponderLocation.backgroundAllowed(context)
+        }
+    }
+    if (explainBackground) androidx.compose.material3.AlertDialog(onDismissRequest = { explainBackground = false },
+        title = { Text(tr("Get requests when Maitri is closed?")) },
+        text = { Text(tr("While you're Available, Maitri will share your location with the server about every 15 minutes, even when the app is closed, so it can ask you to help someone nearby. ") +
+            tr("Nobody sees your location unless you accept a request. On the next screen, choose \"Allow all the time\". Turn Available off at any time to stop.")) },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = {
+            explainBackground = false
+            if (android.os.Build.VERSION.SDK_INT >= 29) backgroundPermission.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        }) { Text(tr("Continue")) } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = { explainBackground = false }) { Text(tr("Not now")) } })
 
     LaunchedEffect(uid, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 try {
                     if (profile == null) profile = BackendClient.api.profile(account)
+                    profile?.let { `in`.maitri.app.network.ResponderLocation.setAvailable(context, uid, it.optedIn && it.available) }
                     inbox = BackendClient.api.invitations(account).filter { it.canOpenIncoming() || it.status == "ACCEPTED" }
                     inboxLoaded = true
                     applicationStatus = BackendClient.api.volunteerStatus(account).status
@@ -193,6 +215,7 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
         scope.launch {
             try {
                 profile = BackendClient.api.profile(ProfileRequest(current.name, optIn, available), account)
+                profile?.let { `in`.maitri.app.network.ResponderLocation.setAvailable(context, uid, it.optedIn && it.available) }
                 preferenceMessage = tr("Preferences saved")
             } catch (e: CancellationException) {
                 throw e
@@ -218,12 +241,20 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
         Text(tr("Community responder"))
         Switch(checked = profile?.optedIn == true, enabled = profile != null && !busy,
             onCheckedChange = { update(it, false) })
-        Text(tr("Share my location while this dashboard is open"))
+        Text(tr("Available for nearby requests"))
         Switch(checked = profile?.available == true, enabled = profile?.optedIn == true && !busy,
             onCheckedChange = { update(true, it) })
         if (profile?.available == true && !permitted) {
             Button(onClick = { permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION)) }) { Text("Allow location") }
+                Manifest.permission.ACCESS_COARSE_LOCATION)) }) { Text(tr("Allow location")) }
+        }
+        // Reachable while Maitri is closed: only with the volunteer's explicit "Allow all the time".
+        if (profile?.available == true && permitted && !backgroundAllowed) {
+            Text(tr("You'll only get requests while Maitri is open."), fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+            Text(tr("To get SOS requests when Maitri is closed, allow location all the time."))
+            OutlinedButton(onClick = { explainBackground = true }) { Text(tr("Get requests when Maitri is closed")) }
+        } else if (profile?.available == true && backgroundAllowed) {
+            Text(tr("You'll get nearby SOS requests even when Maitri is closed. Turn Available off to stop sharing your location."))
         }
         if (preferenceMessage.isNotEmpty()) Text(preferenceMessage)
         locationStatusMessage?.let { Text(it) }
