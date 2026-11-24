@@ -32,6 +32,7 @@ users = Table("users", metadata, pk(), Column("firebase_uid", String(128), nulla
     Column("responder_available", Boolean, nullable=False, server_default=text("false")),
     Column("account_status", String, nullable=False, server_default="ACTIVE"),
     Column("phone_number", String(32)), Column("city", String(128)),
+    Column("share_phone_in_sos", Boolean, nullable=False, server_default=text("false")),
     stamp("created_at", True), stamp("updated_at", True),
     CheckConstraint("account_status IN ('ACTIVE','SUSPENDED')"),
     CheckConstraint("NOT responder_available OR responder_opt_in"))

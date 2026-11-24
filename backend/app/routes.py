@@ -9,7 +9,10 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy import case, func, select, update, text
 from sqlalchemy.dialects.postgresql import insert
 from app.core import account, database, identity
-from app.database.v1 import devices, incidents, invitations, locations, responders, users
+from app.database.v1 import devices, events, incidents, invitations, locations, responders, users
+from typing import Literal
+from pydantic import Field
+from app.schemas import Input
 from app.schemas import (
     ActiveIncident, CreateIncident, Decision, DeviceRegister, Fix, Incident, IncidentResolutionRequest,
     IncidentResolutionResponse, IncidentSnapshot, Profile, ProfileDetailsEdit, ProfileEdit, ResponderStatusUpdate,
@@ -225,7 +228,42 @@ async def inbox(user=Depends(account), db=Depends(database)):
     rows = await db.execute(select(invitations.c.id, invitations.c.incident_id, status.label("status"),
         invitations.c.expires_at).where(invitations.c.recipient_user_id == user.id)
         .order_by(invitations.c.invited_at.desc()).limit(100))
-    return [dict(row) for row in rows.mappings()]
+    result = [dict(row) for row in rows.mappings()]
+    # Before accepting, a responder learns only a distance band, never coordinates.
+    distances = dict((await db.execute(text("""SELECT v.id, ST_Distance(l.location, i.latest_location)
+        FROM incident_invitations v JOIN incidents i ON i.id = v.incident_id
+        JOIN responder_locations l ON l.user_id = v.recipient_user_id
+        WHERE v.recipient_user_id = :me AND v.status = 'PENDING' AND i.latest_location IS NOT NULL"""),
+        {"me": user.id})).all())
+    for row in result:
+        row["distance_band"] = distance_band(distances.get(row["id"]))
+    return result
+
+
+def distance_band(meters):
+    if meters is None:
+        return None
+    for limit, label in ((500, "Under 500 m"), (1000, "500 m – 1 km"), (2000, "1–2 km"), (5000, "2–5 km")):
+        if meters < limit:
+            return label
+    return "Over 5 km"
+
+
+class ResponderReport(Input):
+    reason: Literal["FALSE_ALARM", "UNSAFE", "OTHER"]
+    note: str = Field(default="", max_length=500)
+
+
+@router.post("/incidents/{incident_id}/report", status_code=204)
+async def report_incident(incident_id: UUID, body: ResponderReport, user=Depends(account), db=Depends(database)):
+    """An accepted responder flags an SOS (e.g. a false alarm). Recorded for review; nothing changes for the owner."""
+    incident = await service.incident_row(db, incident_id)
+    if incident.victim_user_id == user.id:
+        raise HTTPException(403, "Only responders can report an SOS")
+    await service.may_read(db, incident, user)
+    await db.execute(events.insert().values(incident_id=incident_id, actor_user_id=user.id, event_type="RESPONDER_REPORT",
+                                            metadata={"reason": body.reason, "note": body.note.strip()[:500]}))
+    return Response(status_code=204)
 
 
 @router.post("/responders/invitations/{invitation_id}/response")

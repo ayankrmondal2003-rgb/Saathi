@@ -277,24 +277,36 @@ async def build_snapshot(db, incident_id, user_id, role):
         assistance_status=assist_status
     )
 
-    active_rows = (await db.execute(select(
-        responders.c.responder_user_id, responders.c.assistance_status, responders.c.assistance_updated_at
-    ).where(
-        responders.c.incident_id == incident_id,
-        responders.c.authorization_status == "AUTHORIZED",
-        responders.c.revoked_at.is_(None),
-        responders.c.access_expires_at > func.clock_timestamp(),
-        responders.c.assistance_status != "LEFT_INCIDENT"
-    ))).mappings().all()
+    active_rows = (await db.execute(text("""
+        SELECT r.responder_user_id, r.assistance_status, r.assistance_updated_at, u.display_name,
+               CASE WHEN l.recorded_at > now() - interval '10 minutes' THEN ST_Y(l.location::geometry) END AS latitude,
+               CASE WHEN l.recorded_at > now() - interval '10 minutes' THEN ST_X(l.location::geometry) END AS longitude,
+               CASE WHEN l.recorded_at > now() - interval '10 minutes' AND i.latest_location IS NOT NULL
+                    THEN ST_Distance(l.location, i.latest_location) END AS distance_meters
+        FROM incident_responders r JOIN users u ON u.id = r.responder_user_id
+        JOIN incidents i ON i.id = r.incident_id
+        LEFT JOIN responder_locations l ON l.user_id = r.responder_user_id
+        WHERE r.incident_id = :id AND r.authorization_status = 'AUTHORIZED' AND r.revoked_at IS NULL
+          AND r.access_expires_at > clock_timestamp() AND r.assistance_status <> 'LEFT_INCIDENT'
+        ORDER BY r.accepted_at"""), {"id": incident_id})).mappings().all()
 
+    owner = role == "OWNER"
     active_responders = [
         ActiveResponderPublic(
-            responder_id="resp-" + r.responder_user_id.hex[:8],
-            assistance_status=r.assistance_status,
-            updated_at=r.assistance_updated_at
+            responder_id="resp-" + r["responder_user_id"].hex[:8],
+            assistance_status=r["assistance_status"],
+            updated_at=r["assistance_updated_at"],
+            display_name=((r["display_name"] or "").split() or ["Responder"])[0][:40],
+            distance_meters=r["distance_meters"] if owner else None,
+            latitude=r["latitude"] if owner else None,
+            longitude=r["longitude"] if owner else None,
         )
         for r in active_rows
     ]
+    victim_phone = None
+    if role == "RESPONDER" and auth_status == "AUTHORIZED":
+        victim_phone = await db.scalar(text("""SELECT phone_number FROM users WHERE id = :id AND share_phone_in_sos"""),
+                                       {"id": incident.victim_user_id})
 
     return IncidentSnapshot(
         incident_id=incident_id,
@@ -304,5 +316,6 @@ async def build_snapshot(db, incident_id, user_id, role):
         latest_location=latest_loc,
         responder_summary=responder_summary,
         requester_membership=requester_membership,
-        active_responders=active_responders
+        active_responders=active_responders,
+        victim_phone=victim_phone
     )

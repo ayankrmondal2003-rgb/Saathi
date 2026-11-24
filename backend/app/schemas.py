@@ -49,6 +49,8 @@ class ProfileDetailsEdit(Input):
     display_name: str | None = Field(default=None, min_length=1, max_length=256)
     phone_number: str | None = Field(default=None, max_length=32)
     city: str | None = Field(default=None, max_length=128)
+    # Accepted responders may call this number during an active SOS (screen 07 "Call").
+    share_phone_in_sos: bool | None = None
 
     @field_validator("display_name")
     @classmethod
@@ -83,6 +85,7 @@ class Profile(ProfileEdit):
     email_verified: bool
     phone_number: str | None = None
     city: str | None = None
+    share_phone_in_sos: bool = False
 
 
 class CreateIncident(Input):
@@ -155,6 +158,11 @@ class ActiveResponderPublic(BaseModel):
     responder_id: str
     assistance_status: str
     updated_at: AwareDatetime | None = None
+    # First name only. Distance and position only for the person in need, from a fix under 10 minutes old.
+    display_name: str | None = None
+    distance_meters: float | None = None
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class IncidentSnapshot(BaseModel):
@@ -166,6 +174,8 @@ class IncidentSnapshot(BaseModel):
     responder_summary: ResponderSummary
     requester_membership: RequesterMembership
     active_responders: list[ActiveResponderPublic]
+    # For accepted responders only, and only when the person in need agreed to share it.
+    victim_phone: str | None = None
 
 
 class SafetyPinSetup(Input):
