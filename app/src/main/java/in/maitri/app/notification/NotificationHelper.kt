@@ -202,8 +202,14 @@ object NotificationHelper {
             .build()
 
         val notificationId = 1000 + (alertId.hashCode() and 0x7FFF)
-        NotificationManagerCompat.from(context).notify(notificationId, notification)
-        return true
+        // Re-checked here (not only in hasNotificationPermission) so lint can see it; revocation can race this call.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED) return false
+        return try {
+            NotificationManagerCompat.from(context).notify(notificationId, notification)
+            true
+        } catch (_: SecurityException) { false }
     }
 
     fun triggerTestVibration(context: Context): Boolean {
