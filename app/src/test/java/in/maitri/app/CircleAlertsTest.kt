@@ -43,6 +43,13 @@ class CircleAlertsTest {
     @Test fun inboxItemsOpenTheRightThing() {
         assertEquals(InboxAction.OpenInvitation("inv"), inboxAction(item("SOS_REQUEST", mapOf("invitation_id" to "inv"))))
         assertEquals(InboxAction.OpenLink("https://x.invalid/l/t"), inboxAction(item("CIRCLE_SOS", mapOf("url" to "https://x.invalid/l/t"))))
+        // With the incident id, the circle member gets the live location and the SOS voice notes and photos.
+        assertEquals(InboxAction.ViewCircleSos("inc", "https://x.invalid/l/t"),
+            inboxAction(item("CIRCLE_SOS", mapOf("url" to "https://x.invalid/l/t", "incident_id" to "inc"))))
+        assertEquals("ended: media only, no live link", InboxAction.ViewCircleSos("inc", null),
+            inboxAction(item("CIRCLE_SOS_ENDED", mapOf("incident_id" to "inc"))))
+        assertEquals(InboxAction.ViewCircleSos("inc", null),
+            inboxAction(item("CIRCLE_SOS", mapOf("url" to "intent://evil", "incident_id" to "inc"))))
         assertEquals("only web links open", InboxAction.None, inboxAction(item("CIRCLE_SOS", mapOf("url" to "intent://evil"))))
         assertEquals(InboxAction.AnswerCircleRequest("r"), inboxAction(item("CIRCLE_REQUEST", mapOf("request_id" to "r"))))
         assertEquals(InboxAction.OpenCheckIn, inboxAction(item("CHECKIN_REMINDER")))

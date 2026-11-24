@@ -25,7 +25,12 @@ data class UploadRequestDto(val kind: String, @SerializedName("mime_type") val m
 data class UploadTicketDto(@SerializedName("file_id") val fileId: String, @SerializedName("upload_url") val uploadUrl: String,
     val headers: Map<String, String>)
 data class FileStatusDto(@SerializedName("file_id") val fileId: String?, val status: String? = null)
-data class DownloadDto(@SerializedName("file_id") val fileId: String?, @SerializedName("download_url") val downloadUrl: String?)
+data class DownloadDto(@SerializedName("file_id") val fileId: String?, @SerializedName("download_url") val downloadUrl: String?,
+    @SerializedName("mime_type") val mimeType: String? = null)
+/** An SOS photo or voice note, visible to the sender and to circle members alerted about that SOS. */
+data class SosMediaItemDto(@SerializedName("file_id") val fileId: String, val kind: String,
+    @SerializedName("mime_type") val mimeType: String, @SerializedName("uploaded_at") val uploadedAt: String?)
+data class SosMediaListDto(val items: List<SosMediaItemDto> = emptyList())
 data class PhotoRequestDto(@SerializedName("file_id") val fileId: String)
 data class VolunteerDocumentDto(@SerializedName("doc_type") val docType: String, @SerializedName("file_id") val fileId: String)
 
@@ -36,6 +41,7 @@ interface FilesApi {
     @GET("api/files/{id}/download-url") suspend fun downloadUrl(@Path("id") id: String, @Tag expected: ExpectedAccount): DownloadDto
     @POST("api/files/profile-photo") suspend fun setProfilePhoto(@Body body: PhotoRequestDto, @Tag expected: ExpectedAccount): FileStatusDto
     @GET("api/files/profile-photo") suspend fun profilePhoto(@Tag expected: ExpectedAccount): DownloadDto
+    @GET("api/files/incidents/{id}/media") suspend fun incidentMedia(@Path("id") incidentId: String, @Tag expected: ExpectedAccount): SosMediaListDto
 }
 
 class UploadException(message: String) : IOException(message)

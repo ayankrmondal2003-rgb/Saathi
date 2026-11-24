@@ -191,8 +191,8 @@ fun MaitriActiveSos(
     if (askVoiceConsent) androidx.compose.material3.AlertDialog(onDismissRequest = { askVoiceConsent = false },
         containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
         title = { Text(tr("Record a voice note?")) },
-        text = { Text(tr("Up to 60 seconds, recorded only while you can see the red indicator. It's stored privately for this SOS; ") +
-            tr("only you can play it, and it's deleted after 30 days.")) },
+        text = { Text(tr("Up to 60 seconds, recorded only while you can see the red indicator. ") +
+            tr("People in your circle who got this SOS can play it, along with any photos you take. Volunteer responders can't. It's deleted after 30 days.")) },
         confirmButton = { TextButton(onClick = {
             askVoiceConsent = false
             mediaPrefs.edit().putBoolean("voice_consent", true).apply()

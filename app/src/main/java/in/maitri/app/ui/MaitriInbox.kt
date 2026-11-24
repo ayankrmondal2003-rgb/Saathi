@@ -43,6 +43,8 @@ import java.time.OffsetDateTime
 internal sealed interface InboxAction {
     data class OpenInvitation(val invitationId: String) : InboxAction
     data class OpenLink(val url: String) : InboxAction
+    /** Someone in your circle sent an SOS: their live location (while active) and their voice notes and photos. */
+    data class ViewCircleSos(val incidentId: String, val liveUrl: String?) : InboxAction
     data class AnswerCircleRequest(val requestId: String) : InboxAction
     data object OpenCheckIn : InboxAction
     data class ViewSession(val sessionId: String) : InboxAction
@@ -51,8 +53,15 @@ internal sealed interface InboxAction {
 
 internal fun inboxAction(item: InboxItemDto): InboxAction = when (item.kind) {
     "SOS_REQUEST" -> item.data["invitation_id"]?.let { InboxAction.OpenInvitation(it) } ?: InboxAction.None
-    "CIRCLE_SOS" -> item.data["url"]?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
-        ?.let { InboxAction.OpenLink(it) } ?: InboxAction.None
+    "CIRCLE_SOS", "CIRCLE_SOS_ENDED" -> {
+        val url = item.data["url"]?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+        val incident = item.data["incident_id"]?.takeIf { it.isNotBlank() }
+        when {
+            incident != null -> InboxAction.ViewCircleSos(incident, url.takeIf { item.kind == "CIRCLE_SOS" })
+            url != null -> InboxAction.OpenLink(url)
+            else -> InboxAction.None
+        }
+    }
     "CIRCLE_REQUEST" -> item.data["request_id"]?.let { InboxAction.AnswerCircleRequest(it) } ?: InboxAction.None
     // Your own reminder or missed check-in: open the check-in so you can say you're safe.
     "CHECKIN_REMINDER" -> InboxAction.OpenCheckIn
@@ -93,6 +102,7 @@ fun MaitriInbox(uid: String, onBack: () -> Unit, onInvitation: (String) -> Unit)
     var request by remember { mutableStateOf<String?>(null) }
     var session by remember { mutableStateOf<String?>(null) }
     var checkIn by remember { mutableStateOf(false) }
+    var circleSos by remember { mutableStateOf<InboxAction.ViewCircleSos?>(null) }
 
     suspend fun load() {
         try {
@@ -115,6 +125,7 @@ fun MaitriInbox(uid: String, onBack: () -> Unit, onInvitation: (String) -> Unit)
             is InboxAction.AnswerCircleRequest -> request = action.requestId
             InboxAction.OpenCheckIn -> checkIn = true
             is InboxAction.ViewSession -> session = action.sessionId
+            is InboxAction.ViewCircleSos -> circleSos = action
             InboxAction.None -> Unit
         }
     }
@@ -162,6 +173,7 @@ fun MaitriInbox(uid: String, onBack: () -> Unit, onInvitation: (String) -> Unit)
                 runCatching { BackendClient.circle.answer(id, "decline", account) }; load() } }) { Text(tr("Decline"), color = p.secondary) } })
     }
     session?.let { id -> CircleSessionViewer(uid, id) { session = null } }
+    circleSos?.let { sos -> CircleSosViewer(uid, sos.incidentId, sos.liveUrl) { circleSos = null } }
     if (checkIn) MaitriSharingDialog("CHECK_IN") { checkIn = false }
 }
 
