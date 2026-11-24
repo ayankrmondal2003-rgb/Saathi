@@ -131,8 +131,14 @@ The free stack runs **without Redis**. With `REDIS_URL` unset, realtime events a
 | `DATABASE_URL` | yes | Neon connection string (secret) |
 | `FIREBASE_PROJECT_ID` | yes | `surakshanet-c4ec1` (in `render.yaml`) |
 | `GOOGLE_APPLICATION_CREDENTIALS` | yes | `/etc/secrets/firebase-admin.json`, uploaded under **Secret Files** |
-| `ENVIRONMENT` | yes | `development` until the public launch |
-| `TEST_ACCOUNT_UIDS` | yes | JSON array of allowed test UIDs (secret) |
+| `ENVIRONMENT` | yes | `beta` for the friends beta: any verified account may use Maitri and SOS is real. `development` keeps the test-account allowlist. The pre-beta code on `master` doesn't accept `beta`: set `development` before deploying older code |
+| `SOS_PER_HOUR` | no | Real SOS per account per hour, default `3`. Raised to 20 only while testing; **remove it before inviting testers** |
+| `LIVE_LINK_SECRET` | beta | Any long random string (`python -c "import secrets; print(secrets.token_urlsafe(32))"`). Signs `/l/...` live-location links so they survive restarts |
+| `PUBLIC_URL` | beta | The service URL, e.g. `https://surakshanet-api.onrender.com` (no trailing slash). Used in live links |
+| `MEDICAL_NOTES_KEY` | beta | 32 random bytes, base64 (`python -c "import secrets,base64; print(base64.b64encode(secrets.token_bytes(32)).decode())"`). Encrypts medical notes. **Keep a copy**: losing or changing it makes saved notes unreadable |
+| `SENTRY_DSN` | no | Sentry project DSN (FastAPI platform). Errors only, scrubbed of personal data. Unset = no reporting |
+| `FIREBASE_WEB_API_KEY` | for `/admin` | Firebase console → Project settings → Your apps → Web app → `apiKey`. Also add the Render host under Authentication → Settings → Authorized domains |
+| `TEST_ACCOUNT_UIDS` | development | JSON array of allowed test UIDs (secret). Ignored when `ENVIRONMENT=beta` |
 | `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | for uploads | From step 3 (secrets). Unset = uploads return 503 |
 | `R2_ENDPOINT` | no | Only for a non-R2 S3 store |
 | `REDIS_URL` | no | Leave unset on the free stack |
@@ -142,12 +148,27 @@ The free stack runs **without Redis**. With `REDIS_URL` unset, realtime events a
 
 ## 7. Deploying a change
 
-1. Merge to `master`, then **surakshanet-api → Manual Deploy → Deploy latest commit** (auto-deploy is off).
+1. Push the branch the service deploys (**Settings → Build & Deploy → Branch**; `beta-complete` during the beta,
+   `master` after the merge), then **surakshanet-api → Manual Deploy → Deploy latest commit** (auto-deploy is off).
+   When you add or change environment variables, use **Save only**, then deploy once.
 2. Watch **Logs** for the `[startup]` lines: configuration → migrations → `starting FastAPI`. A migration error stops startup before the API takes traffic.
 3. Check `/ready`, then sign in on a phone.
 4. **Rollback:**
    - **Code:** in **Events**, pick the previous deploy → **Rollback**.
-   - **Schema:** migrations are additive. To undo 0012 only, run `alembic downgrade 0011` against the database; this drops `stored_files`. The R2 objects stay until deleted.
+   - **Schema:** migrations are additive. 0013-0017 (beta) only add tables and columns and relax one constraint,
+     so the pre-beta code still runs on them; switching back only needs `ENVIRONMENT=development`.
+     To undo 0012 only, run `alembic downgrade 0011` against the database; this drops `stored_files`. The R2 objects stay until deleted.
+
+## 8. One-time setup for the beta
+
+1. **Admin reviewer:** Firebase console → Authentication → Users → copy your **User UID**; Project settings →
+   Service accounts → **Generate new private key** (save it outside the repo). Then
+   `cd backend` and `.venv\Scripts\python.exe scripts\set_admin_claim.py --key <path-to-key.json> --uid <UID>`.
+   Sign out of `/admin` and in again.
+2. **Crash reports:** Firebase console → Crashlytics → **Enable**. Release builds report crashes unless the user
+   turns it off in Privacy & data.
+3. **Public pages:** after the merge to `master`, GitHub → Settings → Pages → Source: **GitHub Actions**. The privacy
+   policy, terms and account-deletion pages in `docs/site` are then published by `.github/workflows/pages.yml`.
 
 ## What users see while the server wakes
 

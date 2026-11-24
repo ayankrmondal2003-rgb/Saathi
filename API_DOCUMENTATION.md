@@ -1,323 +1,163 @@
-# SurakshaNet — Backend API Documentation
+# Maitri API reference
 
-All API routes require HTTPS and are prefixed with `/api`. Authenticated endpoints require an `Authorization: Bearer <firebase_id_token>` header unless explicitly specified.
+The endpoint table below is generated from the server code by `backend/scripts/api_docs.py`. Don't edit it by hand:
+`backend/tests/test_api_docs.py` fails when it no longer matches the routes.
 
----
+## Basics
 
-## 1. Authentication & System Health
+- **Base URL:** the Render service, for example `https://surakshanet-api.onrender.com`. The app reads it from
+  `maitriProdApiUrl` (release) or `maitriDevApiUrl` (debug) in `local.properties`.
+- **Sign-in:** every `/api/...` call except the public ones in the table needs `Authorization: Bearer <Firebase ID
+  token>`. The server verifies the token with Firebase Admin and finds or creates the account. Accounts must be
+  active; in `ENVIRONMENT=beta` any verified account may use the service, otherwise only `TEST_ACCOUNT_UIDS`.
+- **Admin:** `/api/admin/...` additionally needs the Firebase custom claim `{"admin": true}`
+  (`backend/scripts/set_admin_claim.py`). The `/admin` page itself is public HTML that signs in with Firebase.
+- **Idempotency:** `POST /api/incidents` and `POST /api/circle-sharing/sessions` take an `Idempotency-Key` header
+  (a UUID). Repeating a request with the same key returns the original result instead of creating a second one.
+- **Errors:** JSON `{"detail": ...}`. Where the app needs to react to a specific case, `detail` is
+  `{"code": "...", "message": "..."}`, for example `SOS_RATE_LIMITED` (429), `STORAGE_NOT_CONFIGURED` (503),
+  `MEDICAL_NOTES_UNAVAILABLE` (503), `INVITE_NOT_FOUND` (404). Messages are safe to show; they never contain
+  other people's data. Rate limits answer 429.
+- **Real time:** `POST /api/incidents/{id}/ws-ticket` returns a short-lived ticket for the `/ws/...` WebSocket, which
+  streams incident updates. Pushes go through Firebase Cloud Messaging as data messages.
+- **Live links:** `/l/{token}` is a public page with a person's live location during their SOS; the token is an
+  HMAC (LIVE_LINK_SECRET) and stops working when the SOS ends.
+- **Files:** uploads go straight to private Cloudflare R2 storage with a presigned URL from
+  `POST /api/files/upload-url`, then `POST /api/files/{id}/complete`. Downloads use short-lived presigned URLs.
+  SOS photos and voice notes are visible to the sender and to the circle members who got that SOS's alert;
+  volunteer responders never see them.
 
-### `GET /health`
-- **Auth**: None
-- **Description**: Lightweight health probe verifying service responsiveness.
-- **Response**: `200 OK`
-  ```json
-  {
-    "status": "ok",
-    "service": "SurakshaNet API"
-  }
-  ```
+## Endpoints
 
-### `GET /api/users/me`
-- **Auth**: Bearer token
-- **Description**: Returns the caller's profile and responder availability.
-- **Response**: `200 OK`
-  ```json
-  {
-    "id": "7b08ecaa-9b7e-40ec-8ee8-bca77259f972",
-    "firebase_uid": "user_phone_a_uid",
-    "display_name": "Priya Sharma",
-    "email": "priya@example.com",
-    "email_verified": true,
-    "responder_opt_in": true,
-    "responder_available": true
-  }
-  ```
+Access: **public** (no sign-in), **account** (Firebase ID token), **admin** (token with the admin claim).
 
-### `PATCH /api/users/me`
-- **Auth**: Bearer token
-- **Description**: Updates user profile display name or toggles responder settings.
-- **Request Body**:
-  ```json
-  {
-    "display_name": "Priya S.",
-    "responder_opt_in": true,
-    "responder_available": false
-  }
-  ```
-- **Response**: `200 OK`
 
----
+### `app.admin`
 
-## 2. Emergency Incidents & Location Telemetry
+| Method | Path | Access | What it does |
+|---|---|---|---|
+| GET | `/admin` | public | Volunteer review page (HTML). Signs in with Firebase; its API calls need the admin claim. |
+| GET | `/api/admin/applications` | admin | Volunteer applications waiting for review, newest first. |
+| GET | `/api/admin/applications/{application_id}` | admin | One application with its documents' metadata. |
+| POST | `/api/admin/applications/{application_id}/decision` | admin | Approve or reject an application, with a note to the applicant. |
+| POST | `/api/admin/applications/{application_id}/documents/{file_id}/url` | admin | Short-lived download link for one document of the application. Logged. |
 
-### `POST /api/incidents`
-- **Auth**: Bearer token
-- **Description**: Initiates a new emergency SOS incident.
-- **Request Body**:
-  ```json
-  {
-    "is_test": true,
-    "initial_fix": {
-      "latitude": 28.6139,
-      "longitude": 77.2090,
-      "accuracy_meters": 12.5,
-      "recorded_at": "2026-11-21T02:00:00Z",
-      "is_mock": false
-    }
-  }
-  ```
-- **Response**: `201 Created`
-  ```json
-  {
-    "id": "c138f18d-6c17-4889-a5c2-f19bca0214ee",
-    "status": "ACTIVE",
-    "radius_meters": 1000,
-    "created_at": "2026-11-21T02:00:00.123Z"
-  }
-  ```
+### `app.circle`
 
-### `POST /api/incidents/{incident_id}/locations`
-- **Auth**: Bearer token (Victim only)
-- **Description**: Posts continuous GPS fixes from the victim's foreground service. Automatically reevaluates the dynamic geofence if displacement > 30m or interval > 15s.
-- **Request Body**:
-  ```json
-  {
-    "latitude": 28.6145,
-    "longitude": 77.2095,
-    "accuracy_meters": 8.0,
-    "recorded_at": "2026-11-21T02:00:05Z",
-    "is_mock": false
-  }
-  ```
-- **Response**: `200 OK`
+| Method | Path | Access | What it does |
+|---|---|---|---|
+| POST | `/api/circle/invites` | account | Creates an 8-character invite code for one trusted contact (valid 7 days). |
+| POST | `/api/circle/invites/accept` | account | The contact enters the code: links their account to that trusted contact. Rate limited. |
+| GET | `/api/circle/memberships` | account | Circles this account belongs to (whose SOS alerts it receives). |
+| GET | `/api/circle/requests` | account | Circle requests waiting for this account's answer (made by phone-number match). |
+| POST | `/api/circle/requests/{request_id}/{decision}` | account | Accept or decline a circle request (`decision` is accept or decline). |
 
-### `POST /api/responders/location`
-- **Auth**: Bearer token (Opted-in responder)
-- **Description**: Updates the responder's current location to assess eligibility for nearby active incidents.
-- **Request Body**:
-  ```json
-  {
-    "latitude": 28.6150,
-    "longitude": 77.2100,
-    "accuracy_meters": 15.0,
-    "recorded_at": "2026-11-21T02:00:02Z",
-    "is_mock": false
-  }
-  ```
-- **Response**: `200 OK`
+### `app.circle_sharing`
 
----
+| Method | Path | Access | What it does |
+|---|---|---|---|
+| GET | `/api/circle-sharing/links` | account | This account's linked contacts (people who receive its alerts in the app). |
+| POST | `/api/circle-sharing/links` | account | Links a contact using a pairing code. |
+| DELETE | `/api/circle-sharing/links/{link_id}` | account | Removes a link; that person stops receiving alerts and shared locations. |
+| POST | `/api/circle-sharing/pairing-code` | account | Creates a short-lived pairing code for a contact. |
+| GET | `/api/circle-sharing/requests/{key}` | account | Looks up a trip or check-in by the Idempotency-Key it was created with (retry after a lost reply). |
+| GET | `/api/circle-sharing/sessions` | account | Trips and check-ins shared with this account or started by it. |
+| POST | `/api/circle-sharing/sessions` | account | Starts a shared trip or a timed check-in for chosen contacts. Needs Idempotency-Key. |
+| GET | `/api/circle-sharing/sessions/{session_id}` | account | A trip or check-in: status, due time and, while active, the latest location. |
+| PUT | `/api/circle-sharing/sessions/{session_id}/location` | account | The owner's latest location for an active trip. |
+| POST | `/api/circle-sharing/sessions/{session_id}/opened` | account | A recipient opened the shared trip or check-in (shown to the owner). |
+| POST | `/api/circle-sharing/sessions/{session_id}/stop` | account | Ends a trip, or checks in safely. |
 
-## 3. Responder Invitations & Coordination
+### `app.files`
 
-### `GET /api/invitations`
-- **Auth**: Bearer token
-- **Description**: Returns all invitations addressed to the calling responder.
-- **Response**: `200 OK`
-  ```json
-  [
-    {
-      "id": "d9817f7b-9993-41bb-98f9-aa11b817e900",
-      "incident_id": "c138f18d-6c17-4889-a5c2-f19bca0214ee",
-      "status": "PENDING",
-      "expires_at": "2026-11-21T02:05:00Z"
-    }
-  ]
-  ```
+| Method | Path | Access | What it does |
+|---|---|---|---|
+| GET | `/api/files/incidents/{incident_id}/media` | account | Uploaded SOS photos and voice notes for one SOS, oldest first, for its owner and their alerted circle. |
+| GET | `/api/files/profile-photo` | account | Download link for this account's profile photo, if one is set. |
+| POST | `/api/files/profile-photo` | account | Makes an uploaded image the profile photo (the previous one is deleted). |
+| POST | `/api/files/upload-url` | account | Presigned upload to private storage for a volunteer document, SOS photo or voice note, or profile photo. |
+| DELETE | `/api/files/{file_id}` | account | Deletes one of this account's files from storage. |
+| POST | `/api/files/{file_id}/complete` | account | Confirms an upload: the server checks the stored object's size before the file is usable. |
+| GET | `/api/files/{file_id}/download-url` | account | Short-lived download link: own files, or SOS media from an SOS this account was alerted to. |
 
-### `POST /api/invitations/{invitation_id}/accept`
-- **Auth**: Bearer token (Invited responder)
-- **Description**: Accepts an emergency invitation, granting authorized access to live incident updates.
-- **Response**: `200 OK`
-  ```json
-  {
-    "status": "ACCEPTED",
-    "incident_id": "c138f18d-6c17-4889-a5c2-f19bca0214ee"
-  }
-  ```
+### `app.inbox`
 
-### `POST /api/invitations/{invitation_id}/decline`
-- **Auth**: Bearer token
-- **Description**: Declines an invitation, marking it `DECLINED` and preventing further alerts.
-- **Response**: `200 OK`
+| Method | Path | Access | What it does |
+|---|---|---|---|
+| GET | `/api/inbox` | account | Inbox items: circle SOS alerts, SOS ended, circle requests, check-in reminders and missed check-ins. |
+| POST | `/api/inbox/read-all` | account | Marks every inbox item read. |
+| POST | `/api/inbox/{item_id}/delivered` | account | The app calls this when the push reached the phone: the only honest basis for "Delivered". |
+| POST | `/api/inbox/{item_id}/read` | account | Marks one inbox item read. |
 
-### `PATCH /api/incidents/{incident_id}/responders/me/status`
-- **Auth**: Bearer token (Accepted responder)
-- **Description**: Updates responder operational status during the incident.
-- **Request Body**:
-  ```json
-  {
-    "status": "ON_THE_WAY" // Allowed: ON_THE_WAY, HELPING, UNABLE_TO_HELP, LEFT_INCIDENT
-  }
-  ```
-- **Response**: `200 OK`
+### `app.live_link`
 
----
+| Method | Path | Access | What it does |
+|---|---|---|---|
+| GET | `/l/{token}` | public | Public live-location page for an active SOS (map, last update). Stops working when the SOS ends. |
+| GET | `/l/{token}/location` | public | The live-location page's data: latest position and time, while the SOS is active. |
 
-## 4. Real-Time Tracking & WebSocket API
+### `app.main`
 
-### `POST /api/incidents/{incident_id}/ws-ticket`
-- **Auth**: Bearer token (Victim or Accepted Responder)
-- **Description**: Issues a short-lived (60s), single-use ticket to establish a WebSocket connection without exposing auth tokens in the query string.
-- **Response**: `200 OK`
-  ```json
-  {
-    "ticket": "sec_wst_abc12345xyz67890",
-    "expires_at": "2026-11-21T02:01:00Z"
-  }
-  ```
+| Method | Path | Access | What it does |
+|---|---|---|---|
+| GET | `/health` | public | Liveness: the process is up. |
+| GET | `/health/db` | public | Deep check for manual diagnosis. It wakes the database; never point a monitor or keep-alive at it. |
+| GET | `/ready` | public | Cheap: answers from this process only and never opens a database connection, so Render's health check and the cron-job.org keep-alive keep the API warm without waking a suspended Neon compute. Database problems surface on the first API call and on /health/db. |
 
-### `WSS /ws/incidents/{incident_id}?ticket={ticket}`
-- **Auth**: Single-use ticket via query parameter
-- **Description**: Secure bi-directional WebSocket connection streaming live incident updates.
-- **Events Broadcasted**:
-  1. `INCIDENT_SNAPSHOT`: Initial full state upon connection.
-  2. `LOCATION_UPDATED`: Real-time GPS fix of the victim.
-  3. `RESPONDER_JOINED`: Notification that a new responder accepted and entered.
-  4. `RESPONDER_STATUS_CHANGED`: Status changes (`ON_THE_WAY`, `HELPING`, etc.).
-  5. `INCIDENT_STATUS_CHANGED`: State transitions (e.g. `ESCALATION_REQUIRED`).
-  6. `ACCESS_REVOKED`: Dispatched immediately to responders upon incident closure or eviction.
-  7. `INCIDENT_CLOSED`: Broadcast when incident resolves.
+### `app.privacy`
 
----
+| Method | Path | Access | What it does |
+|---|---|---|---|
+| DELETE | `/api/users/me` | account | Deletes the account everywhere: database rows, private files in R2, and the Firebase sign-in. |
+| GET | `/api/users/me/export` | account | Everything Maitri keeps about this account, as JSON. Files are listed, not included (they're private). |
+| GET | `/api/users/me/medical-notes` | account | The account's medical notes (stored encrypted; shown to an accepted responder during an SOS). |
+| PUT | `/api/users/me/medical-notes` | account | Saves medical notes (encrypted with MEDICAL_NOTES_KEY; 503 if the key isn't set). |
 
-## 5. Safety PIN & Incident Resolution
+### `app.routes`
 
-### `POST /api/safety-pin/setup`
-- **Auth**: Bearer token
-- **Description**: Enrolls an initial 6-digit Safety PIN or Duress PIN.
-- **Request Body**:
-  ```json
-  {
-    "pin": "849201",
-    "confirm_pin": "849201",
-    "credential_type": "PRIMARY_PIN" // or "DURESS_PIN"
-  }
-  ```
-- **Validation**: Enforces non-sequential, non-repeated 6-digit format. Rejects primary and duress PIN collisions.
+| Method | Path | Access | What it does |
+|---|---|---|---|
+| POST | `/api/devices/register` | account | Registers this phone's push token for the account. |
+| POST | `/api/devices/{device_id}/test-alert` | account | Sends a test push to one of the account's phones. |
+| DELETE | `/api/devices/{token}` | account | Removes a push token (sign-out). |
+| POST | `/api/incidents` | account | Starts an SOS with the first location. Needs Idempotency-Key; at most SOS_PER_HOUR real SOS per hour. |
+| GET | `/api/incidents/active` | account | The caller's own open (non-CLOSED) incident, so the app can resume it after losing local state. |
+| POST | `/api/incidents/{incident_id}/invitations/{invitation_id}/revoke` | account | The owner removes a responder who accepted. |
+| GET | `/api/incidents/{incident_id}/location` | account | Latest location of the person in need, for the owner and authorized responders. |
+| POST | `/api/incidents/{incident_id}/location` | account | The owner's new location fix during the SOS. |
+| POST | `/api/incidents/{incident_id}/report` | account | An accepted responder flags an SOS (e.g. a false alarm). Recorded for review; nothing changes for the owner. |
+| POST | `/api/incidents/{incident_id}/request-help` | account | An authorized responder asks for more nearby responders ("Bring in help"). |
+| POST | `/api/incidents/{incident_id}/resolve` | account | Ends the SOS with the safety PIN. A duress PIN looks the same but escalates. |
+| PUT | `/api/incidents/{incident_id}/responders/status` | account | A responder's status: on the way, helping, can't help. |
+| GET | `/api/incidents/{incident_id}/snapshot` | account | Full incident state for the owner: responders with names, distance and status; location; circle delivery. |
+| GET | `/api/incidents/{incident_id}/trusted-contacts` | account | Delivery status of the SOS for each trusted contact. |
+| POST | `/api/incidents/{incident_id}/trusted-contacts/alert` | account | Alerts trusted contacts: pushes to linked ones, returns the others for an SMS from the phone. |
+| POST | `/api/incidents/{incident_id}/trusted-contacts/sms-prepared` | account | The owner's messaging app was opened with these contacts and came back. Not proof of sending. |
+| POST | `/api/incidents/{incident_id}/ws-ticket` | account | One-time ticket for the incident WebSocket. |
+| GET | `/api/responders/invitations` | account | Pending SOS requests for this volunteer. |
+| POST | `/api/responders/invitations/{invitation_id}/response` | account | Accept or decline an SOS request. |
+| PUT | `/api/responders/location` | account | A volunteer's current location, used to find nearby responders. |
+| POST | `/api/security/safety-pin/change` | account | Changes the safety and duress PINs (needs the current PIN). |
+| POST | `/api/security/safety-pin/recover` | account | Resets the PINs after a fresh sign-in. |
+| POST | `/api/security/safety-pin/setup` | account | Sets the safety PIN (and optional duress PIN) for the first time. |
+| GET | `/api/security/safety-pin/status` | account | Whether PINs are set, and any lockout. |
+| GET | `/api/trusted-contacts` | account | The account's trusted contacts. |
+| POST | `/api/trusted-contacts` | account | Adds a trusted contact. |
+| DELETE | `/api/trusted-contacts/{contact_id}` | account | Removes a trusted contact (and its circle link). |
+| PUT | `/api/trusted-contacts/{contact_id}` | account | Edits a trusted contact, including whether they get SOS alerts. |
+| POST | `/api/trusted-contacts/{contact_id}/primary` | account | Makes a contact the primary one. |
+| GET | `/api/users/me` | account | The signed-in account: profile, responder settings, volunteer status. |
+| PATCH | `/api/users/me` | account | Updates part of the profile. |
+| PUT | `/api/users/me` | account | Updates the profile and responder availability. |
+| WS | `/api/ws/incidents/{incident_id}` | ticket | Live incident updates (same as /ws/incidents/...; kept for older app builds). |
+| WS | `/ws/incidents/{incident_id}` | ticket | Live incident updates for the owner and authorized responders. Needs a ws-ticket. |
 
-### `POST /api/incidents/{incident_id}/resolve`
-- **Auth**: Bearer token (Victim only)
-- **Description**: Concludes an active emergency. Validates PIN against Argon2id hash.
-- **Request Body**:
-  ```json
-  {
-    "pin": "849201",
-    "reason": "USER_RESOLVED"
-  }
-  ```
-- **Responses**:
-  - `200 OK` (Standard PIN):
-    ```json
-    {
-      "resolution_status": "CONFIRMED",
-      "incident_status": "RESOLVED",
-      "message": "Incident resolved successfully."
-    }
-    ```
-  - `200 OK` (Duress PIN):
-    ```json
-    {
-      "resolution_status": "DURESS_SIMULATION",
-      "incident_status": "ESCALATION_REQUIRED",
-      "message": "Incident resolved."
-    }
-    ```
-  - `403 Forbidden`: Incorrect PIN. Increments attempt counter.
-  - `429 Too Many Requests`: 5 failed attempts reached; returns `retry_after_seconds` (300s cooldown).
+### `app.volunteer`
 
----
-
-## 6. Trusted Emergency Contacts & Escalation API (Phase 13)
-
-### `GET /api/trusted-contacts`
-- **Auth**: Bearer token
-- **Description**: Returns all trusted emergency contacts configured by the caller, sorted with the primary contact first.
-- **Response**: `200 OK`
-  ```json
-  [
-    {
-      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-      "owner_user_id": "7b08ecaa-9b7e-40ec-8ee8-bca77259f972",
-      "display_name": "Mom",
-      "phone_number": "+91 98765 43210",
-      "normalized_phone_number": "+919876543210",
-      "label": "Parent",
-      "is_primary": true,
-      "is_verified": false,
-      "source": "MANUAL",
-      "notify_on_sos": true,
-      "include_location_link": true,
-      "notify_on_closure": true,
-      "allow_live_tracking": true,
-      "preferred_channel": "SMS",
-      "created_at": "2026-11-21T09:00:00Z",
-      "updated_at": "2026-11-21T09:00:00Z"
-    }
-  ]
-  ```
-
-### `POST /api/trusted-contacts`
-- **Auth**: Bearer token
-- **Description**: Creates a new trusted emergency contact. Rejects duplicate phone numbers for the same account (`409 Conflict`). Enforces primary contact invariant.
-- **Request Body**:
-  ```json
-  {
-    "display_name": "Sister",
-    "phone_number": "+91 91234 56789",
-    "label": "Sibling",
-    "is_primary": false,
-    "notify_on_sos": true,
-    "include_location_link": true,
-    "notify_on_closure": true,
-    "allow_live_tracking": true,
-    "preferred_channel": "SMS"
-  }
-  ```
-- **Response**: `201 Created`
-
-### `PUT /api/trusted-contacts/{contact_id}`
-- **Auth**: Bearer token (Contact owner)
-- **Description**: Updates contact display name, phone number, and notification preference flags.
-- **Response**: `200 OK`
-
-### `DELETE /api/trusted-contacts/{contact_id}`
-- **Auth**: Bearer token (Contact owner)
-- **Description**: Deletes a trusted contact. If the deleted contact was primary, automatically promotes the next available contact to primary.
-- **Response**: `204 No Content`
-
-### `POST /api/trusted-contacts/{contact_id}/primary`
-- **Auth**: Bearer token (Contact owner)
-- **Description**: Promotes the specified contact to primary, demoting any existing primary contact.
-- **Response**: `200 OK`
-
-### `POST /api/incidents/{incident_id}/trusted-contacts/alert`
-- **Auth**: Bearer token (Incident owner)
-- **Description**: Dispatches emergency alert outbox jobs for trusted contacts with `notify_on_sos = true` and provisions time-bounded live tracking grants (`trusted_contact_grants`).
-- **Response**: `200 OK`
-  ```json
-  {
-    "incident_id": "c138f18d-6c17-4889-a5c2-f19bca0214ee",
-    "alerts_queued": 1,
-    "primary_contact_name": "Mom",
-    "statuses": [
-      {
-        "contact_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-        "display_name": "Mom",
-        "masked_phone": "+91*****3210",
-        "is_primary": true,
-        "delivery_status": "PROVIDER_ACCEPTED",
-        "message_preview": "SurakshaNet SOS: I may need urgent help. My last available location is: https://maps.google.com/?q=28.613900,77.209000. Location recorded at: 2026-11-21 09:00:00 UTC. If you believe I am in immediate danger, contact emergency services (112).",
-        "location_disclosed": true,
-        "tracking_granted": true,
-        "updated_at": "2026-11-21T09:00:01Z"
-      }
-    ]
-  }
-  ```
-
-### `GET /api/incidents/{incident_id}/trusted-contacts`
-- **Auth**: Bearer token (Incident owner)
-- **Description**: Returns real-time delivery statuses for all configured contacts during an incident.
-- **Response**: `200 OK`
-
+| Method | Path | Access | What it does |
+|---|---|---|---|
+| POST | `/api/volunteer/consent` | account | Records consent to document verification and the volunteer declaration. |
+| POST | `/api/volunteer/intent` | account | "Yes, I'd like to help" or "Not now" on the volunteer screen. |
+| GET | `/api/volunteer/status` | account | Volunteer application status and which documents are uploaded. |
+| POST | `/api/volunteer/submit` | account | Submits the application for review (all five documents and consent required). |
+| POST | `/api/volunteer/upload-document` | account | Per Security Policy 2.3 identity documents go only to private storage with short-lived signed URLs. Returns a presigned upload (see app/files.py); 503 while that storage is not configured. |
