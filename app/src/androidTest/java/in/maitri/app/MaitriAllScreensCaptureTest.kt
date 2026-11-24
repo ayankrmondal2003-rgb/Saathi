@@ -48,7 +48,7 @@ class MaitriAllScreensCaptureTest {
     private fun screens(p: () -> MaitriPalette): List<Pair<String, @Composable () -> Unit>> = listOf(
         "01" to { MaitriWelcomeContent(p().dark) {} },
         "02" to { Docked("Home") { MaitriHomeContent(p(), 2, false, {}, {}, {}, {}, {}) } },
-        "03" to { MaitriLoginContent(p(), 0, {}, "", {}, "", {}, "", {}, false, {}, {}, {}, {}, false, null) },
+        "03" to { MaitriLoginContent(p(), 0, {}, "", {}, "", {}, false, {}, {}, {}, false, null) },
         "04" to { MaitriVolunteerContent(p(), "HELP", {}, emptyMap(), {}, {}, false, {}, {}, null) },
         "05" to { Docked("Contacts") { MaitriCircleContent(listOf(
             EmergencyContact("c1", displayName = "Test Contact A", phoneNumber = "+91 90000 00001", isPrimary = true),
