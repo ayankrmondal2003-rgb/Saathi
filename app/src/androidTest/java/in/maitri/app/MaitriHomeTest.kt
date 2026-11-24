@@ -136,7 +136,9 @@ class MaitriHomeTest {
             for (dark in listOf(false, true)) {
                 scenario.onActivity { activity ->
                     activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                    activity.setTurnScreenOn(true)
+                    // setTurnScreenOn is API 27+; the window flag does the same on Android 8.0.
+                    if (android.os.Build.VERSION.SDK_INT >= 27) activity.setTurnScreenOn(true)
+                    else @Suppress("DEPRECATION") activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
                     val assets = if (dark) listOf(R.drawable.maitri_dark_06, R.drawable.maitri_dark_07, R.drawable.maitri_dark_08)
                     else listOf(R.drawable.maitri_light_06, R.drawable.maitri_light_07, R.drawable.maitri_light_08)
                     assets.forEach { id ->

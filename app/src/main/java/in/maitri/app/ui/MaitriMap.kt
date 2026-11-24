@@ -2,6 +2,7 @@ package `in`.maitri.app.ui
 
 import `in`.maitri.app.tr
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -101,9 +102,50 @@ internal fun circleRing(latitude: Double, longitude: Double, radiusMeters: Doubl
  * Live map (MapLibre + OpenFreeMap). Draws only positions it was given; with none it shows a regional view and
  * [emptyLabel], and never invents a position. [accuracyMeters] belongs to the first PERSON_IN_NEED or YOU marker.
  */
+/**
+ * MapLibre needs OpenGL ES 3.0 and crashes natively (uncatchable) on GPUs that only have 2.0: older and budget
+ * "Android Go" phones, and the Android 8 emulator. Those get a card with the coordinates and Open in Maps instead.
+ */
+internal fun liveMapSupported(context: Context): Boolean {
+    val info = (context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager)?.deviceConfigurationInfo
+    return (info?.reqGlEsVersion ?: 0) >= 0x30000
+}
+
 @Composable
 internal fun MaitriMap(markers: List<MapMarker>, emptyLabel: String, modifier: Modifier = Modifier,
                        accuracyMeters: Double? = null) {
+    val context = LocalContext.current
+    val live = remember(context) { liveMapSupported(context) }
+    if (live) MaitriLiveMap(markers, emptyLabel, modifier, accuracyMeters)
+    else MaitriMapFallback(markers, emptyLabel, modifier, accuracyMeters)
+}
+
+/** No map on this phone: where the person is, in words and numbers, and a hand-off to the phone's maps app. */
+@Composable
+private fun MaitriMapFallback(markers: List<MapMarker>, emptyLabel: String, modifier: Modifier, accuracyMeters: Double?) {
+    val p = maitriPalette()
+    val context = LocalContext.current
+    val target = markers.firstOrNull { it.kind == MarkerKind.PERSON_IN_NEED } ?: markers.firstOrNull()
+    Box(modifier.clip(RoundedCornerShape(24.dp)).background(p.card).padding(16.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (target == null) Text(emptyLabel, color = p.primary, fontSize = 13.sp)
+            else {
+                Text("%.5f, %.5f".format(java.util.Locale.ROOT, target.latitude, target.longitude), color = p.primary,
+                    fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                accuracyMeters?.let { Text(tr("Accurate to about {0} m", it.toInt()), color = p.secondary, fontSize = 12.sp) }
+                TextButton(onClick = {
+                    val uri = Uri.parse("geo:${target.latitude},${target.longitude}?q=${target.latitude},${target.longitude}")
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+                }) { Text(tr("Open in Maps"), color = p.accent, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold) }
+            }
+            Text(tr("The live map isn't available on this phone."), color = p.secondary, fontSize = 11.sp)
+        }
+    }
+}
+
+@Composable
+private fun MaitriLiveMap(markers: List<MapMarker>, emptyLabel: String, modifier: Modifier = Modifier,
+                          accuracyMeters: Double? = null) {
     val p = maitriPalette()
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle

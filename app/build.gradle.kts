@@ -79,6 +79,10 @@ android {
     buildTypes {
         debug {
             buildConfigField("String", "API_BASE_URL", backendUrl("maitriDevApiUrl", "surakshaDevApiUrl"))
+            // Opt-in (-PsignDebugWithUpload=true): sign debug and androidTest APKs with the upload key, so device
+            // tests can install over a phone's release build without uninstalling it (and signing the user out).
+            if (canSignRelease && (project.findProperty("signDebugWithUpload") as String?) == "true")
+                signingConfig = signingConfigs.getByName("upload")
             // Debug builds never report crashes or upload mapping files.
             configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> { mappingFileUploadEnabled = false }
         }
@@ -118,7 +122,9 @@ android {
 
 dependencies {
     // MapLibre + OpenFreeMap tiles: no API key, free for commercial use.
-    implementation("org.maplibre.gl:android-sdk:13.7.1")
+    // OpenGL ES renderer: the default artifact renders with Vulkan and crashes ("No Vulkan compatible GPU found")
+    // on phones without Vulkan, which includes the Android 8 emulator and many budget phones.
+    implementation("org.maplibre.gl:android-sdk-opengl:13.7.1")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
