@@ -39,7 +39,11 @@ async def update_fix(db, row, fix, settings):
         raise conflict("LOCATION_CONFLICT", "Location superseded or conflicting")
     if row.location_is_mock is not None and row.location_is_mock != fix.is_mock:
         raise HTTPException(422, "Location source type cannot change during a test incident")
-    fix.check(settings)
+    # Victim SOS rules: any fix up to max_sos_accuracy_meters is kept, and the very first fix may be the
+    # phone's last-known position. Geofence matching separately requires precise, fresh fixes (FRESH).
+    first = row.location_recorded_at is None
+    fix.check(settings, max_accuracy=settings.max_sos_accuracy_meters,
+              max_age=settings.max_last_known_age_seconds if first else settings.max_location_age_seconds)
     await db.execute(update(incidents).where(incidents.c.id == row.id).values(
         latest_location=point(fix.latitude, fix.longitude), location_accuracy_meters=fix.accuracy_meters,
         location_is_mock=fix.is_mock, location_recorded_at=fix.recorded_at, location_received_at=func.now()))

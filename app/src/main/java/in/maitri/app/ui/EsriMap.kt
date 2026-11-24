@@ -31,6 +31,7 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polygon
 import java.io.File
 import kotlin.math.*
 
@@ -73,7 +74,8 @@ internal fun straightLineLabel(meters: Double): String =
  * it never invents a position.
  */
 @Composable
-internal fun EsriMap(point: Pair<Double, Double>?, pinLabel: String, emptyLabel: String, modifier: Modifier = Modifier) {
+internal fun EsriMap(point: Pair<Double, Double>?, pinLabel: String, emptyLabel: String, modifier: Modifier = Modifier,
+                     accuracyMeters: Double? = null) {
     val p = maitriPalette()
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -110,9 +112,19 @@ internal fun EsriMap(point: Pair<Double, Double>?, pinLabel: String, emptyLabel:
             view.overlayManager.tilesOverlay.setColorFilter(if (p.dark) ColorMatrixColorFilter(ColorMatrix().apply {
                 setScale(0.62f, 0.58f, 0.62f, 1f)
             }) else null)
-            view.overlays.removeAll { it is Marker }
+            view.overlays.removeAll { it is Marker || it is Polygon }
             if (point != null) {
                 val at = GeoPoint(point.first, point.second)
+                // Accuracy circle for coarse fixes, so a ±1.2 km position never looks like an exact pin.
+                if (accuracyMeters != null && accuracyMeters > `in`.maitri.app.location.TrackingConfig.PRECISE_METRES) {
+                    view.overlays.add(Polygon(view).apply {
+                        points = Polygon.pointsAsCircle(at, accuracyMeters)
+                        fillPaint.color = android.graphics.Color.argb(46, 184, 32, 85)
+                        outlinePaint.color = android.graphics.Color.argb(170, 184, 32, 85)
+                        outlinePaint.strokeWidth = 3f
+                        setOnClickListener { _, _, _ -> false }
+                    })
+                }
                 view.overlays.add(Marker(view).apply {
                     position = at
                     title = pinLabel
@@ -120,7 +132,8 @@ internal fun EsriMap(point: Pair<Double, Double>?, pinLabel: String, emptyLabel:
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                     icon = ContextCompat.getDrawable(context, if (p.dark) R.drawable.maitri_map_pin_dark else R.drawable.maitri_map_pin_light)
                 })
-                if (view.tag != at) { view.controller.setZoom(16.0); view.controller.setCenter(at); view.tag = at }
+                val framing = at to `in`.maitri.app.location.zoomForAccuracy(accuracyMeters)
+                if (view.tag != framing) { view.controller.setZoom(framing.second); view.controller.setCenter(at); view.tag = framing }
             } else if (view.tag != "region") {
                 view.controller.setZoom(4.5); view.controller.setCenter(GeoPoint(22.5, 79.0)); view.tag = "region"
             }

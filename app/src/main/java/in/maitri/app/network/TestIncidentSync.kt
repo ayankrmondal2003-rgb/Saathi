@@ -161,6 +161,25 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
         return started
     }
 
+    /**
+     * Gets the phone's newest fix to a just-confirmed incident. A recent one goes through the offline queue; an
+     * older last-known fix (allowed by the server as the first fix, up to 10 minutes) is sent once, best effort.
+     */
+    private suspend fun sendLatestKnown(uid: String, incident: String, account: ExpectedAccount) {
+        val fix = session().latest ?: return
+        if (System.currentTimeMillis() - fix.timestampMillis <= 120_000L) {
+            withContext(disk) { queue.offer(uid, incident, fix) }
+            return
+        }
+        try {
+            logRejectedFix {
+                BackendClient.api.submitIncidentFix(incident, FixDto(fix.latitude, fix.longitude,
+                    Instant.ofEpochMilli(fix.timestampMillis).toString(), fix.isMock, fix.accuracyMeters.toDouble()), account)
+            }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: Exception) { Log.w(TAG, "Last-known fix not sent: ${failure.javaClass.simpleName}") }
+    }
+
     /** POST /api/incidents; on 409 the server already has this user's incident, so it is looked up and adopted. */
     private suspend fun createOrAdopt(key: String, account: ExpectedAccount): IncidentDto? {
         try {
@@ -298,18 +317,23 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
                     else "Your earlier SOS is still open and needs attention. Call 112 if you need help now.")
                 return UploadResult.DONE
             }
+            val newlyConfirmed = authorizedKey != key
             prefs.edit().putString("confirmed:$uid", key).putString("incident:$uid", response.id).apply()
             authorizedKey = key
             incident = response.id
             lastCheck = SystemClock.elapsedRealtime()
+            // Fixes that arrived before the server confirmed the incident were not queued; send the newest one now.
+            if (newlyConfirmed) sendLatestKnown(uid, response.id, account)
         }
         val id = requireNotNull(incident)
         val pending = withContext(disk) { queue.pending(uid, id) }
         val result = replayPendingFixes(pending,
             stillAuthorized = { active(uid, key) && user(uid) != null },
             upload = { fix ->
-                BackendClient.api.submitIncidentFix(id, FixDto(fix.latitude, fix.longitude,
-                    Instant.ofEpochMilli(fix.timestampMillis).toString(), fix.isMock, fix.accuracyMeters.toDouble()), account)
+                logRejectedFix {
+                    BackendClient.api.submitIncidentFix(id, FixDto(fix.latitude, fix.longitude,
+                        Instant.ofEpochMilli(fix.timestampMillis).toString(), fix.isMock, fix.accuracyMeters.toDouble()), account)
+                }
             },
             acknowledge = { timestamp -> withContext(disk) { queue.acknowledge(uid, id, timestamp) } }
         )
@@ -322,6 +346,15 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
         })
         return UploadResult.ACTIVE
     }
+}
+
+/** Logs why the server refused a fix (its reason code) and rethrows, so replay still acknowledges and moves on. */
+private suspend fun <T> logRejectedFix(block: suspend () -> T): T = try { block() } catch (failure: HttpException) {
+    if (failure.code() == 409 || failure.code() == 422) {
+        val code = parseIncidentConflict(runCatching { failure.response()?.errorBody()?.string() }.getOrNull())?.code
+        Log.w(TAG, "Server refused fix: HTTP ${failure.code()} ${code ?: "unstructured"}")
+    }
+    throw failure
 }
 
 private fun errorDetail(failure: Exception): String =
