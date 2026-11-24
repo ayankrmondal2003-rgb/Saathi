@@ -183,7 +183,16 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
     /** POST /api/incidents; on 409 the server already has this user's incident, so it is looked up and adopted. */
     private suspend fun createOrAdopt(key: String, account: ExpectedAccount): IncidentDto? {
         try {
-            return BackendClient.api.createTest(key, TestIncidentRequest(), account)
+            return try {
+                BackendClient.api.createTest(key, TestIncidentRequest(test = false), account)
+            } catch (refused: HttpException) {
+                // A server outside beta mode only takes test incidents; the SOS still goes out as one.
+                val code = if (refused.code() == 403) parseIncidentConflict(
+                    runCatching { refused.response()?.errorBody()?.string() }.getOrNull())?.code else null
+                if (code != REAL_INCIDENTS_DISABLED) throw refused
+                Log.i(TAG, "Server accepts test incidents only; sending this SOS as a test incident")
+                BackendClient.api.createTest(key, TestIncidentRequest(test = true), account)
+            }
         } catch (failure: HttpException) {
             if (failure.code() != 409) throw failure
             val conflict = parseIncidentConflict(runCatching { failure.response()?.errorBody()?.string() }.getOrNull())
@@ -283,9 +292,11 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) {
                 val code = (failure as? HttpException)?.code()
-                if (code != null && isFatalSyncCode(code)) {
-                    Log.w(TAG, "SOS sync refused: HTTP $code ${errorDetail(failure)}")
-                    endLocally(uid, fatalSyncMessage(code))
+                val detail = errorDetail(failure)
+                val errorCode = parseIncidentConflict(detail)?.code
+                if (code != null && isFatalSync(code, errorCode)) {
+                    Log.w(TAG, "SOS sync refused: HTTP $code $detail")
+                    endLocally(uid, fatalSyncMessage(code, errorCode))
                     UploadResult.DONE
                 } else {
                     Log.w(TAG, "SOS sync interrupted: ${code?.let { "HTTP $it" } ?: failure.javaClass.simpleName}")

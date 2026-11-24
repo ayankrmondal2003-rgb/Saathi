@@ -295,13 +295,6 @@ internal fun MainGraph(
                 }
             ) {
                 composable("Home") {
-                    var localPractice by rememberSaveable { mutableStateOf(false) }
-                    if (localPractice) {
-                        AlertDialog(onDismissRequest = { localPractice = false },
-                            title = { Text("Local practice session") },
-                            text = { Text("This practice session is on this device only.") },
-                            confirmButton = { TextButton(onClick = { vm.end(); localPractice = false }) { Text("End practice") } })
-                    }
                     var requested by rememberSaveable { mutableStateOf(false) }
                     val syncState by sync.status.collectAsStateWithLifecycle()
                     val id = sync.getActiveIncidentId(uid)
@@ -326,13 +319,13 @@ internal fun MainGraph(
                     val onStartIncident: (Boolean) -> Unit = { share ->
                         sync.dismissProblem(uid)
                         if (state.incident?.status != IncidentStatus.ACTIVE) {
-                            vm.start(share)
+                            vm.start(true)
                             startDemoTracking(context, uid)
                         }
                         if (!context.preciseLocationAllowed()) sosLocationPermission.launch(arrayOf(
                             android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION))
                         val session = LocalTrackingRepository.get(context).session.value
-                        if (sync.isShared(uid, session.id)) requested = true else localPractice = true
+                        if (sync.isShared(uid, session.id)) requested = true
                     }
                     val ownStatus = syncState.uid == uid
                     val problem = if (ownStatus) syncState.problem else null

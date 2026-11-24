@@ -51,7 +51,7 @@ class MaitriHomeTest {
             scenario.onActivity { activity -> activity.setContent {
                 MaitriTheme {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        MaitriHoldButton(MaitriPalette(false)) { completions.incrementAndGet() }
+                        MaitriHoldButton(MaitriPalette(false), onComplete = { completions.incrementAndGet() })
                     }
                 }
             } }
@@ -89,25 +89,25 @@ class MaitriHomeTest {
         }
     }
 
-    @Test fun accessibleSosRequiresConfirmationAndDefaultsToLocalOnly() {
+    @Test fun accessibleSosAsksFirstAndThenSharesWithTheServer() {
         unlocked()
         val starts = AtomicInteger()
-        var shared = true
+        var shared = false
         ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
             scenario.onActivity { activity -> activity.setContent {
                 MaitriTheme { MaitriHome(DemoState(), { shared = it; starts.incrementAndGet() }, {}) }
             } }
             assertTrue(node { it.contentDescription?.contains("Hold SOS") == true }
                 .performAction(AccessibilityNodeInfo.ACTION_CLICK))
-            node { it.text?.toString() == "Activate test SOS?" }
+            node { it.text?.toString() == "Send SOS now?" }
             assertEquals(0, starts.get())
             click("Cancel")
             assertEquals(0, starts.get())
             assertTrue(node { it.contentDescription?.contains("Hold SOS") == true }
                 .performAction(AccessibilityNodeInfo.ACTION_CLICK))
-            click("Start test SOS")
+            click("Send SOS")
             assertEquals(1, starts.get())
-            assertFalse("GPS sharing requires explicit consent", shared)
+            assertTrue("Every SOS goes to the server", shared)
         }
     }
 

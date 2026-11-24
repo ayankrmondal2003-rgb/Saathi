@@ -94,6 +94,22 @@ fun MaitriActiveSos(
         catch (_: SecurityException) { Toast.makeText(context, "Capture permission unavailable", Toast.LENGTH_SHORT).show() }
     }
 
+    // An SOS never waits for a PIN; without one, ask for it now, because ending the SOS needs it.
+    var pinMissing by remember(uid) { mutableStateOf(false) }
+    var pinPromptDismissed by rememberSaveable(uid, incidentId) { mutableStateOf(false) }
+    LaunchedEffect(uid) {
+        pinMissing = try { !BackendClient.api.safetyPinStatus(ExpectedAccount(uid)).hasPrimaryPin }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { false }
+    }
+    if (pinMissing && !pinPromptDismissed && !showPinDialog) {
+        androidx.compose.material3.AlertDialog(onDismissRequest = { pinPromptDismissed = true },
+            containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
+            title = { Text("Set your Safety PIN") },
+            text = { Text("Your SOS is running. You'll need a 6-digit Safety PIN to end it, so set one now.") },
+            confirmButton = { TextButton(onClick = { pinPromptDismissed = true; onSetPin() }) { Text("Set PIN", color = p.accent) } },
+            dismissButton = { TextButton(onClick = { pinPromptDismissed = true }) { Text("Later", color = p.accent) } })
+    }
+
     // Poll live incident snapshot every 5s while active
     LaunchedEffect(uid, incident.started) {
         while (true) {

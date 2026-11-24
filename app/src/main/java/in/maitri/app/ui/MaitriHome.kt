@@ -60,11 +60,11 @@ fun MaitriHome(state: DemoState, start: (Boolean) -> Unit, contacts: () -> Unit,
     val p = maitriPalette()
     val context = LocalContext.current
     var confirm by rememberSaveable { mutableStateOf(false) }
-    var share by rememberSaveable { mutableStateOf(false) }
     var sharingKind by rememberSaveable { mutableStateOf<String?>(null) }
     val active = state.incident?.status == IncidentStatus.ACTIVE
     MaitriHomeContent(p, state.contacts.size, active,
-        onSos = { if (active) start(false) else confirm = true },
+        onSos = { start(true) },
+        onSosTap = { if (active) start(true) else confirm = true },
         contacts = contacts,
         notifications = {
             context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
@@ -72,27 +72,17 @@ fun MaitriHome(state: DemoState, start: (Boolean) -> Unit, contacts: () -> Unit,
         },
         trip = { sharingKind = "TRIP" },
         checkIn = { sharingKind = "CHECK_IN" },
-        session = session)
+        session = session,
+        beta = `in`.maitri.app.BuildConfig.VERSION_NAME.contains("beta"))
     if (confirm) {
-        AlertDialog(onDismissRequest = { confirm = false; share = false },
+        // Reached by a quick tap or a screen reader, where a 3-second hold isn't practical.
+        AlertDialog(onDismissRequest = { confirm = false },
             containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
-            title = { Text("Activate test SOS?") },
-            text = {
-                Column {
-                    Text("This is a controlled test, not emergency dispatch. Server activation is confirmed separately after connection.")
-                    if (`in`.maitri.app.BuildConfig.API_BASE_URL.isNotBlank()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = share, onCheckedChange = { share = it })
-                            Text("Share GPS with the test server and accepted responders")
-                        }
-                    }
-                    Text(if (share) "Sharing begins only for your authorized test session." else "Without sharing, this is a local-only practice session.")
-                }
-            },
-            confirmButton = { TextButton(onClick = {
-                if (confirm) { confirm = false; val consent = share; share = false; start(consent) }
-            }) { Text("Start test SOS", color = p.accent) } },
-            dismissButton = { TextButton(onClick = { confirm = false; share = false }) { Text("Cancel", color = p.accent) } })
+            title = { Text("Send SOS now?") },
+            text = { Text("Your circle and approved volunteers nearby get your live location. Maitri doesn't call 112 for you.") },
+            confirmButton = { TextButton(onClick = { if (confirm) { confirm = false; start(true) } }) {
+                Text("Send SOS", color = p.accent, fontWeight = FontWeight.SemiBold) } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel", color = p.accent) } })
     }
     sharingKind?.let { kind -> MaitriSharingDialog(kind) { sharingKind = null } }
 }
@@ -100,7 +90,8 @@ fun MaitriHome(state: DemoState, start: (Boolean) -> Unit, contacts: () -> Unit,
 @Composable
 internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Boolean,
     onSos: () -> Unit, contacts: () -> Unit, notifications: () -> Unit,
-    trip: () -> Unit, checkIn: () -> Unit, session: @Composable ColumnScope.() -> Unit = {}) {
+    trip: () -> Unit, checkIn: () -> Unit, session: @Composable ColumnScope.() -> Unit = {},
+    onSosTap: () -> Unit = onSos, beta: Boolean = false) {
     Column(Modifier.fillMaxSize().background(p.background).statusBarsPadding()
         .verticalScroll(rememberScrollState())
         .padding(start = 24.dp, end = 24.dp, top = 22.dp, bottom = LocalFloatingNavBarPadding.current)) {
@@ -108,7 +99,15 @@ internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Bool
             Image(painterResource(R.drawable.maitri_logo), "maitri", Modifier.size(46.dp))
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text("A LITTLE PEACE OF MIND", color = p.accent, fontSize = 10.sp, letterSpacing = 1.3.sp, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("A LITTLE PEACE OF MIND", color = p.accent, fontSize = 10.sp, letterSpacing = 1.3.sp, fontWeight = FontWeight.SemiBold)
+                    if (beta) {
+                        Spacer(Modifier.width(8.dp))
+                        Text("BETA", Modifier.background(p.card, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp)
+                            .semantics { contentDescription = "Beta version" },
+                            color = p.accent, fontSize = 9.sp, letterSpacing = 0.8.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
                 Spacer(Modifier.height(6.dp))
                 Text("Here for you.", color = p.primary, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
             }
@@ -125,7 +124,7 @@ internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Bool
             Text(if (active) "Open your session for its confirmed status." else "Reach your circle when you need them.",
                 color = p.secondary, fontSize = 12.sp, textAlign = TextAlign.Center)
             Spacer(Modifier.height(14.dp))
-            MaitriHoldButton(p, onSos)
+            MaitriHoldButton(p, onSos, onSosTap)
             Spacer(Modifier.height(14.dp))
             Text(if (active) "Hold for 3 seconds to open your SOS" else "Hold for 3 seconds to alert your circle",
                 color = p.accent, fontSize = 11.sp, textAlign = TextAlign.Center)
@@ -179,8 +178,9 @@ private fun MaitriQuickAction(title: String, subtitle: String, icon: Int, p: Mai
 }
 
 @Composable
-internal fun MaitriHoldButton(p: MaitriPalette, onComplete: () -> Unit) {
+internal fun MaitriHoldButton(p: MaitriPalette, onComplete: () -> Unit, onTap: () -> Unit = onComplete) {
     val callback by rememberUpdatedState(onComplete)
+    val tapCallback by rememberUpdatedState(onTap)
     val haptic = LocalHapticFeedback.current
     var progress by remember { mutableFloatStateOf(0f) }
     var completed by remember { mutableStateOf(false) }
@@ -188,7 +188,7 @@ internal fun MaitriHoldButton(p: MaitriPalette, onComplete: () -> Unit) {
         role = Role.Button
         contentDescription = "Hold SOS for three seconds"
         stateDescription = if(progress > 0) "Hold progress ${(progress * 100).toInt()} percent" else "Ready"
-        onClick("Open test SOS confirmation") { callback(); true }
+        onClick("Send SOS") { tapCallback(); true }
     }.pointerInput(Unit) {
         detectTapGestures(onPress = {
             coroutineScope {
@@ -209,7 +209,7 @@ internal fun MaitriHoldButton(p: MaitriPalette, onComplete: () -> Unit) {
                 }
                 try { tryAwaitRelease() } finally { hold.cancel(); progress = 0f }
             }
-        }, onTap = { if (!completed) callback() })
+        }, onTap = { if (!completed) tapCallback() })
     }, contentAlignment = Alignment.Center) {
         Box(Modifier.fillMaxSize().background(Color(if(p.dark) 0xFF4A273B else 0xFFFFDDE7), CircleShape))
         Box(Modifier.size(150.dp).background(Color(if(p.dark) 0xFF75314F else 0xFFFFB0C8), CircleShape))

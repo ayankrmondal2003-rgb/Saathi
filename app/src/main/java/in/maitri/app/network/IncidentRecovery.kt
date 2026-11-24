@@ -18,6 +18,10 @@ data class IncidentConflict(val code: String, val incidentId: String?)
 const val INCIDENT_ALREADY_OPEN = "INCIDENT_ALREADY_OPEN"
 const val IDEMPOTENCY_MISMATCH = "IDEMPOTENCY_MISMATCH"
 const val LOCATION_CONFLICT = "LOCATION_CONFLICT"
+/** 403 from a server not in beta mode: it only accepts test incidents, so the app falls back to one. */
+const val REAL_INCIDENTS_DISABLED = "REAL_INCIDENTS_DISABLED"
+/** 429 after the per-hour real SOS limit. Retrying within the hour can't succeed. */
+const val SOS_RATE_LIMITED = "SOS_RATE_LIMITED"
 
 /** Parses the structured conflict; null for older servers that sent a plain string, or for an unreadable body. */
 fun parseIncidentConflict(body: String?): IncidentConflict? = runCatching {
@@ -33,6 +37,9 @@ fun parseIncidentConflict(body: String?): IncidentConflict? = runCatching {
  * the server already has an incident, which the app looks up and adopts. 408 and 429 are retried.
  */
 fun isFatalSyncCode(code: Int): Boolean = code in 400..499 && code !in setOf(408, 409, 429)
+
+/** As [isFatalSyncCode], plus the SOS rate limit, which is a 429 that retrying won't clear. */
+fun isFatalSync(code: Int, errorCode: String?): Boolean = errorCode == SOS_RATE_LIMITED || isFatalSyncCode(code)
 
 enum class ReconcileAction { KEEP, ADOPT, CLEAR_LOCAL }
 
@@ -55,7 +62,9 @@ fun serverTimeMillis(value: String?, now: Long = System.currentTimeMillis()): Lo
     runCatching { OffsetDateTime.parse(value).toInstant().toEpochMilli() }.getOrDefault(now).coerceAtMost(now)
 
 /** Text shown to the user when the server refuses this session. Never contains HTTP codes. */
-fun fatalSyncMessage(code: Int): String = when (code) {
+fun fatalSyncMessage(code: Int, errorCode: String? = null): String = if (errorCode == SOS_RATE_LIMITED)
+    "You've sent the most SOS alerts allowed in an hour, so Maitri can't send another yet. Call 112 now if you need help."
+else when (code) {
     401, 403 -> "Your account can't send SOS updates right now. Sign in again, or call 112 if you need help now."
     404, 410 -> "This SOS session has ended. Hold SOS again to start a new one. Call 112 if you need help now."
     else -> "Maitri couldn't start this SOS session. Hold SOS again to retry, or call 112 if you need help now."
