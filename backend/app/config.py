@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     firebase_project_id: str = Field(min_length=1)
     google_application_credentials: str | None = None
     environment: Literal["development", "test", "beta", "production"] = "development"
+    # Signs /l/<token> live-location links. Without it links break on every restart.
+    live_link_secret: SecretStr | None = None
+    # Public https origin used in live links (e.g. https://surakshanet-api.onrender.com); request host if empty.
+    public_url: str = ""
     # Real SOS per owner per rolling hour (beta abuse control).
     sos_per_hour: int = Field(default=3, ge=1, le=100)
     allowed_origins: Annotated[list[str], NoDecode] = []

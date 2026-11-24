@@ -263,8 +263,22 @@ class IncidentContactAlertStatus(BaseModel):
     updated_at: AwareDatetime
 
 
+class SmsContact(BaseModel):
+    contact_id: UUID
+    display_name: str
+    phone_number: str
+
+
 class TrustedContactAlertBatchResponse(BaseModel):
     incident_id: UUID
     alerts_queued: int
     primary_contact_name: str | None = None
     statuses: list[IncidentContactAlertStatus]
+    # Read-only page with the live location; valid while the SOS is active.
+    live_link: str | None = None
+    # SOS-enabled contacts without a linked Maitri account: the app offers to text them from the phone.
+    sms_contacts: list[SmsContact] = []
+
+
+class SmsPrepared(Input):
+    contact_ids: list[UUID] = Field(min_length=1, max_length=50)

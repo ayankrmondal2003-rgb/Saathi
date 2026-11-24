@@ -10,6 +10,7 @@ from pydantic import Field
 from sqlalchemy import text
 from app.core import account, database
 from app.schemas import Input, Fix
+from app.inbox import add_item
 
 router = APIRouter(prefix="/api/circle-sharing")
 
@@ -30,6 +31,8 @@ class ShareRequest(Input):
     consent: Literal[True]
     location: Fix | None = None
     duration_minutes: int = Field(default=30, ge=5, le=120)
+    # CHECK_IN: minutes from now until the owner must check in; the circle is told if they don't.
+    due_minutes: int = Field(default=60, ge=5, le=1440)
 
 
 def now():
@@ -149,15 +152,29 @@ async def create(body: ShareRequest, request: Request, idempotency_key: UUID = H
         WHERE owner_id=:owner AND kind='TRIP' AND stopped_at IS NULL AND expires_at>now() LIMIT 1"""),
         {"owner": user.id}):
         raise HTTPException(409, "An active trip already exists. Resume or stop it first.")
-    expiry = now() + (timedelta(minutes=body.duration_minutes) if body.kind == "TRIP" else timedelta(hours=24))
+    due = now() + timedelta(minutes=body.due_minutes) if body.kind == "CHECK_IN" else None
+    # A check-in stays visible to the circle for 12 hours after it was due.
+    expiry = now() + timedelta(minutes=body.duration_minutes) if body.kind == "TRIP" else due + timedelta(hours=12)
     row = await one(db, """INSERT INTO circle_sessions
-        (owner_id,kind,idempotency_key,request_hash,expires_at,latest_fix,fix_received_at)
-        VALUES (:owner,:kind,:key,:hash,:expires,CAST(:fix AS jsonb),:received) RETURNING id""",
+        (owner_id,kind,idempotency_key,request_hash,expires_at,latest_fix,fix_received_at,due_at)
+        VALUES (:owner,:kind,:key,:hash,:expires,CAST(:fix AS jsonb),:received,:due) RETURNING id""",
         owner=user.id, kind=body.kind, key=idempotency_key, hash=digest, expires=expiry,
-        fix=body.location.model_dump_json() if body.location else None, received=now() if body.location else None)
+        fix=body.location.model_dump_json() if body.location else None, received=now() if body.location else None, due=due)
+    owner_name = (user.display_name or "").strip() or "Someone in your circle"
     for link in recipients:
         await db.execute(text("INSERT INTO circle_session_recipients(session_id,link_id) VALUES (:session,:link)"),
             {"session": row.id, "link": link})
+        recipient = await db.scalar(text("SELECT recipient_id FROM circle_links WHERE id=:id"), {"id": link})
+        if body.kind == "TRIP":
+            await add_item(db, recipient, "TRIP_STARTED", f"{owner_name} is sharing a trip with you",
+                           f"Follow along in Maitri for the next {body.duration_minutes} minutes.",
+                           data={"session_id": str(row.id)})
+        else:
+            await add_item(db, recipient, "CHECKIN_STARTED", f"{owner_name} set a check-in",
+                           "Maitri will tell you if they don't check in on time.",
+                           data={"session_id": str(row.id), "due_at": due.isoformat()})
+    if body.kind == "CHECK_IN":
+        wake_scheduler(request)
     return await snapshot(row.id, request, user, db)
 
 
@@ -184,6 +201,7 @@ async def snapshot(session_id: UUID, request: Request, user=Depends(account), db
     status = "STOPPED" if row.stopped_at else ("ACTIVE" if active else "EXPIRED")
     result = {"id": row.id, "kind": row.kind, "status": status, "created_at": row.created_at,
         "expires_at": row.expires_at, "latest_fix": row.latest_fix if active else None,
+        "due_at": row.due_at, "missed": row.missed_at is not None,
         "fix_received_at": row.fix_received_at if active else None, "is_owner": row.owner_id == user.id}
     if row.owner_id == user.id:
         recipients = await db.execute(text("""SELECT l.contact_id, r.notification_status, r.opened_at,
@@ -248,13 +266,20 @@ async def update_location(session_id: UUID, body: Fix, request: Request, user=De
     return {"status": "SYNCED"}
 
 
+def wake_scheduler(request: Request):
+    scheduler = getattr(request.app.state, "checkins", None)
+    if scheduler is not None:
+        scheduler.wake()
+
+
 @router.post("/sessions/{session_id}/stop")
-async def stop(session_id: UUID, user=Depends(account), db=Depends(database)):
+async def stop(session_id: UUID, request: Request, user=Depends(account), db=Depends(database)):
     row = await one(db, """UPDATE circle_sessions SET stopped_at=coalesce(stopped_at,now()),
         latest_fix=NULL,fix_received_at=NULL WHERE id=:id AND owner_id=:owner RETURNING id""",
         id=session_id, owner=user.id)
     if not row:
         raise HTTPException(404, "Owned sharing session unavailable")
+    wake_scheduler(request)
     return {"status": "STOPPED"}
 
 

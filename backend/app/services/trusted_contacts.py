@@ -157,26 +157,40 @@ async def set_primary_contact(db, user_id: UUID, contact_id: UUID) -> dict:
 NO_SMS_PROVIDER = "NO_SMS_PROVIDER"
 
 
-def contact_alert_status(notify_on_sos: bool, outbox_row) -> str:
-    """Public status derived from recorded outbox state only; never reports delivery that did not happen."""
+def contact_alert_status(notify_on_sos: bool, alert) -> str:
+    """Per-contact status from recorded facts only. Never claims an SMS was sent or a push was read unless it was.
+
+    NOT_REQUESTED: SOS alerts are off for this contact.
+    SENDING / PUSH_SENT / DELIVERED / OPENED: a push to their linked Maitri account (DELIVERED once their phone
+        confirmed receipt, OPENED once they opened it).
+    SMS_PREPARED: the owner's messaging app was opened with this contact; Maitri can't tell if it was sent.
+    NOT_REACHED: nothing has reached them yet (no app link and no SMS prepared, or the push failed).
+    """
     if not notify_on_sos:
         return "NOT_REQUESTED"
-    if outbox_row is None:
-        return "NOT_SENT"
-    if outbox_row["failure_reason"] == NO_SMS_PROVIDER:
-        return NO_SMS_PROVIDER
-    return outbox_row["delivery_status"]
+    if alert is None:
+        return "NOT_REACHED"
+    if alert["channel"] == "SMS":
+        return "SMS_PREPARED" if alert["sms_prepared_at"] else "NOT_REACHED"
+    if alert["read_at"]:
+        return "OPENED"
+    return {"PENDING": "SENDING", "SENT": "PUSH_SENT", "DELIVERED": "DELIVERED"}.get(alert["push_status"], "NOT_REACHED")
+
+
+async def _owned_incident(db, user_id, incident_id):
+    inc = (await db.execute(select(incidents).where(
+        incidents.c.id == incident_id, incidents.c.victim_user_id == user_id))).mappings().first()
+    if not inc:
+        raise HTTPException(404, "Incident not found or unauthorized")
+    return inc
 
 
 async def incident_contact_statuses(db, user_id: UUID, incident_id: UUID) -> list[dict]:
-    owned = await db.scalar(select(incidents.c.id).where(
-        incidents.c.id == incident_id, incidents.c.victim_user_id == user_id))
-    if owned is None:
-        raise HTTPException(404, "Incident not found or unauthorized")
-    rows = (await db.execute(select(notification_outbox.c.contact_id, notification_outbox.c.delivery_status,
-        notification_outbox.c.failure_reason, notification_outbox.c.created_at).where(
-        notification_outbox.c.incident_id == incident_id,
-        notification_outbox.c.event_type == "TRUSTED_CONTACT_SOS_ALERT"))).mappings().all()
+    await _owned_incident(db, user_id, incident_id)
+    rows = (await db.execute(text("""SELECT a.contact_id, a.channel, a.sms_prepared_at, a.created_at,
+        i.push_status, i.read_at, coalesce(i.read_at, i.delivered_at, i.pushed_at, a.sms_prepared_at, a.created_at) AS updated_at
+        FROM incident_contact_alerts a LEFT JOIN inbox_items i ON i.id = a.inbox_item_id
+        WHERE a.incident_id=:id"""), {"id": incident_id})).mappings().all()
     by_contact = {r["contact_id"]: r for r in rows}
     now = datetime.now(timezone.utc)
     return [{
@@ -185,102 +199,57 @@ async def incident_contact_statuses(db, user_id: UUID, incident_id: UUID) -> lis
         "masked_phone": mask_phone(c["phone_number"]),
         "is_primary": c["is_primary"],
         "delivery_status": contact_alert_status(c["notify_on_sos"], by_contact.get(c["id"])),
-        "message_preview": "Maitri SOS: I may need urgent help.",
+        "message_preview": "I need help. This is my live location from Maitri.",
         "location_disclosed": c["include_location_link"],
-        "tracking_granted": c["allow_live_tracking"],
-        "updated_at": by_contact[c["id"]]["created_at"] if c["id"] in by_contact else now,
+        "tracking_granted": c["id"] in by_contact and by_contact[c["id"]]["channel"] == "PUSH",
+        "updated_at": by_contact[c["id"]]["updated_at"] if c["id"] in by_contact else now,
     } for c in await list_contacts(db, user_id)]
 
 
-async def dispatch_incident_alerts(db, user_id: UUID, incident_id: UUID) -> dict:
-    inc = (await db.execute(select(incidents).where(
-        incidents.c.id == incident_id,
-        incidents.c.victim_user_id == user_id
-    ))).mappings().first()
+async def dispatch_incident_alerts(db, user, incident_id: UUID, live_link: str | None = None) -> dict:
+    """Idempotent: each SOS-enabled contact is alerted once per incident.
 
-    if not inc:
-        raise HTTPException(404, "Incident not found or unauthorized")
+    A contact linked to a Maitri account gets an inbox item, which is pushed to that account's phones. Every
+    other contact is returned in sms_contacts so the owner's phone can open its messaging app for them.
+    """
+    from app.inbox import add_item  # avoid an import cycle with app.core users
+    inc = await _owned_incident(db, user.id, incident_id)
     if inc["status"] != "ACTIVE":
         raise HTTPException(409, "Incident is not active")
+    owner_name = (user.display_name or "").strip() or "Someone in your circle"
+    contacts = [c for c in await list_contacts(db, user.id) if c["notify_on_sos"]]
+    links = dict((await db.execute(text("""SELECT contact_id, recipient_id FROM circle_links
+        WHERE owner_id=:owner AND revoked_at IS NULL"""), {"owner": user.id})).all())
+    existing = {r[0]: r[1] for r in (await db.execute(text(
+        "SELECT contact_id, channel FROM incident_contact_alerts WHERE incident_id=:id"), {"id": incident_id})).all()}
+    sms = []
+    for c in contacts:
+        recipient = links.get(c["id"])
+        if c["id"] in existing:
+            if existing[c["id"]] == "SMS":
+                sms.append(c)
+            continue
+        if recipient is not None:
+            item = await add_item(db, recipient, "CIRCLE_SOS", f"{owner_name} needs help",
+                                  "They started an SOS in Maitri. Tap to see their live location.",
+                                  data={"url": live_link or "", "incident_id": str(incident_id)}, incident_id=incident_id)
+            await db.execute(text("""INSERT INTO incident_contact_alerts(incident_id, contact_id, channel, inbox_item_id)
+                VALUES (:i, :c, 'PUSH', :item)"""), {"i": incident_id, "c": c["id"], "item": item})
+        else:
+            await db.execute(text("""INSERT INTO incident_contact_alerts(incident_id, contact_id, channel)
+                VALUES (:i, :c, 'SMS')"""), {"i": incident_id, "c": c["id"]})
+            sms.append(c)
+    statuses = await incident_contact_statuses(db, user.id, incident_id)
+    primary = next((c["display_name"] for c in contacts if c["is_primary"]), None)
+    return {"incident_id": incident_id, "alerts_queued": len(contacts), "primary_contact_name": primary,
+            "statuses": [s for s in statuses if s["delivery_status"] != "NOT_REQUESTED"],
+            "live_link": live_link,
+            "sms_contacts": [{"contact_id": c["id"], "display_name": c["display_name"],
+                              "phone_number": c["phone_number"]} for c in sms]}
 
-    # Extract geometry point if available
-    lat, lng = None, None
-    if inc["latest_location"] is not None:
-        coords = (await db.execute(select(
-            func.ST_Y(func.Geometry(incidents.c.latest_location)).label("lat"),
-            func.ST_X(func.Geometry(incidents.c.latest_location)).label("lng")
-        ).where(incidents.c.id == incident_id))).mappings().first()
-        if coords:
-            lat, lng = coords["lat"], coords["lng"]
 
-    contacts = await list_contacts(db, user_id)
-    alerts_to_send = [c for c in contacts if c["notify_on_sos"]]
-
-    statuses = []
-    now = datetime.now(timezone.utc)
-    expires_at = now + timedelta(hours=2)
-
-    primary_name = None
-    for c in alerts_to_send:
-        if c["is_primary"]:
-            primary_name = c["display_name"]
-
-        msg = format_emergency_message(c["display_name"], lat, lng, inc["location_recorded_at"], c["include_location_link"])
-
-        # Check for grant if live tracking allowed
-        grant_created = False
-        if c["allow_live_tracking"]:
-            existing_grant = await db.scalar(select(trusted_contact_grants.c.id).where(
-                trusted_contact_grants.c.incident_id == incident_id,
-                trusted_contact_grants.c.contact_id == c["id"]
-            ))
-            if not existing_grant:
-                await db.execute(trusted_contact_grants.insert().values(
-                    incident_id=incident_id,
-                    contact_id=c["id"],
-                    recipient_user_id=user_id, # Scoped to this grant context
-                    authorization_status="AUTHORIZED",
-                    access_expires_at=expires_at,
-                    granted_at=now
-                ))
-            grant_created = True
-
-        # Check existing outbox to prevent duplicate alerts
-        existing_outbox = await db.scalar(select(notification_outbox.c.id).where(
-            notification_outbox.c.incident_id == incident_id,
-            notification_outbox.c.contact_id == c["id"],
-            notification_outbox.c.event_type == "TRUSTED_CONTACT_SOS_ALERT"
-        ))
-
-        # No SMS provider is integrated. Record the attempt as not sent instead of claiming provider acceptance;
-        # FAILED rows are never picked up by the outbox worker.
-        delivery_status = NO_SMS_PROVIDER
-        if not existing_outbox:
-            await db.execute(notification_outbox.insert().values(
-                incident_id=incident_id,
-                recipient_user_id=user_id,
-                contact_id=c["id"],
-                event_type="TRUSTED_CONTACT_SOS_ALERT",
-                delivery_status="FAILED",
-                failure_reason=NO_SMS_PROVIDER,
-                created_at=now
-            ))
-
-        statuses.append({
-            "contact_id": c["id"],
-            "display_name": c["display_name"],
-            "masked_phone": mask_phone(c["phone_number"]),
-            "is_primary": c["is_primary"],
-            "delivery_status": delivery_status,
-            "message_preview": msg,
-            "location_disclosed": c["include_location_link"] and lat is not None,
-            "tracking_granted": grant_created,
-            "updated_at": now
-        })
-
-    return {
-        "incident_id": incident_id,
-        "alerts_queued": len(statuses),
-        "primary_contact_name": primary_name,
-        "statuses": statuses
-    }
+async def mark_sms_prepared(db, user_id, incident_id, contact_ids):
+    await _owned_incident(db, user_id, incident_id)
+    await db.execute(text("""UPDATE incident_contact_alerts SET sms_prepared_at = coalesce(sms_prepared_at, now())
+        WHERE incident_id=:i AND channel='SMS' AND contact_id = ANY(CAST(:ids AS uuid[]))"""),
+        {"i": incident_id, "ids": [str(x) for x in contact_ids]})

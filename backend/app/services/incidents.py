@@ -121,6 +121,15 @@ async def revoke_incident_access(db, incident_id, now):
                      .values(authorization_status="REVOKED", revoked_at=now))
     await db.execute(text("UPDATE trusted_contact_grants SET authorization_status='REVOKED', revoked_at=:now "
                           "WHERE incident_id=:id AND authorization_status='AUTHORIZED'"), {"id": incident_id, "now": now})
+    # Circle members who got the SOS push learn that it ended (the live link stops working by itself).
+    from app.inbox import add_item
+    rows = (await db.execute(text("""SELECT DISTINCT i.user_id, u.display_name FROM incident_contact_alerts a
+        JOIN inbox_items i ON i.id = a.inbox_item_id JOIN incidents x ON x.id = a.incident_id
+        JOIN users u ON u.id = x.victim_user_id WHERE a.incident_id=:id AND a.channel='PUSH'"""),
+        {"id": incident_id})).all()
+    for recipient, owner_name in rows:
+        await add_item(db, recipient, "CIRCLE_SOS_ENDED", f"{(owner_name or '').strip() or 'Someone in your circle'} ended their SOS",
+                       "Their location is no longer shared.", data={"incident_id": str(incident_id)}, incident_id=incident_id)
 
 
 async def expire_orphaned(db, settings, batch=50):

@@ -221,11 +221,11 @@ def test_sos_incident_trusted_contact_alerts(client_env):
     batch = alert_resp.json()
     assert batch["alerts_queued"] == 1
     assert batch["statuses"][0]["contact_id"] == cA["id"]
-    # No SMS provider is integrated, so the API must not claim provider acceptance.
-    assert batch["statuses"][0]["delivery_status"] == "NO_SMS_PROVIDER"
-    assert "https://maps.google.com" in batch["statuses"][0]["message_preview"]
-    assert "112" in batch["statuses"][0]["message_preview"]
-    assert batch["statuses"][0]["tracking_granted"] is True
+    # Not linked to a Maitri account: returned for the owner's phone to text, and not claimed as reached.
+    assert batch["statuses"][0]["delivery_status"] == "NOT_REACHED"
+    assert [c["contact_id"] for c in batch["sms_contacts"]] == [cA["id"]]
+    assert "/l/" in batch["live_link"]
+    assert batch["statuses"][0]["tracking_granted"] is False
 
     # 4. Check status endpoint for incident contacts
     statuses_resp = client.get(
@@ -236,7 +236,7 @@ def test_sos_incident_trusted_contact_alerts(client_env):
     statuses = statuses_resp.json()
     assert len(statuses) == 2
     by_id = {s["contact_id"]: s for s in statuses}
-    assert by_id[cA["id"]]["delivery_status"] == "NO_SMS_PROVIDER"
+    assert by_id[cA["id"]]["delivery_status"] == "NOT_REACHED"
     assert by_id[cB["id"]]["delivery_status"] == "NOT_REQUESTED"
 
 

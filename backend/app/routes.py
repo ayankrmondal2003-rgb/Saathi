@@ -16,12 +16,14 @@ from app.schemas import (
     SafetyPinChange, SafetyPinRecovery, SafetyPinSetup, SafetyPinStatus, TestAlertResponse,
     TrustedContact, TrustedContactAlertBatchResponse, TrustedContactCreate, TrustedContactUpdate,
     IncidentContactAlertStatus, WsTicketResponse
-)
+, SmsPrepared)
 from app.services import incidents as service
 from app.services import safety_pin as safety_pin_service
 from app.services import trusted_contacts as tc_service
 from app.services.geofence import point, responder_changed
 from app.services.outbox_worker import default_firebase_sender
+from app.circle import request_phone_matches
+from app.live_link import public_link
 from app.services.realtime import hub as default_hub, PROTOCOL_VERSION, RealtimeEvent
 
 logger = logging.getLogger("surakshanet.routes")
@@ -343,12 +345,16 @@ async def get_trusted_contacts(user=Depends(account), db=Depends(database)):
 
 @router.post("/trusted-contacts", response_model=TrustedContact, status_code=201)
 async def create_trusted_contact(body: TrustedContactCreate, user=Depends(account), db=Depends(database)):
-    return await tc_service.create_contact(db, user.id, body)
+    contact = await tc_service.create_contact(db, user.id, body)
+    await request_phone_matches(db, user, contact["id"], contact["normalized_phone_number"])
+    return contact
 
 
 @router.put("/trusted-contacts/{contact_id}", response_model=TrustedContact)
 async def update_trusted_contact(contact_id: UUID, body: TrustedContactUpdate, user=Depends(account), db=Depends(database)):
-    return await tc_service.update_contact(db, user.id, contact_id, body)
+    contact = await tc_service.update_contact(db, user.id, contact_id, body)
+    await request_phone_matches(db, user, contact["id"], contact["normalized_phone_number"])
+    return contact
 
 
 @router.delete("/trusted-contacts/{contact_id}", status_code=204)
@@ -363,8 +369,14 @@ async def set_primary_trusted_contact(contact_id: UUID, user=Depends(account), d
 
 
 @router.post("/incidents/{incident_id}/trusted-contacts/alert", response_model=TrustedContactAlertBatchResponse)
-async def trigger_trusted_contact_alerts(incident_id: UUID, user=Depends(account), db=Depends(database)):
-    return await tc_service.dispatch_incident_alerts(db, user.id, incident_id)
+async def trigger_trusted_contact_alerts(incident_id: UUID, request: Request, user=Depends(account), db=Depends(database)):
+    return await tc_service.dispatch_incident_alerts(db, user, incident_id, public_link(request, incident_id))
+
+
+@router.post("/incidents/{incident_id}/trusted-contacts/sms-prepared", status_code=204)
+async def report_sms_prepared(incident_id: UUID, body: SmsPrepared, user=Depends(account), db=Depends(database)):
+    """The owner's messaging app was opened with these contacts and came back. Not proof of sending."""
+    await tc_service.mark_sms_prepared(db, user.id, incident_id, body.contact_ids)
 
 
 @router.get("/incidents/{incident_id}/trusted-contacts", response_model=list[IncidentContactAlertStatus])
