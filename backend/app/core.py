@@ -37,7 +37,8 @@ async def identity(request: Request, credentials: HTTPAuthorizationCredentials |
     phone = claims.get("phone_number") or ""
     if not email_ok and not phone:
         raise HTTPException(403, "Verified email or phone required")
-    if claims["uid"] not in request.app.state.settings.test_account_uids:
+    settings = request.app.state.settings
+    if not getattr(settings, "open_access", False) and claims["uid"] not in settings.test_account_uids:
         raise HTTPException(403, "Test account required")
     return Identity(claims["uid"], claims["email"] if email_ok else "", claims.get("name") or "", email_ok,
                     claims.get("auth_time", 0), phone, bool(phone))

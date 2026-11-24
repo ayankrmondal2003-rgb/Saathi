@@ -124,7 +124,7 @@ async def incident_fix(incident_id: UUID, body: Fix, request: Request, user=Depe
 async def location(incident_id: UUID, user=Depends(account), db=Depends(database)):
     row = await service.incident_row(db, incident_id)
     await service.may_read(db, row, user)
-    return {"is_test": True, "status": row.status, "latitude": row.latitude, "longitude": row.longitude,
+    return {"is_test": row.is_test, "status": row.status, "latitude": row.latitude, "longitude": row.longitude,
             "accuracy_meters": row.location_accuracy_meters, "recorded_at": row.location_recorded_at,
             "received_at": row.location_received_at, "is_mock": row.location_is_mock}
 

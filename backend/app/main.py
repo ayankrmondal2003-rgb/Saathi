@@ -66,7 +66,7 @@ def create_app(settings=None, *, initialize_firebase=True):
                 try:
                     firebase_app = getattr(app.state, "firebase", None)
                     fcm_sender = getattr(app.state, "fcm_sender", None)
-                    await process_outbox_batch(app.state.sessions, firebase_app, fcm_sender=fcm_sender, allowed_uids=settings.test_account_uids)
+                    await process_outbox_batch(app.state.sessions, firebase_app, fcm_sender=fcm_sender, allowed_uids=settings.allowed_uids())
                 except (SQLAlchemyError, OSError):
                     logging.getLogger("surakshanet").warning("Outbox worker batch unavailable")
 

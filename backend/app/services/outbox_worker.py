@@ -86,9 +86,9 @@ async def claim_pending_work(db, batch_size=25, *, allowed_uids=frozenset()) -> 
                   SELECT 1 FROM incidents i
                   JOIN users owner ON owner.id = i.victim_user_id
                   JOIN users recipient ON recipient.id = notification_outbox.recipient_user_id
-                  WHERE i.id = notification_outbox.incident_id AND i.is_test
-                    AND owner.firebase_uid = ANY(CAST(:allowed AS text[]))
-                    AND recipient.firebase_uid = ANY(CAST(:allowed AS text[]))
+                  WHERE i.id = notification_outbox.incident_id
+                    AND (CAST(:allowed AS text[]) IS NULL OR owner.firebase_uid = ANY(CAST(:allowed AS text[])))
+                    AND (CAST(:allowed AS text[]) IS NULL OR recipient.firebase_uid = ANY(CAST(:allowed AS text[])))
               )
             ORDER BY created_at
             LIMIT :batch
@@ -96,7 +96,7 @@ async def claim_pending_work(db, batch_size=25, *, allowed_uids=frozenset()) -> 
         )
         RETURNING id, invitation_id, incident_id, recipient_user_id, event_type, attempt_count, accepted_token_hashes
     """
-    rows = (await db.execute(text(claim_sql), {"batch": batch_size, "allowed": list(allowed_uids)})).mappings().all()
+    rows = (await db.execute(text(claim_sql), {"batch": batch_size, "allowed": None if allowed_uids is None else list(allowed_uids)})).mappings().all()
     return [dict(r) for r in rows]
 
 

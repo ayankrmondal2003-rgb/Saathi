@@ -95,9 +95,18 @@ async def create(db, user, body, key, settings):
     already = await open_incident(db, user.id)
     if already:
         raise conflict("INCIDENT_ALREADY_OPEN", "An incident is already open", already.id)
+    if not body.is_test and not settings.real_incidents:
+        raise HTTPException(403, {"code": "REAL_INCIDENTS_DISABLED",
+                                  "message": "This server only accepts test incidents"})
+    recent = await db.scalar(text("SELECT count(*) FROM incidents WHERE victim_user_id=:owner "
+                                  "AND NOT is_test AND started_at > now() - interval '1 hour'"), {"owner": user.id})
+    if not body.is_test and recent >= settings.sos_per_hour:
+        raise HTTPException(429, {"code": "SOS_RATE_LIMITED",
+                                  "message": f"At most {settings.sos_per_hour} SOS alerts per hour. Call 112 if you need help now."},
+                            headers={"X-Error-Code": "SOS_RATE_LIMITED", "Retry-After": "600"})
     result = (await db.execute(incidents.insert().values(victim_user_id=user.id, idempotency_key=key,
-        request_hash=digest, radius_meters=settings.radius_meters).returning(incidents))).mappings().one()
-    await audit(db, result.id, user.id, "TEST_INCIDENT_CREATED")
+        request_hash=digest, radius_meters=settings.radius_meters, is_test=body.is_test).returning(incidents))).mappings().one()
+    await audit(db, result.id, user.id, "TEST_INCIDENT_CREATED" if body.is_test else "INCIDENT_CREATED")
     await apply_creation_fix(db, result, body.location, settings)
     return result
 

@@ -45,7 +45,7 @@ locations = Table("responder_locations", metadata, reference("user_id", "users",
 Index("ix_responder_location_gist", locations.c.location, postgresql_using="gist")
 incidents = Table("incidents", metadata, pk(), reference("victim_user_id", "users"),
     Column("idempotency_key", UUID(as_uuid=True), nullable=False), Column("request_hash", String(64), nullable=False),
-    Column("is_test", Boolean, nullable=False, server_default=text("true")), CheckConstraint("is_test"),
+    Column("is_test", Boolean, nullable=False, server_default=text("true")),
     Column("status", String, nullable=False, server_default="ACTIVE"), point("latest_location", True),
     Column("location_accuracy_meters", Float), Column("location_is_mock", Boolean),
     stamp("location_recorded_at", nullable=True), stamp("location_received_at", nullable=True),

@@ -11,13 +11,13 @@ def point(latitude, longitude):
 
 
 def parameters(settings):
-    return dict(allowed=list(settings.test_account_uids), age=settings.max_location_age_seconds, accuracy=settings.max_accuracy_meters,
+    return dict(allowed=settings.allowed_uids(), age=settings.max_location_age_seconds, accuracy=settings.max_accuracy_meters,
                 interval=settings.reevaluation_seconds, floor=settings.min_search_interval_seconds,
                 movement=settings.movement_threshold_meters, ttl=settings.invitation_ttl_seconds,
                 production=settings.environment == "production")
 
 
-FRESH = """i.status='ACTIVE' AND i.is_test AND i.location_accuracy_meters <= :accuracy
+FRESH = """i.status='ACTIVE' AND i.location_accuracy_meters <= :accuracy
     AND i.location_recorded_at >= clock_timestamp() - make_interval(secs => :age)
     AND (NOT :production OR NOT i.location_is_mock)"""
 DUE = "i.evaluated_at IS NULL OR i.evaluated_at <= clock_timestamp() - make_interval(secs => :interval)"
@@ -33,8 +33,8 @@ async def invite(db, params, *, recipient=None):
             FROM incidents i JOIN responder_locations l ON ST_DWithin(l.location,i.latest_location,i.radius_meters)
             JOIN users u ON u.id=l.user_id
             WHERE i.id=:id AND {FRESH} AND u.id<>i.victim_user_id AND u.account_status='ACTIVE'
-              AND u.firebase_uid = ANY(CAST(:allowed AS text[]))
-              AND EXISTS (SELECT 1 FROM users owner WHERE owner.id=i.victim_user_id AND owner.firebase_uid = ANY(CAST(:allowed AS text[])))
+              AND (CAST(:allowed AS text[]) IS NULL OR u.firebase_uid = ANY(CAST(:allowed AS text[])))
+              AND EXISTS (SELECT 1 FROM users owner WHERE owner.id=i.victim_user_id AND (CAST(:allowed AS text[]) IS NULL OR owner.firebase_uid = ANY(CAST(:allowed AS text[]))))
               AND (u.email_verified OR u.phone_verified) AND u.responder_opt_in AND u.responder_available
               AND EXISTS (SELECT 1 FROM volunteer_applications va WHERE va.user_id=u.id AND va.status='APPROVED')
               AND l.recorded_at >= clock_timestamp()-make_interval(secs => :age)

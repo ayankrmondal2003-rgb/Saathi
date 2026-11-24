@@ -17,7 +17,9 @@ class Settings(BaseSettings):
     database_url: SecretStr
     firebase_project_id: str = Field(min_length=1)
     google_application_credentials: str | None = None
-    environment: Literal["development", "test", "production"] = "development"
+    environment: Literal["development", "test", "beta", "production"] = "development"
+    # Real SOS per owner per rolling hour (beta abuse control).
+    sos_per_hour: int = Field(default=3, ge=1, le=100)
     allowed_origins: Annotated[list[str], NoDecode] = []
     test_account_uids: Annotated[set[str], NoDecode] = Field(default_factory=set)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -75,6 +77,19 @@ class Settings(BaseSettings):
         if url.drivername != "postgresql+asyncpg" or not url.database:
             raise PydanticCustomError("postgres_url", "Invalid PostgreSQL URL")
         return value
+
+    @property
+    def open_access(self) -> bool:
+        """Beta: any verified account may use the service. Every other environment keeps the allowlist."""
+        return self.environment == "beta"
+
+    @property
+    def real_incidents(self) -> bool:
+        return self.environment == "beta"
+
+    def allowed_uids(self) -> list[str] | None:
+        """For SQL: None means everyone (beta); otherwise the allowlist."""
+        return None if self.open_access else sorted(self.test_account_uids)
 
     @field_validator("allowed_origins", "test_account_uids", mode="before")
     @classmethod

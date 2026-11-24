@@ -59,8 +59,8 @@ async def pairing(body: PairingRequest, request: Request, user=Depends(account),
     # Email lookup only matches owners whose email is verified; phone-only accounts have no email.
     owner = await one(db, """SELECT id FROM users WHERE lower(email)=lower(:email)
         AND id<>:recipient AND account_status='ACTIVE' AND email_verified
-        AND firebase_uid=ANY(CAST(:allowed AS text[]))""",
-        email=email, recipient=user.id, allowed=list(request.app.state.settings.test_account_uids))
+        AND (CAST(:allowed AS text[]) IS NULL OR firebase_uid = ANY(CAST(:allowed AS text[])))""",
+        email=email, recipient=user.id, allowed=request.app.state.settings.allowed_uids())
     if not owner:
         raise HTTPException(404, "Eligible sharing account unavailable")
     code = secrets.token_urlsafe(32)
@@ -118,8 +118,8 @@ async def recipient_links(db, owner, contacts, allowed, trip):
         AND c.id=ANY(CAST(:contacts AS uuid[])) AND l.revoked_at IS NULL
         AND (NOT :trip OR c.allow_live_tracking)
         AND u.account_status='ACTIVE' AND (u.email_verified OR u.phone_verified)
-        AND u.firebase_uid=ANY(CAST(:allowed AS text[]))"""),
-        {"owner": owner, "contacts": contacts, "allowed": list(allowed), "trip": trip})
+        AND (CAST(:allowed AS text[]) IS NULL OR u.firebase_uid = ANY(CAST(:allowed AS text[])))"""),
+        {"owner": owner, "contacts": contacts, "allowed": allowed, "trip": trip})
     ids = list(result.scalars())
     if len(ids) != len(contacts):
         raise HTTPException(403, "Every selected contact must be paired and eligible for sharing")
@@ -144,7 +144,7 @@ async def create(body: ShareRequest, request: Request, idempotency_key: UUID = H
     if body.kind == "TRIP" and body.location is None:
         raise HTTPException(422, "A fresh location is required to start a trip")
     recipients = await recipient_links(db, user.id, body.contact_ids,
-        request.app.state.settings.test_account_uids, body.kind == "TRIP")
+        request.app.state.settings.allowed_uids(), body.kind == "TRIP")
     if body.kind == "TRIP" and await db.scalar(text("""SELECT id FROM circle_sessions
         WHERE owner_id=:owner AND kind='TRIP' AND stopped_at IS NULL AND expires_at>now() LIMIT 1"""),
         {"owner": user.id}):
@@ -164,14 +164,14 @@ async def create(body: ShareRequest, request: Request, idempotency_key: UUID = H
 async def visible(db, session_id, user, allowed):
     row = await one(db, """SELECT s.* FROM circle_sessions s JOIN users owner ON owner.id=s.owner_id
         WHERE s.id=:id AND owner.account_status='ACTIVE'
-        AND owner.firebase_uid=ANY(CAST(:allowed AS text[]))
+        AND (CAST(:allowed AS text[]) IS NULL OR owner.firebase_uid = ANY(CAST(:allowed AS text[])))
         AND (s.owner_id=:user OR (s.stopped_at IS NULL AND s.expires_at>now() AND EXISTS (
             SELECT 1 FROM circle_session_recipients r
             JOIN circle_links l ON l.id=r.link_id
             JOIN trusted_contacts c ON c.id=l.contact_id
             WHERE r.session_id=s.id AND l.recipient_id=:user AND l.revoked_at IS NULL
             AND (s.kind<>'TRIP' OR c.allow_live_tracking))))""",
-        id=session_id, user=user.id, allowed=list(allowed))
+        id=session_id, user=user.id, allowed=allowed)
     if not row:
         raise HTTPException(404, "Sharing session unavailable or access expired")
     return row
@@ -179,7 +179,7 @@ async def visible(db, session_id, user, allowed):
 
 @router.get("/sessions/{session_id}")
 async def snapshot(session_id: UUID, request: Request, user=Depends(account), db=Depends(database)):
-    row = await visible(db, session_id, user, request.app.state.settings.test_account_uids)
+    row = await visible(db, session_id, user, request.app.state.settings.allowed_uids())
     active = row.stopped_at is None and row.expires_at > now()
     status = "STOPPED" if row.stopped_at else ("ACTIVE" if active else "EXPIRED")
     result = {"id": row.id, "kind": row.kind, "status": status, "created_at": row.created_at,
@@ -224,7 +224,7 @@ async def sessions(request: Request, user=Depends(account), db=Depends(database)
 
 @router.post("/sessions/{session_id}/opened")
 async def opened(session_id: UUID, request: Request, user=Depends(account), db=Depends(database)):
-    await visible(db, session_id, user, request.app.state.settings.test_account_uids)
+    await visible(db, session_id, user, request.app.state.settings.allowed_uids())
     await db.execute(text("""UPDATE circle_session_recipients r
         SET notification_status='OPENED', opened_at=coalesce(opened_at,now())
         FROM circle_links l WHERE r.link_id=l.id AND r.session_id=:id

@@ -86,7 +86,8 @@ class Profile(ProfileEdit):
 
 
 class CreateIncident(Input):
-    is_test: Literal[True]
+    # False (a real SOS) is accepted only in the beta environment; see services.incidents.create.
+    is_test: bool
     location: Fix | None = None
 
 
