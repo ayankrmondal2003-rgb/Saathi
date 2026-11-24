@@ -203,3 +203,17 @@ Open items:
 - **API key:** tiles currently load from Esri's public endpoint. Commercial/production use needs an ArcGIS Location Platform key, set as `maitriEsriApiKey` in `local.properties` (never committed). With a key, the app switches to `ibasemaps-api.arcgis.com` with `?token=`; verify that endpoint once a key exists.
 - **Dark theme:** World Street Map has no dark variant, so tiles are dimmed instead.
 - **Privacy:** tile requests send the viewed area (tile coordinates) and the device IP to Esri. Disclose this in the privacy policy and the Data Safety form (Phase F).
+
+### Package move and Google Sign-In (`0a29e33`, `cdbd1af`)
+
+| Item | Now |
+|---|---|
+| R11 applicationId/namespace `in.maitri.app`; sources under `in/maitri/app`; `Theme.Maitri`, `MaitriTheme`, adaptive launcher with monochrome layer (`e4cc31c`) | works. Internal logger and DB names (`surakshanet`) are kept on purpose |
+| `google-services.json` for `in.maitri.app` (debug and upload-key SHA-1, web client) | works |
+| R12 release signing with the upload key; passwords only from `local.properties` (`maitriKeystorePassword` / `maitriKeyPassword`) | partial (versioning scheme and a tested R8 release build still to do) |
+| 03 "Continue with Google": Credential Manager → Firebase `GoogleAuthProvider`; cancelling is silent; a missing account or disabled provider shows a clear message | works on the build; not yet verified on a device |
+
+Tests at `cdbd1af` plus the contract-test path fix:
+- Android JVM 140/140.
+- Isolated backend 116/116 (Alembic head 0011). `test_android_api_contract_consistency` still pointed at the old `com/example/surakshanet` path; it now reads `in/maitri/app`.
+- Device suite not re-run: it uninstalls the app.

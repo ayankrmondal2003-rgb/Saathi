@@ -1,11 +1,11 @@
 # MAITRI SERVER-BASED FEATURE TEST REPORT
 
-**Execution Timestamp:** 2026-11-23T16:46:14Z
+**Execution Timestamp:** 2026-11-24T02:25:16Z
 **Environment:** Isolated PostgreSQL + PostGIS (Port dynamically allocated)
 **Safety Guard Status:** VERIFIED_ISOLATED (No production connections, live SOS disabled)
 **Alembic Head Revision:** `0011`
 **PostGIS Version:** `3.7.0`
-**Duration:** 42.88s
+**Duration:** 81.3s
 **Overall Status:** **PASS**
 
 ---
@@ -91,8 +91,8 @@ To make the live Render backend match the verified local test server:
            backend/tests/test_maitri_features.py \
            backend/tests/run_maitri_server_tests.py \
            backend/test-maitri-server.ps1 \
-           app/src/main/java/com/example/surakshanet/network/BackendApi.kt \
-           app/src/main/java/com/example/surakshanet/ui/MaitriSharingDialog.kt
+           app/src/main/java/in/maitri/app/network/BackendApi.kt \
+           app/src/main/java/in/maitri/app/ui/MaitriSharingDialog.kt
 
    git commit -m "Deploy circle sharing, volunteer verification, safety guard, and server test suite"
    git push origin master

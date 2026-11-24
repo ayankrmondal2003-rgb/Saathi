@@ -684,7 +684,7 @@ def test_android_api_contract_consistency(maitri_env):
 
     # Read Android BackendApi.kt
     backend_api_path = os.path.join(
-        os.path.dirname(__file__), "..", "..", "app", "src", "main", "java", "com", "example", "surakshanet", "network", "BackendApi.kt"
+        os.path.dirname(__file__), "..", "..", "app", "src", "main", "java", "in", "maitri", "app", "network", "BackendApi.kt"
     )
     assert os.path.exists(backend_api_path), f"BackendApi.kt not found at {backend_api_path}"
 
