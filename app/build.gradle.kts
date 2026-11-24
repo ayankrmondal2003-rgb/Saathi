@@ -7,6 +7,7 @@ import java.awt.image.BufferedImage
 
 plugins {
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
@@ -75,7 +76,11 @@ android {
     }
 
     buildTypes {
-        debug { buildConfigField("String", "API_BASE_URL", backendUrl("maitriDevApiUrl", "surakshaDevApiUrl")) }
+        debug {
+            buildConfigField("String", "API_BASE_URL", backendUrl("maitriDevApiUrl", "surakshaDevApiUrl"))
+            // Debug builds never report crashes or upload mapping files.
+            configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> { mappingFileUploadEnabled = false }
+        }
         release {
             buildConfigField("String", "API_BASE_URL", backendUrl("maitriProdApiUrl", "surakshaProdApiUrl"))
             if (canSignRelease) signingConfig = signingConfigs.getByName("upload")
@@ -113,6 +118,8 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("com.google.firebase:firebase-messaging")
+    // Crash reports for release builds (free on the Spark plan); see MaitriApp for what is and isn't sent.
+    implementation("com.google.firebase:firebase-crashlytics")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     implementation("androidx.navigation:navigation-compose:2.8.9")

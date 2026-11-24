@@ -44,6 +44,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Crash reporting starts only when MaitriApp turns it on (release builds, user hasn't opted out). -->
+        <meta-data android:name="firebase_crashlytics_collection_enabled" android:value="false" />
         <!-- Camera captures (volunteer documents, profile photo) and the bundled declaration template. -->
         <provider
             android:name="androidx.core.content.FileProvider"

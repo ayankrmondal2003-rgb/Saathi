@@ -159,6 +159,20 @@ fun MaitriPrivacyData(onBack: () -> Unit, onDeleted: () -> Unit) {
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = p.accent)
         message?.let { Text(it, color = p.accent, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp)) }
         PrivacyRow(p, tr("Export my data"), tr("Download everything Maitri keeps about you, as a file")) { if (!busy) export() }
+        // Crash reports (release builds): stack trace, app version and phone model only.
+        var crashReports by remember { mutableStateOf(`in`.maitri.app.CrashReports.enabled(context)) }
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).background(p.surface, RoundedCornerShape(18.dp))
+            .clickable { crashReports = !crashReports; `in`.maitri.app.CrashReports.set(context, crashReports) }
+            .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(tr("Send crash reports"), color = p.primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(2.dp))
+                Text(tr("Helps fix problems. Only the error, app version and phone model, never your location or details."),
+                    color = p.secondary, fontSize = 11.sp)
+            }
+            Switch(checked = crashReports, onCheckedChange = { crashReports = it; `in`.maitri.app.CrashReports.set(context, it) },
+                colors = SwitchDefaults.colors(checkedTrackColor = p.accent))
+        }
         PrivacyRow(p, tr("Privacy policy"), tr("What we collect, why, and who can see it")) { openLink(context, MaitriLinks.PRIVACY) }
         PrivacyRow(p, tr("Terms of service"), tr("How Maitri works during the beta")) { openLink(context, MaitriLinks.TERMS) }
         PrivacyRow(p, tr("Permissions"), tr("Location, notifications and microphone")) {
