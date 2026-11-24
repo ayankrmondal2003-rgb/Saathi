@@ -1,5 +1,7 @@
 package `in`.maitri.app.network
 
+import `in`.maitri.app.tr
+
 import com.google.gson.JsonParser
 import retrofit2.HttpException
 import java.io.IOException
@@ -7,8 +9,8 @@ import java.io.IOException
 internal const val MISSING_PRIMARY_PIN = "Safety PIN not configured. Set or recover your PIN to end this SOS."
 
 internal fun pinFailure(error: Exception): String {
-    if (error is IOException) return "Connection interrupted. Closure is unconfirmed. Reconnect and retry."
-    if (error !is HttpException) return "The PIN request could not be confirmed. Please retry."
+    if (error is IOException) return tr("Connection interrupted. Closure is unconfirmed. Reconnect and retry.")
+    if (error !is HttpException) return tr("The PIN request could not be confirmed. Please retry.")
     val detail = runCatching {
         JsonParser.parseString(error.response()?.errorBody()?.string()).asJsonObject
             .getAsJsonPrimitive("detail").asString
@@ -17,35 +19,35 @@ internal fun pinFailure(error: Exception): String {
         400 -> when (detail) {
             MISSING_PRIMARY_PIN, "Safety PIN not enrolled. Configure your Safety PIN in settings first." -> MISSING_PRIMARY_PIN
             "New PIN and confirmation PIN do not match.", "PIN and confirmation PIN do not match." -> detail
-            else -> "The server could not accept the PIN request. Check the entries and retry."
+            else -> tr("The server could not accept the PIN request. Check the entries and retry.")
         }
-        401 -> "Your session expired. Sign in again."
+        401 -> tr("Your session expired. Sign in again.")
         403 -> when {
             detail == "Only the incident owner can resolve the incident." -> detail
             detail.matches(Regex("""Incorrect Safety PIN\. \d+ attempt\(s\) remaining\.""")) -> detail
             detail.matches(Regex("""Current PIN is incorrect\. \d+ attempt\(s\) remaining\.""")) -> detail
-            detail == "Sign in again to recover your Safety PIN" -> "Verify your account password again to recover your PIN."
-            else -> "This account does not have permission for this action."
+            detail == "Sign in again to recover your Safety PIN" -> tr("Verify your account password again to recover your PIN.")
+            else -> tr("This account does not have permission for this action.")
         }
-        404 -> if (detail == "No existing Safety PIN configured.") "No Safety PIN is set yet. Create one first."
-               else "This incident is unavailable for this account."
+        404 -> if (detail == "No existing Safety PIN configured.") tr("No Safety PIN is set yet. Create one first.")
+               else tr("This incident is unavailable for this account.")
         409 -> if (detail == "PIN already enrolled. Use PIN change or recovery.") detail
-               else "The incident state changed. Reopen the PIN dialog and retry."
+               else tr("The incident state changed. Reopen the PIN dialog and retry.")
         422 -> when (detail) {
-            "Safety PIN must consist of exactly 6 digits.",
-            "PIN cannot consist of a single repeated digit (e.g., 111111).",
-            "PIN cannot be an obvious sequential sequence (e.g., 123456).",
-            "PIN cannot be an obvious reverse sequence (e.g., 654321).",
-            "Primary PIN and Duress PIN must be distinct.",
+            tr("Safety PIN must consist of exactly 6 digits."),
+            tr("PIN cannot consist of a single repeated digit (e.g., 111111)."),
+            tr("PIN cannot be an obvious sequential sequence (e.g., 123456)."),
+            tr("PIN cannot be an obvious reverse sequence (e.g., 654321)."),
+            tr("Primary PIN and Duress PIN must be distinct."),
             "New PIN must be different from current PIN." -> detail
-            else -> "Invalid PIN request. Check that your PIN has six digits."
+            else -> tr("Invalid PIN request. Check that your PIN has six digits.")
         }
         429 -> if (detail.matches(Regex("""Safety PIN verification is rate-limited\. Retry in \d+ seconds\.""")) ||
                    detail.matches(Regex("""Rate limited\. Verification locked for \d+ seconds\.""")) ||
                    detail == "Wait one minute after a PIN change before recovering again." ||
                    detail == "Safety PIN recovery is temporarily locked.") detail
-               else "Too many attempts. Wait for the security cooldown before trying again."
-        else -> "PIN service unavailable (HTTP ${error.code()}). Retry when connected."
+               else tr("Too many attempts. Wait for the security cooldown before trying again.")
+        else -> tr("PIN service unavailable (HTTP {0}). Retry when connected.", error.code())
     }
 }
 
@@ -59,8 +61,8 @@ internal suspend fun resolveWithPin(id: String, submit: suspend () -> IncidentRe
 }
 
 internal enum class PrimaryPinState(val label: String) {
-    UNKNOWN("PIN status unknown"), NOT_CONFIGURED("PIN not set"), CONFIGURED("PIN set"),
-    LOCKED("PIN locked"), RECOVERY_REQUIRED("PIN recovery required")
+    UNKNOWN(tr("PIN status unknown")), NOT_CONFIGURED(tr("PIN not set")), CONFIGURED(tr("PIN set")),
+    LOCKED(tr("PIN locked")), RECOVERY_REQUIRED(tr("PIN recovery required"))
 }
 
 internal fun primaryPinState(status: SafetyPinStatusDto?, recovering: Boolean = false): PrimaryPinState = when {

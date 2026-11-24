@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,19 +47,41 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         permitted = context.locationAllowed()
     }
+    var backgroundAllowed by remember { mutableStateOf(`in`.maitri.app.network.ResponderLocation.backgroundAllowed(context)) }
+    var explainBackground by remember { mutableStateOf(false) }
+    val backgroundPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        backgroundAllowed = `in`.maitri.app.network.ResponderLocation.backgroundAllowed(context)
+        `in`.maitri.app.network.ResponderLocation.schedule(context, uid)
+    }
+    // Coming back from the system settings page also updates the state.
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            backgroundAllowed = `in`.maitri.app.network.ResponderLocation.backgroundAllowed(context)
+        }
+    }
+    if (explainBackground) androidx.compose.material3.AlertDialog(onDismissRequest = { explainBackground = false },
+        title = { Text(tr("Get requests when Maitri is closed?")) },
+        text = { Text(tr("While you're Available, Maitri will share your location with the server about every 15 minutes, even when the app is closed, so it can ask you to help someone nearby. ") +
+            tr("Nobody sees your location unless you accept a request. On the next screen, choose \"Allow all the time\". Turn Available off at any time to stop.")) },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = {
+            explainBackground = false
+            if (android.os.Build.VERSION.SDK_INT >= 29) backgroundPermission.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        }) { Text(tr("Continue")) } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = { explainBackground = false }) { Text(tr("Not now")) } })
 
     LaunchedEffect(uid, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 try {
                     if (profile == null) profile = BackendClient.api.profile(account)
+                    profile?.let { `in`.maitri.app.network.ResponderLocation.setAvailable(context, uid, it.optedIn && it.available) }
                     inbox = BackendClient.api.invitations(account).filter { it.canOpenIncoming() || it.status == "ACCEPTED" }
                     inboxLoaded = true
                     applicationStatus = BackendClient.api.volunteerStatus(account).status
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    preferenceMessage = "Could not refresh responder information"
+                    preferenceMessage = tr("Could not refresh responder information")
                 }
                 delay(10000)
             }
@@ -81,23 +105,23 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
                     status = { state ->
                         when (state) {
                             TrackingState.TRACKING -> {
-                                if (!hasResponse) locationStatusMessage = "GPS signal acquired; waiting for first sync…"
+                                if (!hasResponse) locationStatusMessage = tr("GPS signal acquired; waiting for first sync…")
                             }
                             TrackingState.STARTING -> {
-                                locationStatusMessage = "Acquiring GPS fix..."
+                                locationStatusMessage = tr("Acquiring GPS fix...")
                             }
                             TrackingState.LOCATION_UNAVAILABLE -> {
                                 if (!context.locationEnabled()) {
-                                    locationStatusMessage = "Location unavailable (disabled in system settings)"
+                                    locationStatusMessage = tr("Location unavailable (disabled in system settings)")
                                 } else {
-                                    locationStatusMessage = "Location unavailable (searching for GPS...)"
+                                    locationStatusMessage = tr("Location unavailable (searching for GPS...)")
                                 }
                             }
                             TrackingState.PERMISSION_REQUIRED -> {
-                                locationStatusMessage = "Location permission required for responder mode"
+                                locationStatusMessage = tr("Location permission required for responder mode")
                             }
                             TrackingState.ERROR -> {
-                                locationStatusMessage = "Location provider error"
+                                locationStatusMessage = tr("Location provider error")
                             }
                             TrackingState.IDLE, TrackingState.STOPPING, TrackingState.STOPPED -> {
                                 locationStatusMessage = null
@@ -112,7 +136,7 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
 
                 // Accuracy filter: ignore fixes worse than 100 meters
                 if (fix.accuracyMeters > 100f) {
-                    locationStatusMessage = "Waiting for better GPS accuracy (${fix.accuracyMeters.toInt()}m > 100m)"
+                    locationStatusMessage = tr("Waiting for better GPS accuracy ({0}m > 100m)", fix.accuracyMeters.toInt())
                     return@collect
                 }
 
@@ -144,7 +168,7 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
                     )
                     lastSubmittedTimestamp = fix.timestampMillis
                     hasResponse = true
-                    locationStatusMessage = "Responder location updated"
+                    locationStatusMessage = tr("Responder location updated")
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: HttpException) {
@@ -154,30 +178,30 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
                             // Stale update: Recoverable conflict! Update lastSubmittedTimestamp so we do not retry this fix,
                             // and keep listening for newer GPS fixes without disabling tracking or marking permanently unavailable.
                             if (!staleResponderFix(e.code(), e.response()?.headers()?.get("X-Error-Code"))) {
-                                locationStatusMessage = "Location conflict. Waiting for another fix."
+                                locationStatusMessage = tr("Location conflict. Waiting for another fix.")
                                 return@collect
                             }
                             hasResponse = true
                             lastSubmittedTimestamp = maxOf(lastSubmittedTimestamp, fix.timestampMillis)
-                            locationStatusMessage = "Older GPS fix skipped. Waiting for a newer fix."
+                            locationStatusMessage = tr("Older GPS fix skipped. Waiting for a newer fix.")
                         }
                         401 -> {
-                            locationStatusMessage = "Session expired. Sign in again."
+                            locationStatusMessage = tr("Session expired. Sign in again.")
                         }
                         403 -> {
-                            locationStatusMessage = "Responder consent and availability required (HTTP 403)"
+                            locationStatusMessage = tr("Responder consent and availability required (HTTP 403)")
                         }
                         422 -> {
-                            locationStatusMessage = "Location rejected: check device clock and GPS accuracy (HTTP 422)"
+                            locationStatusMessage = tr("Location rejected: check device clock and GPS accuracy (HTTP 422)")
                         }
                         else -> {
-                            locationStatusMessage = "Location sync failed (HTTP ${e.code()})"
+                            locationStatusMessage = tr("Location sync failed (HTTP {0})", e.code())
                         }
                     }
                 } catch (e: IOException) {
-                    locationStatusMessage = "Network interrupted; will retry on next GPS fix"
+                    locationStatusMessage = tr("Network interrupted; will retry on next GPS fix")
                 } catch (e: Exception) {
-                    locationStatusMessage = "Location sync error: ${e.localizedMessage ?: "Unknown error"}"
+                    locationStatusMessage = tr("Location sync error: {0}", e.localizedMessage ?: tr("Unknown error"))
                 } finally {
                     isSubmitting = false
                 }
@@ -191,11 +215,12 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
         scope.launch {
             try {
                 profile = BackendClient.api.profile(ProfileRequest(current.name, optIn, available), account)
-                preferenceMessage = "Preferences saved"
+                profile?.let { `in`.maitri.app.network.ResponderLocation.setAvailable(context, uid, it.optedIn && it.available) }
+                preferenceMessage = tr("Preferences saved")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                preferenceMessage = "Could not save preferences"
+                preferenceMessage = tr("Could not save preferences")
             } finally {
                 busy = false
             }
@@ -206,27 +231,35 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
     Column(Modifier.fillMaxSize().background(palette.background).statusBarsPadding()
         .verticalScroll(rememberScrollState()).padding(bottom = LocalFloatingNavBarPadding.current)) {
         Image(painterResource(if (palette.dark) R.drawable.maitri_dark_responder else R.drawable.maitri_light_responder),
-            "Nearby support. Responder. Illustrative map.", Modifier.fillMaxWidth().aspectRatio(390f / 466f))
+            tr("Nearby support. Responder. Illustrative map."), Modifier.fillMaxWidth().aspectRatio(390f / 466f))
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)
             .background(palette.surface, RoundedCornerShape(22.dp)).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (applicationStatus in setOf("NOT_STARTED", "DRAFT", "REJECTED")) {
-            OutlinedButton(onClick = onApply) { Text("Volunteer application") }
+            OutlinedButton(onClick = onApply) { Text(tr("Volunteer application")) }
         }
-        Text("Community responder")
+        Text(tr("Community responder"))
         Switch(checked = profile?.optedIn == true, enabled = profile != null && !busy,
             onCheckedChange = { update(it, false) })
-        Text("Share my location while this dashboard is open")
+        Text(tr("Available for nearby requests"))
         Switch(checked = profile?.available == true, enabled = profile?.optedIn == true && !busy,
             onCheckedChange = { update(true, it) })
         if (profile?.available == true && !permitted) {
             Button(onClick = { permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION)) }) { Text("Allow location") }
+                Manifest.permission.ACCESS_COARSE_LOCATION)) }) { Text(tr("Allow location")) }
+        }
+        // Reachable while Maitri is closed: only with the volunteer's explicit "Allow all the time".
+        if (profile?.available == true && permitted && !backgroundAllowed) {
+            Text(tr("You'll only get requests while Maitri is open."), fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+            Text(tr("To get SOS requests when Maitri is closed, allow location all the time."))
+            OutlinedButton(onClick = { explainBackground = true }) { Text(tr("Get requests when Maitri is closed")) }
+        } else if (profile?.available == true && backgroundAllowed) {
+            Text(tr("You'll get nearby SOS requests even when Maitri is closed. Turn Available off to stop sharing your location."))
         }
         if (preferenceMessage.isNotEmpty()) Text(preferenceMessage)
         locationStatusMessage?.let { Text(it) }
-        Text("Invitations")
-        if (inbox.isEmpty()) Text(if (inboxLoaded) "No current invitations" else "Checking invitations…")
+        Text(tr("Invitations"))
+        if (inbox.isEmpty()) Text(if (inboxLoaded) tr("No current invitations") else tr("Checking invitations…"))
         for (invitation in inbox) {
             if (invitation.status == "ACCEPTED") {
                 OutlinedButton(enabled = !busy, onClick = {
@@ -235,13 +268,13 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
                         try {
                             val snapshot = BackendClient.api.snapshot(invitation.incidentId, account)
                             if (snapshot.authorizesJourney(invitation.incidentId)) onResumeJourney(invitation.incidentId)
-                            else preferenceMessage = "Responder access has ended."
+                            else preferenceMessage = tr("Responder access has ended.")
                         } catch (e: CancellationException) { throw e }
-                        catch (_: Exception) { preferenceMessage = "Could not confirm responder access." }
+                        catch (_: Exception) { preferenceMessage = tr("Could not confirm responder access.") }
                         finally { busy = false }
                     }
-                }) { Text("Resume responder journey") }
-            } else OutlinedButton(onClick = { openInvitation(invitation.id) }) { Text("Open invitation") }
+                }) { Text(tr("Resume responder journey")) }
+            } else OutlinedButton(onClick = { openInvitation(invitation.id) }) { Text(tr("Open invitation")) }
         }
         }
     }
@@ -254,13 +287,13 @@ fun ResponderUnavailable() {
     Column(Modifier.fillMaxSize().background(palette.background).statusBarsPadding()
         .verticalScroll(rememberScrollState()).padding(bottom = LocalFloatingNavBarPadding.current)) {
         Image(painterResource(if (palette.dark) R.drawable.maitri_dark_responder else R.drawable.maitri_light_responder),
-            "Nearby support. Responder. Illustrative map.", Modifier.fillMaxWidth().aspectRatio(390f / 466f))
+            tr("Nearby support. Responder. Illustrative map."), Modifier.fillMaxWidth().aspectRatio(390f / 466f))
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)
             .background(palette.surface, RoundedCornerShape(22.dp)).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Responder mode unavailable", color = palette.primary)
-            Text("Responder availability and invitations need a signed-in account connected to the Maitri server. " +
-                "Nothing is shared and no requests are received on this screen.", color = palette.secondary)
+            Text(tr("Responder mode unavailable"), color = palette.primary)
+            Text(tr("Responder availability and invitations need a signed-in account connected to the Maitri server. ") +
+                tr("Nothing is shared and no requests are received on this screen."), color = palette.secondary)
         }
     }
 }

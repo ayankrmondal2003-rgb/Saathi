@@ -1,11 +1,14 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.app.Activity
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -31,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.withLink
 import `in`.maitri.app.R
 import `in`.maitri.app.state.AuthState
 import `in`.maitri.app.state.AuthViewModel
@@ -50,7 +54,6 @@ fun MaitriLogin(
     val activity = context as? Activity
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) } // 0: Log in, 1: Sign up
-    var phone by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
@@ -58,8 +61,6 @@ fun MaitriLogin(
     var showForgotDialog by rememberSaveable { mutableStateOf(false) }
     var resetEmail by rememberSaveable { mutableStateOf("") }
 
-    var showOtpDialog by rememberSaveable { mutableStateOf(false) }
-    var otpCode by rememberSaveable { mutableStateOf("") }
 
     MaitriLoginContent(
         p = p,
@@ -68,20 +69,12 @@ fun MaitriLogin(
             selectedTab = it
             auth.clearMessage()
         },
-        phone = phone,
-        onPhoneChange = { phone = it },
         email = email,
         onEmailChange = { email = it },
         password = password,
         onPasswordChange = { password = it },
         passwordVisible = passwordVisible,
         onPasswordVisibilityToggle = { passwordVisible = !passwordVisible },
-        onContinueWithPhone = {
-            val fullPhone = if (phone.startsWith("+")) phone else "+91$phone"
-            auth.sendPhoneOtp(activity, fullPhone) {
-                showOtpDialog = true
-            }
-        },
         onSubmitEmail = {
             if (isDemoMode && email.isBlank() && password.isBlank()) {
                 auth.submit(null, `in`.maitri.app.data.LocalAuthRepository.DEMO_EMAIL, `in`.maitri.app.data.LocalAuthRepository.DEMO_PASSWORD)
@@ -89,7 +82,7 @@ fun MaitriLogin(
                 auth.submit(null, email, password)
             } else {
                 val name = email.substringBefore("@").replace(".", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-                auth.submit(name.ifBlank { "User" }, email, password, password)
+                auth.submit(name.ifBlank { tr("User") }, email, password, password)
             }
         },
         onForgotPassword = {
@@ -98,7 +91,7 @@ fun MaitriLogin(
         },
         onContinueWithGoogle = {
             if (activity == null) auth.signInWithGoogle {
-                throw `in`.maitri.app.data.GoogleSignInUnavailable("Google sign-in needs the app window. Reopen Maitri and retry.")
+                throw `in`.maitri.app.data.GoogleSignInUnavailable(tr("Google sign-in needs the app window. Reopen Maitri and retry."))
             } else auth.signInWithGoogle { `in`.maitri.app.data.requestGoogleIdToken(activity) }
         },
         isBusy = state.busy,
@@ -112,14 +105,14 @@ fun MaitriLogin(
             containerColor = p.surface,
             titleContentColor = p.primary,
             textContentColor = p.secondary,
-            title = { Text("Reset password", fontWeight = FontWeight.SemiBold) },
+            title = { Text(tr("Reset password"), fontWeight = FontWeight.SemiBold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Enter your email address to receive a secure password reset link.")
+                    Text(tr("Enter your email address to receive a secure password reset link."))
                     OutlinedTextField(
                         value = resetEmail,
                         onValueChange = { resetEmail = it },
-                        label = { Text("Email address") },
+                        label = { Text(tr("Email address")) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -139,58 +132,16 @@ fun MaitriLogin(
                         auth.reset(resetEmail)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = Color.White)
-                ) { Text("Send reset link") }
+                ) { Text(tr("Send reset link")) }
             },
             dismissButton = {
                 TextButton(onClick = { showForgotDialog = false }) {
-                    Text("Cancel", color = p.secondary)
+                    Text(tr("Cancel"), color = p.secondary)
                 }
             }
         )
     }
 
-    if (showOtpDialog) {
-        AlertDialog(
-            onDismissRequest = { showOtpDialog = false },
-            containerColor = p.surface,
-            titleContentColor = p.primary,
-            textContentColor = p.secondary,
-            title = { Text("Enter SMS code", fontWeight = FontWeight.SemiBold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Enter the 6-digit verification code sent to your phone.")
-                    OutlinedTextField(
-                        value = otpCode,
-                        onValueChange = { if (it.length <= 6) otpCode = it },
-                        label = { Text("6-digit code") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = p.accent,
-                            unfocusedBorderColor = p.divider,
-                            focusedTextColor = p.primary,
-                            unfocusedTextColor = p.primary
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showOtpDialog = false
-                        auth.submitPhoneOtp(otpCode)
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = Color.White)
-                ) { Text("Verify code") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showOtpDialog = false }) {
-                    Text("Cancel", color = p.secondary)
-                }
-            }
-        )
-    }
 }
 
 @Composable
@@ -198,15 +149,12 @@ internal fun MaitriLoginContent(
     p: MaitriPalette,
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
-    phone: String,
-    onPhoneChange: (String) -> Unit,
     email: String,
     onEmailChange: (String) -> Unit,
     password: String,
     onPasswordChange: (String) -> Unit,
     passwordVisible: Boolean,
     onPasswordVisibilityToggle: () -> Unit,
-    onContinueWithPhone: () -> Unit,
     onSubmitEmail: () -> Unit,
     onForgotPassword: () -> Unit,
     isBusy: Boolean,
@@ -256,17 +204,17 @@ internal fun MaitriLoginContent(
 
             // Title & Subtitle
             Text(
-                text = "Welcome to maitri",
+                text = tr("Welcome to maitri"),
                 color = p.primary,
-                fontSize = 24.sp,
+                fontSize = 26.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "A little peace of mind starts here.",
+                text = tr("A little peace of mind starts here."),
                 color = p.secondary,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -312,7 +260,7 @@ internal fun MaitriLoginContent(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Log in",
+                                text = tr("Log in"),
                                 color = if (selectedTab == 0) p.accent else p.secondary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -329,7 +277,7 @@ internal fun MaitriLoginContent(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Sign up",
+                                text = tr("Sign up"),
                                 color = if (selectedTab == 1) p.accent else p.secondary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -341,73 +289,13 @@ internal fun MaitriLoginContent(
 
             Spacer(Modifier.height(24.dp))
 
-            // Phone Number Input Section
-            Text(
-                text = "Phone number",
-                color = p.primary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(p.surface)
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "+91",
-                    color = p.primary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(Modifier.width(4.dp))
-                Icon(
-                    imageVector = Icons.Rounded.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = p.secondary,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(Modifier.width(10.dp))
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(22.dp)
-                        .background(p.divider)
-                )
-                Spacer(Modifier.width(12.dp))
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (phone.isEmpty()) {
-                        Text(
-                            text = "Enter phone number",
-                            color = p.secondary,
-                            fontSize = 14.sp
-                        )
-                    }
-                    BasicTextField(
-                        value = phone,
-                        onValueChange = onPhoneChange,
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        textStyle = TextStyle(color = p.primary, fontSize = 14.sp),
-                        cursorBrush = SolidColor(p.accent),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            // "Continue with phone" Button (342 x 44, rx 22)
+            // "Continue with phone" slot (342 x 44, rx 22). Phone OTP needs Firebase's paid plan, so Google signs in here.
             Button(
                 onClick = {
                     focusManager.clearFocus()
-                    onContinueWithPhone()
+                    onContinueWithGoogle()
                 },
+                enabled = !isBusy && !isDemoMode,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(44.dp),
@@ -418,9 +306,13 @@ internal fun MaitriLoginContent(
                 ),
                 elevation = null
             ) {
+                Box(Modifier.size(22.dp).background(Color.White, CircleShape), contentAlignment = Alignment.Center) {
+                    Image(painterResource(R.drawable.ic_google_g), contentDescription = null, modifier = Modifier.size(14.dp))
+                }
+                Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "Continue with phone",
-                    fontSize = 14.sp,
+                    text = tr("Continue with Google"),
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -439,7 +331,7 @@ internal fun MaitriLoginContent(
                         .background(p.divider)
                 )
                 Text(
-                    text = "or use email & password",
+                    text = tr("or use email & password"),
                     color = p.secondary,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(horizontal = 10.dp)
@@ -456,7 +348,7 @@ internal fun MaitriLoginContent(
 
             // Email Address Field
             Text(
-                text = "Email address",
+                text = tr("Email address"),
                 color = p.primary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -473,10 +365,10 @@ internal fun MaitriLoginContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.Email,
+                    painter = painterResource(R.drawable.maitri_mail),
                     contentDescription = null,
                     tint = p.secondary,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(24.dp)
                 )
                 Spacer(Modifier.width(12.dp))
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
@@ -492,7 +384,7 @@ internal fun MaitriLoginContent(
                         onValueChange = onEmailChange,
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        textStyle = TextStyle(color = p.primary, fontSize = 14.sp),
+                        textStyle = TextStyle(fontFamily = `in`.maitri.app.ui.theme.MaitriFont, color = p.primary, fontSize = 14.sp),
                         cursorBrush = SolidColor(p.accent),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -503,7 +395,7 @@ internal fun MaitriLoginContent(
 
             // Password Field
             Text(
-                text = "Password",
+                text = tr("Password"),
                 color = p.primary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -520,16 +412,16 @@ internal fun MaitriLoginContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.Lock,
+                    painter = painterResource(R.drawable.maitri_lock),
                     contentDescription = null,
                     tint = p.secondary,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(24.dp)
                 )
                 Spacer(Modifier.width(12.dp))
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (password.isEmpty()) {
                         Text(
-                            text = "Enter your password",
+                            text = tr("Enter your password"),
                             color = p.secondary,
                             fontSize = 14.sp
                         )
@@ -544,7 +436,7 @@ internal fun MaitriLoginContent(
                             focusManager.clearFocus()
                             onSubmitEmail()
                         }),
-                        textStyle = TextStyle(color = p.primary, fontSize = 14.sp),
+                        textStyle = TextStyle(fontFamily = `in`.maitri.app.ui.theme.MaitriFont, color = p.primary, fontSize = 14.sp),
                         cursorBrush = SolidColor(p.accent),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -553,12 +445,11 @@ internal fun MaitriLoginContent(
                     onClick = onPasswordVisibilityToggle,
                     modifier = Modifier.size(24.dp)
                 ) {
-                    Icon(
-                        imageVector = if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                        contentDescription = "Toggle password visibility",
-                        tint = p.secondary,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    // The design draws the open eye; the crossed-out state has no design, so it stays Material.
+                    if (passwordVisible) Icon(Icons.Rounded.VisibilityOff, tr("Toggle password visibility"),
+                        tint = p.secondary, modifier = Modifier.size(18.dp))
+                    else Icon(painterResource(R.drawable.maitri_eye), tr("Toggle password visibility"),
+                        tint = p.secondary, modifier = Modifier.size(24.dp))
                 }
             }
 
@@ -570,7 +461,7 @@ internal fun MaitriLoginContent(
                 horizontalArrangement = Arrangement.End
             ) {
                 Text(
-                    text = "Forgot password?",
+                    text = tr("Forgot password?"),
                     color = p.accent,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -606,34 +497,8 @@ internal fun MaitriLoginContent(
                     )
                 } else {
                     Text(
-                        text = if (selectedTab == 0) "Log in with email" else "Sign up with email",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-
-            if (!isDemoMode) {
-                Spacer(Modifier.height(10.dp))
-                // Sign in with Google: same 44 dp pill as the email action, outlined so phone stays primary.
-                OutlinedButton(
-                    onClick = {
-                        focusManager.clearFocus()
-                        onContinueWithGoogle()
-                    },
-                    enabled = !isBusy,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp),
-                    shape = RoundedCornerShape(22.dp),
-                    border = BorderStroke(1.dp, p.divider),
-                    colors = ButtonDefaults.outlinedButtonColors(containerColor = p.surface, contentColor = p.primary)
-                ) {
-                    Image(painterResource(R.drawable.ic_google_g), contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = "Continue with Google",
-                        fontSize = 14.sp,
+                        text = if (selectedTab == 0) tr("Log in with email") else tr("Sign up with email"),
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -653,7 +518,7 @@ internal fun MaitriLoginContent(
             if (isDemoMode) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Demo Mode: Leave fields empty and tap above to enter with local demo account.",
+                    text = tr("Demo Mode: Leave fields empty and tap above to enter with local demo account."),
                     color = p.secondary,
                     fontSize = 11.sp,
                     textAlign = TextAlign.Center,
@@ -665,7 +530,14 @@ internal fun MaitriLoginContent(
 
             // Terms & Privacy notice
             Text(
-                text = "By continuing, you agree to the Terms of Service\nand Privacy Policy.",
+                text = androidx.compose.ui.text.buildAnnotatedString {
+                    val link = androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = p.accent))
+                    append(tr("By continuing, you agree to the "))
+                    withLink(androidx.compose.ui.text.LinkAnnotation.Url(`in`.maitri.app.network.MaitriLinks.TERMS, link)) { append(tr("Terms of Service")) }
+                    append(designBreaks(tr("\nand ")))
+                    withLink(androidx.compose.ui.text.LinkAnnotation.Url(`in`.maitri.app.network.MaitriLinks.PRIVACY, link)) { append(tr("Privacy Policy")) }
+                    append(".")
+                },
                 color = p.secondary,
                 fontSize = 10.sp,
                 textAlign = TextAlign.Center,
@@ -687,15 +559,12 @@ private fun MaitriLoginLightPreview() {
         p = MaitriPalette(dark = false),
         selectedTab = 0,
         onTabSelected = {},
-        phone = "",
-        onPhoneChange = {},
         email = "",
         onEmailChange = {},
         password = "",
         onPasswordChange = {},
         passwordVisible = false,
         onPasswordVisibilityToggle = {},
-        onContinueWithPhone = {},
         onSubmitEmail = {},
         onForgotPassword = {},
         isBusy = false,
@@ -710,15 +579,12 @@ private fun MaitriLoginDarkPreview() {
         p = MaitriPalette(dark = true),
         selectedTab = 0,
         onTabSelected = {},
-        phone = "",
-        onPhoneChange = {},
         email = "",
         onEmailChange = {},
         password = "",
         onPasswordChange = {},
         passwordVisible = false,
         onPasswordVisibilityToggle = {},
-        onContinueWithPhone = {},
         onSubmitEmail = {},
         onForgotPassword = {},
         isBusy = false,

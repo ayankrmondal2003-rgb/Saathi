@@ -32,6 +32,7 @@ users = Table("users", metadata, pk(), Column("firebase_uid", String(128), nulla
     Column("responder_available", Boolean, nullable=False, server_default=text("false")),
     Column("account_status", String, nullable=False, server_default="ACTIVE"),
     Column("phone_number", String(32)), Column("city", String(128)),
+    Column("share_phone_in_sos", Boolean, nullable=False, server_default=text("false")),
     stamp("created_at", True), stamp("updated_at", True),
     CheckConstraint("account_status IN ('ACTIVE','SUSPENDED')"),
     CheckConstraint("NOT responder_available OR responder_opt_in"))
@@ -45,7 +46,7 @@ locations = Table("responder_locations", metadata, reference("user_id", "users",
 Index("ix_responder_location_gist", locations.c.location, postgresql_using="gist")
 incidents = Table("incidents", metadata, pk(), reference("victim_user_id", "users"),
     Column("idempotency_key", UUID(as_uuid=True), nullable=False), Column("request_hash", String(64), nullable=False),
-    Column("is_test", Boolean, nullable=False, server_default=text("true")), CheckConstraint("is_test"),
+    Column("is_test", Boolean, nullable=False, server_default=text("true")),
     Column("status", String, nullable=False, server_default="ACTIVE"), point("latest_location", True),
     Column("location_accuracy_meters", Float), Column("location_is_mock", Boolean),
     stamp("location_recorded_at", nullable=True), stamp("location_received_at", nullable=True),

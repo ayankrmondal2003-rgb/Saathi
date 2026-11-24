@@ -63,4 +63,20 @@ class IncidentRecoveryTest {
             assertTrue(text, "112" in text)
         }
     }
+
+    @Test fun rateLimitedSosEndsTheSessionWithA112Message() {
+        val body = """{"detail":{"code":"SOS_RATE_LIMITED","message":"At most 3 SOS alerts per hour."}}"""
+        val code = parseIncidentConflict(body)?.code
+        assertEquals(SOS_RATE_LIMITED, code)
+        assertTrue(isFatalSync(429, code))
+        assertFalse("A plain 429 is still retried", isFatalSync(429, null))
+        val text = fatalSyncMessage(429, code)
+        assertTrue(text, "112" in text)
+        assertFalse(text, Regex("\\b[45]\\d\\d\\b").containsMatchIn(text))
+    }
+
+    @Test fun realIncidentsDisabledIsRecognised() {
+        assertEquals(REAL_INCIDENTS_DISABLED,
+            parseIncidentConflict("""{"detail":{"code":"REAL_INCIDENTS_DISABLED","message":"x"}}""")?.code)
+    }
 }

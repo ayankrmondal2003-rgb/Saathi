@@ -1,5 +1,7 @@
 package `in`.maitri.app.notification
 
+import `in`.maitri.app.tr
+
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -28,7 +30,13 @@ enum class ChannelStatus {
 }
 
 object NotificationHelper {
+    /** The pre-P5 urgent channel; deleted once a pattern channel exists. */
     const val CHANNEL_ID_SOS = "urgent_sos_v1"
+    /**
+     * Android fixes a channel's vibration when it's created, so each pattern from screen 11 has its own urgent
+     * channel; switching patterns switches channels.
+     */
+    fun sosChannelId(context: Context): String = "urgent_sos_v2_" + AlertVibration.current(context).name.lowercase()
     const val CHANNEL_NAME_SOS = "Urgent SOS Alerts"
     const val CHANNEL_DESC_SOS = "Incoming emergency SOS invitations and practice responder alerts"
 
@@ -36,6 +44,14 @@ object NotificationHelper {
     const val EXTRA_INCIDENT_ID = "in.maitri.app.extra.INCIDENT_ID"
     const val EXTRA_EVENT_TYPE = "in.maitri.app.extra.EVENT_TYPE"
     const val ACTION_VIEW_INVITATION = "in.maitri.app.action.VIEW_INVITATION"
+    const val EXTRA_INBOX_ID = "in.maitri.app.extra.INBOX_ID"
+    const val EXTRA_URL = "in.maitri.app.extra.URL"
+    const val EVENT_INBOX = "INBOX"
+    const val CHANNEL_ID_CIRCLE = "circle_updates_v1"
+    /** Inbox pushes that need attention now use the urgent channel; the rest are ordinary updates. */
+    val URGENT_INBOX_KINDS = setOf("CIRCLE_SOS", "CHECKIN_MISSED")
+    val INBOX_KINDS = setOf("CIRCLE_SOS", "CIRCLE_SOS_ENDED", "CHECKIN_REMINDER", "CHECKIN_MISSED",
+        "TRIP_STARTED", "CHECKIN_STARTED", "CIRCLE_REQUEST", "CIRCLE_LINKED", "VOLUNTEER_DECISION")
 
     // Target ~5.2 seconds: 6 pulses of 700ms with 200ms pauses between them
     val EMERGENCY_VIBRATION_PATTERN = longArrayOf(
@@ -64,7 +80,11 @@ object NotificationHelper {
     fun createEmergencyNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-            val existing = manager.getNotificationChannel(CHANNEL_ID_SOS)
+            val id = sosChannelId(context)
+            // One urgent channel at a time: the legacy one and other patterns' channels go.
+            (listOf(CHANNEL_ID_SOS) + `in`.maitri.app.ui.VibrationPattern.entries.map { "urgent_sos_v2_" + it.name.lowercase() })
+                .filter { it != id }.forEach { manager.deleteNotificationChannel(it) }
+            val existing = manager.getNotificationChannel(id)
             if (existing != null) return
 
             val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
@@ -74,13 +94,13 @@ object NotificationHelper {
                 .build()
 
             val channel = NotificationChannel(
-                CHANNEL_ID_SOS,
+                id,
                 CHANNEL_NAME_SOS,
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = CHANNEL_DESC_SOS
                 enableVibration(true)
-                vibrationPattern = EMERGENCY_VIBRATION_PATTERN
+                vibrationPattern = AlertVibration.pattern(context)
                 setSound(soundUri, audioAttributes)
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
                 setShowBadge(true)
@@ -111,7 +131,7 @@ object NotificationHelper {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
                 ?: return ChannelStatus.MISSING
-            val channel = manager.getNotificationChannel(CHANNEL_ID_SOS) ?: return ChannelStatus.MISSING
+            val channel = manager.getNotificationChannel(sosChannelId(context)) ?: return ChannelStatus.MISSING
             if (channel.importance == NotificationManager.IMPORTANCE_NONE) {
                 return ChannelStatus.BLOCKED
             }
@@ -140,13 +160,52 @@ object NotificationHelper {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
                 putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                putExtra(Settings.EXTRA_CHANNEL_ID, CHANNEL_ID_SOS)
+                putExtra(Settings.EXTRA_CHANNEL_ID, sosChannelId(context))
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
         } else {
             openNotificationSettings(context)
         }
+    }
+
+    /** Circle alerts, check-ins and circle requests (server inbox items). Tapping opens the item in the app. */
+    fun showInboxNotification(context: Context, inboxId: String, kind: String, title: String, body: String, url: String?): Boolean {
+        val urgent = kind in URGENT_INBOX_KINDS
+        createEmergencyNotificationChannel(context)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            context.getSystemService(android.app.NotificationManager::class.java).createNotificationChannel(
+                android.app.NotificationChannel(CHANNEL_ID_CIRCLE, tr("Circle updates"), android.app.NotificationManager.IMPORTANCE_DEFAULT)
+                    .apply { description = tr("Trips, check-ins and circle requests from people you know") })
+        }
+        if (!hasNotificationPermission(context) || !areNotificationsEnabled(context)) return false
+        if (!claimAlert(context, "inbox:$inboxId", System.currentTimeMillis())) return false
+        val intent = Intent(context, MainActivity::class.java).apply {
+            data = android.net.Uri.Builder().scheme("saathi").authority("notification").appendPath(EVENT_INBOX).appendPath(inboxId).build()
+            putExtra(EXTRA_EVENT_TYPE, EVENT_INBOX)
+            putExtra(EXTRA_INBOX_ID, inboxId)
+            if (!url.isNullOrBlank()) putExtra(EXTRA_URL, url)
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pending = PendingIntent.getActivity(context, ("inbox:$inboxId").hashCode(), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val builder = NotificationCompat.Builder(context, if (urgent) sosChannelId(context) else CHANNEL_ID_CIRCLE)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle(title).setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(if (urgent) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(if (urgent) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_SOCIAL)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setContentIntent(pending).setAutoCancel(true)
+        if (urgent) builder.setVibrate(AlertVibration.pattern(context))
+            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED) return false
+        return try {
+            NotificationManagerCompat.from(context).notify(3000 + (inboxId.hashCode() and 0x7FFF), builder.build())
+            true
+        } catch (_: SecurityException) { false }
     }
 
     fun showSosNotification(
@@ -185,7 +244,7 @@ object NotificationHelper {
 
         val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID_SOS)
+        val builder = NotificationCompat.Builder(context, sosChannelId(context))
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentTitle(title)
             .setContentText(body)
@@ -197,13 +256,22 @@ object NotificationHelper {
             .setOnlyAlertOnce(true)
             .setAutoCancel(true)
             .setOngoing(false)
-            .setVibrate(EMERGENCY_VIBRATION_PATTERN)
+            .setVibrate(AlertVibration.pattern(context))
             .setSound(soundUri)
-            .build()
+        // A nearby SOS request opens full screen where Android allows it (Android 14+ asks the user to allow
+        // "full-screen notifications"); otherwise it is a heads-up notification with sound and vibration.
+        if (eventType == "RESPONDER_INVITATION_CREATED" && canUseFullScreen(context)) builder.setFullScreenIntent(pendingIntent, true)
+        val notification = builder.build()
 
         val notificationId = 1000 + (alertId.hashCode() and 0x7FFF)
-        NotificationManagerCompat.from(context).notify(notificationId, notification)
-        return true
+        // Re-checked here (not only in hasNotificationPermission) so lint can see it; revocation can race this call.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED) return false
+        return try {
+            NotificationManagerCompat.from(context).notify(notificationId, notification)
+            true
+        } catch (_: SecurityException) { false }
     }
 
     fun triggerTestVibration(context: Context): Boolean {
@@ -229,5 +297,37 @@ object NotificationHelper {
         } catch (_: Exception) {
             return false
         }
+    }
+
+    fun canUseFullScreen(context: Context): Boolean =
+        Build.VERSION.SDK_INT < 34 || (context.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() == true)
+}
+
+/** The vibration chosen on screen 11, used for real SOS alerts as well as the test. */
+object AlertVibration {
+    private const val PREFS = "alert_prefs"
+    private const val KEY = "vibration_pattern"
+
+    fun current(context: Context): `in`.maitri.app.ui.VibrationPattern =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null)
+            ?.let { runCatching { `in`.maitri.app.ui.VibrationPattern.valueOf(it) }.getOrNull() }
+            ?: `in`.maitri.app.ui.VibrationPattern.STEADY
+
+    fun save(context: Context, pattern: `in`.maitri.app.ui.VibrationPattern) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, pattern.name).apply()
+        NotificationHelper.createEmergencyNotificationChannel(context)
+    }
+
+    /** The chosen pattern repeated to about 5 seconds, so an alert is hard to miss whichever pattern it is. */
+    fun pattern(context: Context): LongArray = repeatTo(current(context).timings, 5_000)
+
+    internal fun repeatTo(timings: LongArray, totalMs: Long): LongArray {
+        val body = timings.drop(1)  // first entry is the initial delay
+        val out = mutableListOf(0L)
+        while (out.sum() < totalMs && body.isNotEmpty()) {
+            if (out.size > 1) out += 250L
+            out += body
+        }
+        return out.toLongArray()
     }
 }

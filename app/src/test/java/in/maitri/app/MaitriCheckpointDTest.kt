@@ -28,14 +28,16 @@ class MaitriCheckpointDTest {
         val volunteer = ui("MaitriVolunteer")
         listOf("Be there for someone.", "Volunteer verification", "All 5 documents are required.",
             "I consent to document verification").forEach { assertTrue(it, volunteer.contains(it)) }
-        // Documents are only selected locally until secure storage exists, so the counter must not say "uploaded".
-        assertTrue(volunteer.contains("documents selected"))
+        // Documents go to private storage; the counter counts only uploads the server confirmed.
+        assertTrue(volunteer.contains("documents uploaded"))
+        assertTrue(volunteer.contains("Download template"))
         val circle = ui("MaitriCircle")
         listOf("YOUR PEOPLE, CLOSE BY", "Your circle", "Saved contacts", "SOS alerts on", "Choose who gets your SOS",
             "\"Add contact\"").forEach { assertTrue(it, circle.contains(it)) }
-        // No SMS provider is integrated: the circle must not promise SMS delivery.
+        // No SMS provider: the circle must not promise automatic SMS delivery. Contacts get a push (linked app
+        // users) or the SMS the owner sends from their own phone, so the design's copy is accurate again.
         assertFalse(circle.contains("receives immediate SMS alerts"))
-        assertTrue(circle.contains("SMS alerts are not connected yet."))
+        assertTrue(circle.contains("These contacts receive your SOS and\\nlive location when you ask for help."))
     }
 
     @Test fun incomingSosKeepsTheResponderDockSelected() {

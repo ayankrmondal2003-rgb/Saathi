@@ -49,6 +49,8 @@ class ProfileDetailsEdit(Input):
     display_name: str | None = Field(default=None, min_length=1, max_length=256)
     phone_number: str | None = Field(default=None, max_length=32)
     city: str | None = Field(default=None, max_length=128)
+    # Accepted responders may call this number during an active SOS (screen 07 "Call").
+    share_phone_in_sos: bool | None = None
 
     @field_validator("display_name")
     @classmethod
@@ -83,10 +85,12 @@ class Profile(ProfileEdit):
     email_verified: bool
     phone_number: str | None = None
     city: str | None = None
+    share_phone_in_sos: bool = False
 
 
 class CreateIncident(Input):
-    is_test: Literal[True]
+    # False (a real SOS) is accepted only in the beta environment; see services.incidents.create.
+    is_test: bool
     location: Fix | None = None
 
 
@@ -154,6 +158,11 @@ class ActiveResponderPublic(BaseModel):
     responder_id: str
     assistance_status: str
     updated_at: AwareDatetime | None = None
+    # First name only. Distance and position only for the person in need, from a fix under 10 minutes old.
+    display_name: str | None = None
+    distance_meters: float | None = None
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class IncidentSnapshot(BaseModel):
@@ -165,6 +174,10 @@ class IncidentSnapshot(BaseModel):
     responder_summary: ResponderSummary
     requester_membership: RequesterMembership
     active_responders: list[ActiveResponderPublic]
+    # For accepted responders only, and only when the person in need agreed to share it.
+    victim_phone: str | None = None
+    # For accepted responders only, while the SOS is active.
+    medical_notes: str | None = None
 
 
 class SafetyPinSetup(Input):
@@ -262,8 +275,22 @@ class IncidentContactAlertStatus(BaseModel):
     updated_at: AwareDatetime
 
 
+class SmsContact(BaseModel):
+    contact_id: UUID
+    display_name: str
+    phone_number: str
+
+
 class TrustedContactAlertBatchResponse(BaseModel):
     incident_id: UUID
     alerts_queued: int
     primary_contact_name: str | None = None
     statuses: list[IncidentContactAlertStatus]
+    # Read-only page with the live location; valid while the SOS is active.
+    live_link: str | None = None
+    # SOS-enabled contacts without a linked Maitri account: the app offers to text them from the phone.
+    sms_contacts: list[SmsContact] = []
+
+
+class SmsPrepared(Input):
+    contact_ids: list[UUID] = Field(min_length=1, max_length=50)

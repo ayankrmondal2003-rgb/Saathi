@@ -15,8 +15,10 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /** Private database. Only routing keys and timestamps are indexed. GPS payloads are encrypted. */
+// Closeable is declared here because SQLiteOpenHelper only became AutoCloseable in later Android versions:
+// without it, `use { }` throws ClassCastException on Android 8-9 (found on the API 26 emulator).
 internal class IncidentFixQueue(context: Context, databaseName: String = "incident_fix_queue.db") :
-    SQLiteOpenHelper(context, databaseName, null, 1) {
+    SQLiteOpenHelper(context, databaseName, null, 1), java.io.Closeable {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE fixes (uid TEXT NOT NULL, incident TEXT NOT NULL, stamp INTEGER NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(uid, incident, stamp))")
     }

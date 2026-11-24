@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -39,13 +41,14 @@ import kotlinx.coroutines.launch
 fun MaitriIncoming(
     invitation: `in`.maitri.app.network.InvitationDto,
     uid: String,
-    approxLocality: String = "Nearby emergency",
-    approxDistance: String = "Distance unavailable",
-    estimatedEta: String = "Arrival time unavailable",
+    approxLocality: String = tr("Nearby emergency"),
+    approxDistance: String = tr("Distance unavailable"),
+    estimatedEta: String = tr("Arrival time unavailable"),
     onAccepted: (incidentId: String) -> Unit,
     onDeclined: () -> Unit
 ) {
     val p = maitriPalette()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var isSubmitting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -53,13 +56,13 @@ fun MaitriIncoming(
     fun submitDecision(decision: String) {
         if (isSubmitting) return
         if (!invitation.canOpenIncoming()) {
-            errorMessage = "Invalid invitation ID."
+            errorMessage = tr("Invalid invitation ID.")
             return
         }
 
         val currentUser = runCatching { FirebaseAuth.getInstance().currentUser }.getOrNull()
         if (currentUser?.uid != uid) {
-            errorMessage = "Sign in required to respond to SOS requests."
+            errorMessage = tr("Sign in required to respond to SOS requests.")
             return
         }
 
@@ -68,12 +71,14 @@ fun MaitriIncoming(
 
         scope.launch {
             try {
+                // Accepting needs a location under 2 minutes old inside the alert radius: send the current one first.
+                if (decision == "ACCEPTED") `in`.maitri.app.network.ResponderLocation.reportNow(context, uid)
                 // Only a server-confirmed decision changes screens; EXPIRED is reported, never treated as success.
                 val status = confirmedInvitationResponse(decision) {
                     BackendClient.api.respond(invitation.id, DecisionDto(decision), ExpectedAccount(uid))
                 }
                 when {
-                    status == "EXPIRED" -> errorMessage = "This emergency invitation has expired."
+                    status == "EXPIRED" -> errorMessage = tr("This emergency invitation has expired.")
                     decision == "ACCEPTED" -> onAccepted(invitation.incidentId)
                     else -> onDeclined()
                 }
@@ -87,11 +92,26 @@ fun MaitriIncoming(
         }
     }
 
+    // Expiry countdown; the server sends only a distance band before acceptance, never a place or coordinates.
+    val expiresAt = remember(invitation.expiresAt) { runCatching { java.time.Instant.parse(invitation.expiresAt) }.getOrNull() }
+    var secondsLeft by remember { mutableLongStateOf(Long.MAX_VALUE) }
+    LaunchedEffect(expiresAt) {
+        while (expiresAt != null) {
+            secondsLeft = java.time.Duration.between(java.time.Instant.now(), expiresAt).seconds.coerceAtLeast(0)
+            if (secondsLeft == 0L) break
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+    val expired = expiresAt != null && secondsLeft == 0L
     MaitriIncomingContent(
         p = p,
-        approxLocality = approxLocality,
-        approxDistance = approxDistance,
-        estimatedEta = estimatedEta,
+        approxLocality = if (approxLocality == "Nearby emergency") tr("Nearby emergency") else approxLocality,
+        approxDistance = invitation.distanceBand ?: approxDistance,
+        estimatedEta = when {
+            expired -> tr("Request expired")
+            expiresAt != null -> "Answer within %d:%02d".format(secondsLeft / 60, secondsLeft % 60)
+            else -> estimatedEta
+        },
         isSubmitting = isSubmitting,
         errorMessage = errorMessage,
         onAccept = { submitDecision("ACCEPTED") },
@@ -113,18 +133,35 @@ internal fun MaitriIncomingContent(
     dismissError: () -> Unit = {}
 ) {
     EmergencyBoard(if (p.dark) R.drawable.maitri_dark_06 else R.drawable.maitri_light_06,
-        "Someone needs help. Only accept if you can respond safely.", 816) {
-        BoardLabel(86, 410, 252, approxLocality, p.primary, 15)
-        BoardLabel(86, 434, 252, "Location private until accepted", p.secondary)
-        BoardLabel(54, 466, 154, estimatedEta, p.accent)
-        BoardLabel(215, 466, 132, approxDistance, p.primary)
-        BoardAction(40, 548, 148, 48, "Accept", !isSubmitting, onAccept)
-        BoardAction(202, 548, 148, 48, "Decline", !isSubmitting, onDecline)
+        tr("Someone needs help. Only accept if you can respond safely."), 816) {
+        // Behind the dimmed backdrop: the Responder tab's header and tab bar, as in the design.
+        ArtText(tr("NEARBY SUPPORT"), 84f, 71.1f, 270f, 10f, scrimmed(p.accent, p.dark), FontWeight.SemiBold,
+            letterSpacing = 1.2.sp)
+        ArtText(tr("Responder"), 84f, 108f, 270f, 26f, scrimmed(p.primary, p.dark), FontWeight.SemiBold)
+        listOf(tr("Home") to 67f, tr("Circle") to 152.3f, tr("Responder") to 238f, tr("Profile") to 323.5f).forEach { (label, cx) ->
+            val selected = cx == 238f
+            ArtText(label, cx - 45f, 807.1f, 90f, 10f, scrimmed(if (selected) p.accent else p.secondary, p.dark),
+                if (selected) FontWeight.SemiBold else FontWeight.Normal, center = true)
+        }
+        // The request card.
+        ArtText(tr("NEARBY SOS REQUEST"), 40f, 313.6f, 310f, 11f, p.accent, FontWeight.SemiBold, center = true)
+        ArtText(tr("Someone needs help"), 40f, 349.7f, 310f, 21f, p.primary, FontWeight.SemiBold, center = true)
+        ArtText(tr("Someone nearby is asking for help."), 40f, 375f, 310f, 12f, p.secondary, center = true)
+        ArtText(tr("Only accept if you can respond safely."), 40f, 521.9f, 310f, 11f, p.secondary, center = true)
+        ArtText(tr("Accept"), 40f, 577f, 148f, 14f, if (p.dark) p.background else Color.White, FontWeight.SemiBold, center = true)
+        ArtText(tr("Decline"), 202f, 577.1f, 148f, 14f, p.accent, FontWeight.SemiBold, center = true)
+        // The card's rows are 24 units apart: each label keeps to its row at any text size.
+        BoardLabel(86, 410, 252, approxLocality, p.primary, 15, height = 26, maxLines = 1)
+        BoardLabel(86, 434, 252, tr("Location private until accepted"), p.secondary, height = 18, maxLines = 1)
+        BoardLabel(54, 466, 154, estimatedEta, p.accent, height = 18, maxLines = 1)
+        BoardLabel(215, 466, 132, approxDistance, p.primary, height = 18, maxLines = 1)
+        BoardAction(40, 548, 148, 48, tr("Accept"), !isSubmitting, onAccept)
+        BoardAction(202, 548, 148, 48, tr("Decline"), !isSubmitting, onDecline)
     }
     if (errorMessage != null) androidx.compose.material3.AlertDialog(
-        onDismissRequest = dismissError, title = { Text("Invitation update") },
+        onDismissRequest = dismissError, title = { Text(tr("Invitation update")) },
         text = { Text(errorMessage) }, confirmButton = {
-            androidx.compose.material3.TextButton(onClick = dismissError) { Text("Close") }
+            androidx.compose.material3.TextButton(onClick = dismissError) { Text(tr("Close")) }
         })
 }
 @Preview(name = "Screen 06 — Incoming SOS Light", widthDp = 390, heightDp = 844, showBackground = true)
@@ -132,9 +169,9 @@ internal fun MaitriIncomingContent(
 fun MaitriIncomingLightPreview() {
     MaitriIncomingContent(
         p = MaitriPalette(dark = false),
-        approxLocality = "Nearby emergency",
-        approxDistance = "Distance unavailable",
-        estimatedEta = "ETA unavailable",
+        approxLocality = tr("Nearby emergency"),
+        approxDistance = tr("Distance unavailable"),
+        estimatedEta = tr("ETA unavailable"),
         isSubmitting = false,
         errorMessage = null,
         onAccept = {},
@@ -147,9 +184,9 @@ fun MaitriIncomingLightPreview() {
 fun MaitriIncomingDarkPreview() {
     MaitriIncomingContent(
         p = MaitriPalette(dark = true),
-        approxLocality = "Nearby emergency",
-        approxDistance = "Distance unavailable",
-        estimatedEta = "ETA unavailable",
+        approxLocality = tr("Nearby emergency"),
+        approxDistance = tr("Distance unavailable"),
+        estimatedEta = tr("ETA unavailable"),
         isSubmitting = false,
         errorMessage = null,
         onAccept = {},

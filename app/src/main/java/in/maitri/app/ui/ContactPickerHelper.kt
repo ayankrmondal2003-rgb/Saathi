@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
@@ -85,7 +87,7 @@ object ContactPickerHelper {
         // If Strategy 1 succeeded and found a phone number, we have the user's selected phone number.
         if (phoneEntries.isNotEmpty()) {
             return PickedContactData(
-                name = resolvedName?.ifBlank { "Contact" } ?: "Contact",
+                name = resolvedName?.ifBlank { tr("Contact") } ?: tr("Contact"),
                 phoneNumbers = phoneEntries
             )
         }
@@ -171,20 +173,20 @@ object ContactPickerHelper {
         }
 
         return PickedContactData(
-            name = resolvedName?.ifBlank { "Contact" } ?: "Contact",
+            name = resolvedName?.ifBlank { tr("Contact") } ?: tr("Contact"),
             phoneNumbers = phoneEntries
         )
     }
 
     private fun formatPhoneType(type: Int, customLabel: String?): String {
         return when (type) {
-            ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE -> "Mobile"
-            ContactsContract.CommonDataKinds.Phone.TYPE_HOME -> "Home"
-            ContactsContract.CommonDataKinds.Phone.TYPE_WORK -> "Work"
-            ContactsContract.CommonDataKinds.Phone.TYPE_MAIN -> "Main"
-            ContactsContract.CommonDataKinds.Phone.TYPE_OTHER -> "Other"
-            ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM -> customLabel?.ifBlank { "Custom" } ?: "Custom"
-            else -> "Phone"
+            ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE -> tr("Mobile")
+            ContactsContract.CommonDataKinds.Phone.TYPE_HOME -> tr("Home")
+            ContactsContract.CommonDataKinds.Phone.TYPE_WORK -> tr("Work")
+            ContactsContract.CommonDataKinds.Phone.TYPE_MAIN -> tr("Main")
+            ContactsContract.CommonDataKinds.Phone.TYPE_OTHER -> tr("Other")
+            ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM -> customLabel?.ifBlank { tr("Custom") } ?: tr("Custom")
+            else -> tr("Phone")
         }
     }
 }

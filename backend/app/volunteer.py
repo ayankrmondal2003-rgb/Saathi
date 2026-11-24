@@ -41,6 +41,9 @@ async def one(db, sql, **params):
 @router.get("/status")
 async def get_volunteer_status(request: Request, user=Depends(account), db=Depends(database)):
     storage_ready = request.app.state.settings.storage_configured
+    documents = [dict(r) for r in (await db.execute(text("""SELECT DISTINCT ON (doc_type) doc_type, id AS file_id,
+        mime_type, size_bytes, uploaded_at FROM stored_files WHERE owner_user_id = :uid AND kind = 'VOLUNTEER_DOC'
+        AND status = 'UPLOADED' ORDER BY doc_type, uploaded_at DESC"""), {"uid": user.id})).mappings().all()]
     row = await one(db, "SELECT * FROM volunteer_applications WHERE user_id = :uid", uid=user.id)
     if not row:
         return {
@@ -55,6 +58,8 @@ async def get_volunteer_status(request: Request, user=Depends(account), db=Depen
             "secure_storage_ready": storage_ready,
             "submitted_at": None,
             "reviewer_notes": None,
+            "reviewed_at": None,
+            "documents": documents,
         }
     return {
         "status": row["status"],
@@ -68,6 +73,8 @@ async def get_volunteer_status(request: Request, user=Depends(account), db=Depen
         "secure_storage_ready": storage_ready,
         "submitted_at": row["submitted_at"].isoformat() if row["submitted_at"] else None,
         "reviewer_notes": row["reviewer_notes"],
+        "reviewed_at": row["reviewed_at"].isoformat() if row["reviewed_at"] else None,
+        "documents": documents,
     }
 
 

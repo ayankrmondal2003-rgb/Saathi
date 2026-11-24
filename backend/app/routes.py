@@ -9,19 +9,25 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy import case, func, select, update, text
 from sqlalchemy.dialects.postgresql import insert
 from app.core import account, database, identity
-from app.database.v1 import devices, incidents, invitations, locations, responders, users
+from app.database.v1 import devices, events, incidents, invitations, locations, responders, users
+from typing import Literal
+from pydantic import Field
+from app.schemas import Input
 from app.schemas import (
     ActiveIncident, CreateIncident, Decision, DeviceRegister, Fix, Incident, IncidentResolutionRequest,
     IncidentResolutionResponse, IncidentSnapshot, Profile, ProfileDetailsEdit, ProfileEdit, ResponderStatusUpdate,
     SafetyPinChange, SafetyPinRecovery, SafetyPinSetup, SafetyPinStatus, TestAlertResponse,
     TrustedContact, TrustedContactAlertBatchResponse, TrustedContactCreate, TrustedContactUpdate,
     IncidentContactAlertStatus, WsTicketResponse
-)
+, SmsPrepared)
 from app.services import incidents as service
 from app.services import safety_pin as safety_pin_service
 from app.services import trusted_contacts as tc_service
 from app.services.geofence import point, responder_changed
 from app.services.outbox_worker import default_firebase_sender
+from app.circle import request_phone_matches
+from app.live_link import public_link
+from app.privacy import notes_for_responder
 from app.services.realtime import hub as default_hub, PROTOCOL_VERSION, RealtimeEvent
 
 logger = logging.getLogger("surakshanet.routes")
@@ -124,17 +130,20 @@ async def incident_fix(incident_id: UUID, body: Fix, request: Request, user=Depe
 async def location(incident_id: UUID, user=Depends(account), db=Depends(database)):
     row = await service.incident_row(db, incident_id)
     await service.may_read(db, row, user)
-    return {"is_test": True, "status": row.status, "latitude": row.latitude, "longitude": row.longitude,
+    return {"is_test": row.is_test, "status": row.status, "latitude": row.latitude, "longitude": row.longitude,
             "accuracy_meters": row.location_accuracy_meters, "recorded_at": row.location_recorded_at,
             "received_at": row.location_received_at, "is_mock": row.location_is_mock}
 
 
 @router.get("/incidents/{incident_id}/snapshot", response_model=IncidentSnapshot)
-async def snapshot(incident_id: UUID, user=Depends(account), db=Depends(database)):
+async def snapshot(incident_id: UUID, request: Request, user=Depends(account), db=Depends(database)):
     incident = await service.incident_row(db, incident_id)
     await service.may_read(db, incident, user)
     role = "OWNER" if incident.victim_user_id == user.id else "RESPONDER"
-    return await service.build_snapshot(db, incident_id, user.id, role)
+    result = await service.build_snapshot(db, incident_id, user.id, role)
+    if role == "RESPONDER" and result.requester_membership.authorization_status == "AUTHORIZED":
+        result.medical_notes = await notes_for_responder(db, request.app.state.settings, incident)
+    return result
 
 
 @router.post("/incidents/{incident_id}/ws-ticket", response_model=WsTicketResponse)
@@ -221,9 +230,45 @@ async def inbox(user=Depends(account), db=Depends(database)):
     status = case(((invitations.c.status == "PENDING") & (invitations.c.expires_at <= func.now()),
                    "EXPIRED"), else_=invitations.c.status)
     rows = await db.execute(select(invitations.c.id, invitations.c.incident_id, status.label("status"),
-        invitations.c.expires_at).where(invitations.c.recipient_user_id == user.id)
+        invitations.c.expires_at, incidents.c.is_test).select_from(invitations.join(incidents,
+        incidents.c.id == invitations.c.incident_id)).where(invitations.c.recipient_user_id == user.id)
         .order_by(invitations.c.invited_at.desc()).limit(100))
-    return [dict(row) for row in rows.mappings()]
+    result = [dict(row) for row in rows.mappings()]
+    # Before accepting, a responder learns only a distance band, never coordinates.
+    distances = dict((await db.execute(text("""SELECT v.id, ST_Distance(l.location, i.latest_location)
+        FROM incident_invitations v JOIN incidents i ON i.id = v.incident_id
+        JOIN responder_locations l ON l.user_id = v.recipient_user_id
+        WHERE v.recipient_user_id = :me AND v.status = 'PENDING' AND i.latest_location IS NOT NULL"""),
+        {"me": user.id})).all())
+    for row in result:
+        row["distance_band"] = distance_band(distances.get(row["id"]))
+    return result
+
+
+def distance_band(meters):
+    if meters is None:
+        return None
+    for limit, label in ((500, "Under 500 m"), (1000, "500 m – 1 km"), (2000, "1–2 km"), (5000, "2–5 km")):
+        if meters < limit:
+            return label
+    return "Over 5 km"
+
+
+class ResponderReport(Input):
+    reason: Literal["FALSE_ALARM", "UNSAFE", "OTHER"]
+    note: str = Field(default="", max_length=500)
+
+
+@router.post("/incidents/{incident_id}/report", status_code=204)
+async def report_incident(incident_id: UUID, body: ResponderReport, user=Depends(account), db=Depends(database)):
+    """An accepted responder flags an SOS (e.g. a false alarm). Recorded for review; nothing changes for the owner."""
+    incident = await service.incident_row(db, incident_id)
+    if incident.victim_user_id == user.id:
+        raise HTTPException(403, "Only responders can report an SOS")
+    await service.may_read(db, incident, user)
+    await db.execute(events.insert().values(incident_id=incident_id, actor_user_id=user.id, event_type="RESPONDER_REPORT",
+                                            metadata={"reason": body.reason, "note": body.note.strip()[:500]}))
+    return Response(status_code=204)
 
 
 @router.post("/responders/invitations/{invitation_id}/response")
@@ -343,12 +388,16 @@ async def get_trusted_contacts(user=Depends(account), db=Depends(database)):
 
 @router.post("/trusted-contacts", response_model=TrustedContact, status_code=201)
 async def create_trusted_contact(body: TrustedContactCreate, user=Depends(account), db=Depends(database)):
-    return await tc_service.create_contact(db, user.id, body)
+    contact = await tc_service.create_contact(db, user.id, body)
+    await request_phone_matches(db, user, contact["id"], contact["normalized_phone_number"])
+    return contact
 
 
 @router.put("/trusted-contacts/{contact_id}", response_model=TrustedContact)
 async def update_trusted_contact(contact_id: UUID, body: TrustedContactUpdate, user=Depends(account), db=Depends(database)):
-    return await tc_service.update_contact(db, user.id, contact_id, body)
+    contact = await tc_service.update_contact(db, user.id, contact_id, body)
+    await request_phone_matches(db, user, contact["id"], contact["normalized_phone_number"])
+    return contact
 
 
 @router.delete("/trusted-contacts/{contact_id}", status_code=204)
@@ -363,8 +412,14 @@ async def set_primary_trusted_contact(contact_id: UUID, user=Depends(account), d
 
 
 @router.post("/incidents/{incident_id}/trusted-contacts/alert", response_model=TrustedContactAlertBatchResponse)
-async def trigger_trusted_contact_alerts(incident_id: UUID, user=Depends(account), db=Depends(database)):
-    return await tc_service.dispatch_incident_alerts(db, user.id, incident_id)
+async def trigger_trusted_contact_alerts(incident_id: UUID, request: Request, user=Depends(account), db=Depends(database)):
+    return await tc_service.dispatch_incident_alerts(db, user, incident_id, public_link(request, incident_id))
+
+
+@router.post("/incidents/{incident_id}/trusted-contacts/sms-prepared", status_code=204)
+async def report_sms_prepared(incident_id: UUID, body: SmsPrepared, user=Depends(account), db=Depends(database)):
+    """The owner's messaging app was opened with these contacts and came back. Not proof of sending."""
+    await tc_service.mark_sms_prepared(db, user.id, incident_id, body.contact_ids)
 
 
 @router.get("/incidents/{incident_id}/trusted-contacts", response_model=list[IncidentContactAlertStatus])

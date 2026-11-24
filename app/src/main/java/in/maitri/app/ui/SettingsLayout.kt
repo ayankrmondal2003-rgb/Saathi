@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.app.LocaleManager
 import android.content.Context
 import android.content.res.Configuration
@@ -39,10 +41,12 @@ internal object MaitriLocale {
 
     fun save(context: Context, code: String) {
         require(MAITRI_LANGUAGES.any { it.code == code })
-        context.getSharedPreferences(FILE, 0).edit().putString(KEY, code).apply()
+        context.getSharedPreferences(FILE, 0).edit().putString(KEY, code).commit()
         if (Build.VERSION.SDK_INT >= 33) {
             context.getSystemService(LocaleManager::class.java).applicationLocales = LocaleList.forLanguageTags(code)
         }
+        // After the platform locale changes, so tr() reads the new language.
+        `in`.maitri.app.I18n.init(context)
     }
 }
 
@@ -91,10 +95,8 @@ internal fun SettingsText(label: String, x: Int, y: Int, width: Int, height: Int
     val modifier = settingsSlot(x, y, width, height)
     Box(if (action == null) modifier else modifier.clickable(role = Role.Button, onClick = action),
         contentAlignment = if (center) Alignment.Center else Alignment.CenterStart) {
-        Text(label, color = color, fontSize = size.sp, lineHeight = line.sp,
-            fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
-            textAlign = if (center) TextAlign.Center else TextAlign.Start, maxLines = maxLines,
-            overflow = TextOverflow.Ellipsis)
+        FitText(label, Modifier, color, size.toFloat(), line.toFloat(),
+            if (bold) FontWeight.SemiBold else FontWeight.Normal, if (center) TextAlign.Center else TextAlign.Start, maxLines)
     }
 }
 

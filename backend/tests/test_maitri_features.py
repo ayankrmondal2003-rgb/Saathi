@@ -809,12 +809,12 @@ def test_trusted_contact_status_is_truthful_and_owner_scoped(maitri_env):
 
     # Before dispatch nothing has been sent, and nothing claims otherwise.
     before = client.get(f"/api/incidents/{incident_id}/trusted-contacts", headers=a).json()
-    assert [s["delivery_status"] for s in before] == ["NOT_SENT"]
+    assert [s["delivery_status"] for s in before] == ["NOT_REACHED"]
 
     sent = client.post(f"/api/incidents/{incident_id}/trusted-contacts/alert", headers=a).json()
-    assert [s["delivery_status"] for s in sent["statuses"]] == ["NO_SMS_PROVIDER"]
+    assert [s["delivery_status"] for s in sent["statuses"]] == ["NOT_REACHED"]  # not linked, no SMS prepared yet
     after = client.get(f"/api/incidents/{incident_id}/trusted-contacts", headers=a).json()
-    assert [s["delivery_status"] for s in after] == ["NO_SMS_PROVIDER"]
+    assert [s["delivery_status"] for s in after] == ["NOT_REACHED"]
     assert all(s["delivery_status"] != "PROVIDER_ACCEPTED" for s in before + after)
 
     # Another account cannot probe this incident's alert state.
@@ -889,7 +889,7 @@ def test_app_circle_sync_contract_feeds_alert_dispatch(maitri_env):
     incident_id = create_test_sos_incident(client, "VICTIM_A")
     statuses = {s["display_name"]: s["delivery_status"]
                 for s in client.post(f"/api/incidents/{incident_id}/trusted-contacts/alert", headers=a).json()["statuses"]}
-    assert statuses == {"Asha": "NO_SMS_PROVIDER"}   # only contacts with SOS alerts on, honestly not sent
+    assert statuses == {"Asha": "NOT_REACHED"}   # only contacts with SOS alerts on, honestly not reached yet
     # Dispatch is idempotent: the app may call it again after a reconnect.
     again = client.post(f"/api/incidents/{incident_id}/trusted-contacts/alert", headers=a)
     assert again.status_code == 200

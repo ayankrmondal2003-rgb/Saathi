@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path name="captures" path="captures/" />
+    <cache-path name="shared" path="shared/" />
+    <!-- SOS photos: the camera app writes straight into the private folder SosMedia uploads from. -->
+    <files-path name="sos_media" path="sos-media/" />
+</paths>

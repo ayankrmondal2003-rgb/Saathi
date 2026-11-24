@@ -2,7 +2,9 @@
 
 Flow: POST /api/files/upload-url -> the phone PUTs the bytes straight to R2 with the returned URL and headers
 -> POST /api/files/{id}/complete (the server checks the object exists with the declared size) -> the file is
-usable. Downloads go through GET /api/files/{id}/download-url, owner only, valid for a few minutes.
+usable. Downloads go through GET /api/files/{id}/download-url, valid for a few minutes: the owner, and for SOS
+photos and voice notes also the circle members who got that SOS's alert in the app and are still in the circle.
+Volunteer responders never get SOS media.
 """
 from typing import Literal
 from uuid import UUID, uuid4
@@ -64,6 +66,36 @@ async def owned_file(db, file_id: UUID, user):
     return row
 
 
+# A circle member who was alerted in the app about this SOS (inbox push) and whose circle link is still active.
+CIRCLE_MEMBER_OF_INCIDENT = """
+    SELECT 1 FROM incident_contact_alerts a
+    JOIN inbox_items i ON i.id = a.inbox_item_id
+    JOIN circle_links l ON l.contact_id = a.contact_id AND l.recipient_id = i.user_id AND l.revoked_at IS NULL
+    WHERE a.incident_id = :incident AND a.channel = 'PUSH' AND i.user_id = :viewer
+    LIMIT 1"""
+
+
+async def can_see_incident_media(db, incident_id: UUID, user) -> bool:
+    owner = await db.scalar(text("SELECT victim_user_id FROM incidents WHERE id = :id"), {"id": incident_id})
+    if owner is None:
+        return False
+    if owner == user.id:
+        return True
+    return bool(await db.scalar(text(CIRCLE_MEMBER_OF_INCIDENT), {"incident": incident_id, "viewer": user.id}))
+
+
+async def readable_file(db, file_id: UUID, user):
+    """The owner's file, or SOS media the user's circle shared with them; 404 otherwise (no hint it exists)."""
+    row = (await db.execute(text("SELECT * FROM stored_files WHERE id = :id"), {"id": file_id})).mappings().first()
+    if row is None:
+        raise HTTPException(404, "File unavailable")
+    if row["owner_user_id"] == user.id:
+        return row
+    if row["kind"] in ("SOS_PHOTO", "SOS_VOICE") and row["incident_id"] is not None             and await can_see_incident_media(db, row["incident_id"], user):
+        return row
+    raise HTTPException(404, "File unavailable")
+
+
 async def create_upload(db, request: Request, user, body: UploadRequest) -> dict:
     settings = request.app.state.settings
     bucket = bucket_for(request)
@@ -122,10 +154,23 @@ async def complete(file_id: UUID, request: Request, user=Depends(account), db=De
     return {"file_id": str(file_id), "status": "UPLOADED"}
 
 
+@router.get("/incidents/{incident_id}/media")
+async def incident_media(incident_id: UUID, user=Depends(account), db=Depends(database)):
+    """Uploaded SOS photos and voice notes for one SOS, oldest first, for its owner and their alerted circle."""
+    if not await can_see_incident_media(db, incident_id, user):
+        raise HTTPException(404, "Incident unavailable")
+    rows = (await db.execute(text("""SELECT id, kind, mime_type, size_bytes, uploaded_at FROM stored_files
+        WHERE incident_id = :id AND kind IN ('SOS_PHOTO', 'SOS_VOICE') AND status = 'UPLOADED'
+        ORDER BY uploaded_at, id"""), {"id": incident_id})).mappings().all()
+    return {"incident_id": str(incident_id), "items": [
+        {"file_id": str(r["id"]), "kind": r["kind"], "mime_type": r["mime_type"], "size_bytes": r["size_bytes"],
+         "uploaded_at": r["uploaded_at"]} for r in rows]}
+
+
 @router.get("/{file_id}/download-url")
 async def download_url(file_id: UUID, request: Request, user=Depends(account), db=Depends(database)):
     bucket = bucket_for(request)
-    row = await owned_file(db, file_id, user)
+    row = await readable_file(db, file_id, user)
     if row["status"] != "UPLOADED":
         raise HTTPException(409, {"code": "UPLOAD_NOT_FOUND", "message": "The file has not been uploaded yet"})
     seconds = request.app.state.settings.download_url_seconds
@@ -150,3 +195,34 @@ async def delete_file(file_id: UUID, request: Request, user=Depends(account), db
             await db.execute(text(f"UPDATE volunteer_applications SET {column} = false, updated_at = now() WHERE user_id = :uid"
                                   " AND status NOT IN ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED')"), {"uid": user.id})
     return Response(status_code=204)
+
+
+class PhotoRequest(Input):
+    file_id: UUID
+
+
+@router.post("/profile-photo")
+async def set_profile_photo(body: PhotoRequest, request: Request, user=Depends(account), db=Depends(database)):
+    row = await owned_file(db, body.file_id, user)
+    if row["kind"] != "PROFILE_PHOTO" or row["status"] != "UPLOADED":
+        raise HTTPException(409, {"code": "UPLOAD_NOT_FOUND", "message": "Upload the photo first"})
+    previous = await db.scalar(text("SELECT photo_file_id FROM users WHERE id = :uid"), {"uid": user.id})
+    await db.execute(text("UPDATE users SET photo_file_id = :f, updated_at = now() WHERE id = :uid"),
+                     {"f": body.file_id, "uid": user.id})
+    if previous and previous != body.file_id:
+        old = await db.scalar(text("SELECT object_key FROM stored_files WHERE id = :id"), {"id": previous})
+        await db.execute(text("DELETE FROM stored_files WHERE id = :id"), {"id": previous})
+        if old:
+            try:
+                await bucket_for(request).delete(old)
+            except (httpx.HTTPError, HTTPException):
+                pass  # an orphaned object is removed by the bucket lifecycle rule; the account no longer points at it
+    return {"file_id": str(body.file_id)}
+
+
+@router.get("/profile-photo")
+async def get_profile_photo(request: Request, user=Depends(account), db=Depends(database)):
+    file_id = await db.scalar(text("SELECT photo_file_id FROM users WHERE id = :uid"), {"uid": user.id})
+    if file_id is None:
+        return {"file_id": None, "download_url": None}
+    return {**(await download_url(file_id, request, user, db))}

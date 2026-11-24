@@ -11,6 +11,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TrackingManifestTest {
+    /** The SOS service is foreground-location only; background location exists solely for opted-in volunteers. */
     @Test fun installedServiceIsPrivateAndUsesForegroundLocationOnly() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext
         val service = app.packageManager.getServiceInfo(ComponentName(app, SosLocationService::class.java), 0)
@@ -23,6 +24,6 @@ class TrackingManifestTest {
         assertTrue(permissions.containsAll(listOf(Manifest.permission.ACCESS_COARSE_LOCATION,
             Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.FOREGROUND_SERVICE,
             Manifest.permission.FOREGROUND_SERVICE_LOCATION, Manifest.permission.POST_NOTIFICATIONS)))
-        assertFalse(Manifest.permission.ACCESS_BACKGROUND_LOCATION in permissions)
+        assertTrue(Manifest.permission.ACCESS_BACKGROUND_LOCATION in permissions)
     }
 }

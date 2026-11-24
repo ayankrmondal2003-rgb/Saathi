@@ -21,7 +21,7 @@ import javax.crypto.spec.GCMParameterSpec
  *
  * Medical notes are AES-256-GCM encrypted with a non-exportable Android Keystore key, bound to the
  * account uid as associated data, and kept in no-backup storage so they are not copied to cloud backups.
- * The profile photo is a downscaled private copy; no server photo storage exists yet.
+ * The profile photo is a square, downscaled copy without EXIF; it is also uploaded to private storage.
  */
 internal class ProfileLocalStore(context: Context) {
     private val root = File(context.applicationContext.noBackupFilesDir, "profile")
@@ -76,10 +76,19 @@ internal class ProfileLocalStore(context: Context) {
                 Bitmap.createScaledBitmap(it, (it.width * scale).toInt().coerceAtLeast(1), (it.height * scale).toInt().coerceAtLeast(1), true)
             }
         }
+        // Square centre crop, as the profile circle shows it.
+        val side = minOf(bitmap.width, bitmap.height)
+        val square = Bitmap.createBitmap(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side)
         root.mkdirs()
         val file = fileFor(uid, "jpg")
-        file.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.JPEG, 88, it)) }
+        file.outputStream().use { check(square.compress(Bitmap.CompressFormat.JPEG, 88, it)) }
         return file
+    }
+
+    /** Stores a photo downloaded from the account (another phone set it). */
+    fun savePhotoBytes(uid: String, bytes: ByteArray): File {
+        root.mkdirs()
+        return fileFor(uid, "jpg").also { it.writeBytes(bytes) }
     }
 
     private fun key(): SecretKey = synchronized(ProfileLocalStore::class.java) {

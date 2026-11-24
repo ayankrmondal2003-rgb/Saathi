@@ -1,5 +1,7 @@
 package `in`.maitri.app.state
 
+import `in`.maitri.app.tr
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import `in`.maitri.app.data.*
@@ -25,11 +27,11 @@ data class AuthState(val ready: Boolean = false, val identity: Identity? = null,
 object AuthForm {
     fun email(value: String) = value.trim().matches(Regex("[^@\\s]+@[^@\\s.]+(?:\\.[^@\\s.]+)+"))
     fun validate(name: String?, email: String, password: String, confirm: String): String? = when {
-        name != null && name.isBlank() -> "Enter your full name."
-        !email(email) -> "Enter a valid email address."
-        password.isBlank() -> "Enter your password."
-        name != null && password.length < 6 -> "Use at least six characters."
-        name != null && password != confirm -> "The passwords must match."
+        name != null && name.isBlank() -> tr("Enter your full name.")
+        !email(email) -> tr("Enter a valid email address.")
+        password.isBlank() -> tr("Enter your password.")
+        name != null && password.length < 6 -> tr("Use at least six characters.")
+        name != null && password != confirm -> tr("The passwords must match.")
         else -> null
     }
 }
@@ -63,17 +65,17 @@ class AuthViewModel(private val repo: AuthRepository) : ViewModel() {
             catch (e: Exception) {
                 message(when (e) {
                     is GoogleSignInUnavailable -> e.userMessage
-                    is FirebaseNetworkException -> "Connection failed. Check your network and retry."
-                    is FirebaseTooManyRequestsException -> "Too many requests. Please try again later."
+                    is FirebaseNetworkException -> tr("Connection failed. Check your network and retry.")
+                    is FirebaseTooManyRequestsException -> tr("Too many requests. Please try again later.")
                     is FirebaseAuthException -> when (e.errorCode) {
-                        "ERROR_WEAK_PASSWORD" -> "Choose a stronger password that meets the account policy."
-                        "ERROR_EMAIL_ALREADY_IN_USE" -> "Unable to create this account. Try signing in or resetting your password."
-                        "ERROR_USER_DISABLED" -> "This account has been disabled."
-                        "ERROR_OPERATION_NOT_ALLOWED" -> "Email and password sign-in is unavailable."
-                        "ERROR_INVALID_CREDENTIAL", "ERROR_WRONG_PASSWORD", "ERROR_USER_NOT_FOUND" -> "Check your email and password."
-                        else -> "The account request failed. Please try again."
+                        "ERROR_WEAK_PASSWORD" -> tr("Choose a stronger password that meets the account policy.")
+                        "ERROR_EMAIL_ALREADY_IN_USE" -> tr("Unable to create this account. Try signing in or resetting your password.")
+                        "ERROR_USER_DISABLED" -> tr("This account has been disabled.")
+                        "ERROR_OPERATION_NOT_ALLOWED" -> tr("Email and password sign-in is unavailable.")
+                        "ERROR_INVALID_CREDENTIAL", "ERROR_WRONG_PASSWORD", "ERROR_USER_NOT_FOUND" -> tr("Check your email and password.")
+                        else -> tr("The account request failed. Please try again.")
                     }
-                    else -> "Unable to complete the request. Please try again."
+                    else -> tr("Unable to complete the request. Please try again.")
                 })
             } finally { mutable.update { it.copy(identity = repo.current, busy = false) } }
         }
@@ -91,7 +93,7 @@ class AuthViewModel(private val repo: AuthRepository) : ViewModel() {
     }
     private suspend fun verificationEmail() {
         repo.sendVerification()
-        mutable.update { it.copy(identity = repo.current, cooldown = 60, message = "Verification email sent. Check your inbox and spam folder.") }
+        mutable.update { it.copy(identity = repo.current, cooldown = 60, message = tr("Verification email sent. Check your inbox and spam folder.")) }
         cooldownJob?.cancel()
         cooldownJob = viewModelScope.launch {
             repeat(60) { delay(1000); mutable.update { it.copy(cooldown = (it.cooldown - 1).coerceAtLeast(0)) } }
@@ -103,18 +105,18 @@ class AuthViewModel(private val repo: AuthRepository) : ViewModel() {
         try { repo.signInWithGoogle(token) }
         catch (e: FirebaseAuthException) {
             if (e.errorCode == "ERROR_OPERATION_NOT_ALLOWED")
-                throw GoogleSignInUnavailable("Google sign-in is not enabled for Maitri yet. Use phone or email sign-in.", e)
+                throw GoogleSignInUnavailable(tr("Google sign-in is not enabled for Maitri yet. Use phone or email sign-in."), e)
             throw e
         }
     }
     fun resend() { if (mutable.value.cooldown == 0) perform { verificationEmail() } }
     fun refresh() = perform {
         repo.refresh()
-        if (repo.current?.verified == false) message("Still awaiting verification. Open the link in your email first.")
+        if (repo.current?.verified == false) message(tr("Still awaiting verification. Open the link in your email first."))
     }
     fun reset(email: String) {
-        if (!AuthForm.email(email)) { message("Enter a valid email address."); return }
-        perform { repo.reset(email.trim()); message("If an account is eligible, a reset link will arrive by email.") }
+        if (!AuthForm.email(email)) { message(tr("Enter a valid email address.")); return }
+        perform { repo.reset(email.trim()); message(tr("If an account is eligible, a reset link will arrive by email.")) }
     }
     fun logout() {
         if (mutable.value.busy) return
@@ -128,11 +130,11 @@ class AuthViewModel(private val repo: AuthRepository) : ViewModel() {
     fun sendPhoneOtp(activity: android.app.Activity?, phone: String, onPromptCode: () -> Unit) {
         val clean = phone.trim()
         if (clean.length < 10) {
-            message("Enter a valid phone number with country code.")
+            message(tr("Enter a valid phone number with country code."))
             return
         }
         if (activity == null) {
-            message("Unable to start phone verification: Activity context required.")
+            message(tr("Unable to start phone verification: Activity context required."))
             return
         }
         mutable.update { it.copy(busy = true, message = null) }
@@ -142,7 +144,7 @@ class AuthViewModel(private val repo: AuthRepository) : ViewModel() {
                 phone = clean,
                 onCodeSent = { id ->
                     phoneVerificationId = id
-                    mutable.update { it.copy(busy = false, message = "Code sent. Enter the 6-digit code.") }
+                    mutable.update { it.copy(busy = false, message = tr("Code sent. Enter the 6-digit code.")) }
                     onPromptCode()
                 },
                 onCompleted = {
@@ -151,29 +153,29 @@ class AuthViewModel(private val repo: AuthRepository) : ViewModel() {
                 onFailed = { e ->
                     val userMsg = when {
                         e is FirebaseAuthException && e.errorCode == "ERROR_OPERATION_NOT_ALLOWED" ->
-                            "Phone authentication is not enabled in Firebase Console. Please use email sign-in."
+                            tr("Phone authentication is not enabled in Firebase Console. Please use email sign-in.")
                         e is FirebaseTooManyRequestsException ->
-                            "SMS quota exceeded. Please try again later or use email sign-in."
+                            tr("SMS quota exceeded. Please try again later or use email sign-in.")
                         e.message?.contains("SHA-256", ignoreCase = true) == true || e.message?.contains("app verification", ignoreCase = true) == true ->
-                            "Firebase Phone Auth requires app SHA-256 and Play Integrity configured in Firebase Console."
-                        else -> e.localizedMessage ?: "Phone verification failed. Use email sign-in."
+                            tr("Firebase Phone Auth requires app SHA-256 and Play Integrity configured in Firebase Console.")
+                        else -> e.localizedMessage ?: tr("Phone verification failed. Use email sign-in.")
                     }
                     mutable.update { it.copy(busy = false, message = userMsg) }
                 }
             )
         } catch (e: Exception) {
-            mutable.update { it.copy(busy = false, message = e.localizedMessage ?: "Phone authentication is not available.") }
+            mutable.update { it.copy(busy = false, message = e.localizedMessage ?: tr("Phone authentication is not available.")) }
         }
     }
 
     fun submitPhoneOtp(code: String) {
         val id = phoneVerificationId
         if (id.isNullOrBlank()) {
-            message("No active phone verification. Please request a new code.")
+            message(tr("No active phone verification. Please request a new code."))
             return
         }
         if (code.trim().length < 6) {
-            message("Enter the full 6-digit verification code.")
+            message(tr("Enter the full 6-digit verification code."))
             return
         }
         perform {

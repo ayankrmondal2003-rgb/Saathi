@@ -7,6 +7,8 @@ import java.awt.image.BufferedImage
 
 plugins {
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
+    id("com.google.firebase.appdistribution")
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
@@ -25,14 +27,6 @@ fun localSetting(name: String, legacy: String? = null): String {
     val local = localProperties()
     return providers.gradleProperty(name).orNull ?: local.getProperty(name)
         ?: legacy?.let { providers.gradleProperty(it).orNull ?: local.getProperty(it) } ?: ""
-}
-
-/** Optional ArcGIS Location Platform key for Esri basemap tiles; kept in local.properties, never committed. */
-fun esriApiKey(): String {
-    val local = localProperties()
-    val key = providers.gradleProperty("maitriEsriApiKey").orNull ?: local.getProperty("maitriEsriApiKey", "")
-    require(key.matches(Regex("[A-Za-z0-9._-]*"))) { "maitriEsriApiKey contains unexpected characters" }
-    return "\"" + key + "\""
 }
 
 fun backendUrl(property: String, legacy: String): String {
@@ -58,11 +52,13 @@ android {
         applicationId = "in.maitri.app"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        // versionCode = major*10000 + minor*100 + patch. A later beta of the same version must bump patch
+        // (0.9.1-beta.2 -> 901), because Android rejects an update with an equal or lower versionCode.
+        val (major, minor, patch) = listOf(0, 9, 0)
+        versionCode = major * 10000 + minor * 100 + patch
+        versionName = "$major.$minor.$patch-beta.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "ESRI_API_KEY", esriApiKey())
     }
 
     // Upload key for Play App Signing. Passwords come only from local.properties (or -P), never from the repo.
@@ -81,14 +77,34 @@ android {
     }
 
     buildTypes {
-        debug { buildConfigField("String", "API_BASE_URL", backendUrl("maitriDevApiUrl", "surakshaDevApiUrl")) }
+        debug {
+            buildConfigField("String", "API_BASE_URL", backendUrl("maitriDevApiUrl", "surakshaDevApiUrl"))
+            // Opt-in (-PsignDebugWithUpload=true): sign debug and androidTest APKs with the upload key, so device
+            // tests can install over a phone's release build without uninstalling it (and signing the user out).
+            if (canSignRelease && (project.findProperty("signDebugWithUpload") as String?) == "true")
+                signingConfig = signingConfigs.getByName("upload")
+            // Debug builds never report crashes or upload mapping files.
+            configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> { mappingFileUploadEnabled = false }
+        }
         release {
             buildConfigField("String", "API_BASE_URL", backendUrl("maitriProdApiUrl", "surakshaProdApiUrl"))
             if (canSignRelease) signingConfig = signingConfigs.getByName("upload")
+            // Firebase App Distribution (free): ./gradlew assembleRelease appDistributionUploadRelease
+            // sends this build to the "friends" tester group. Credentials and testers stay in local.properties.
+            configure<com.google.firebase.appdistribution.gradle.AppDistributionExtension> {
+                artifactType = "APK"
+                groups = localSetting("maitriTesterGroups").ifBlank { "friends" }
+                releaseNotesFile = rootProject.file("release-notes.txt").path
+                localSetting("maitriAppDistributionCredentials").takeIf { it.isNotBlank() }?.let {
+                    serviceCredentialsFile = it
+                }
+            }
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
             }
+            // Keep rules for reflection inside the optimized packages (Room/WorkManager, startup); see the file.
+            proguardFiles("proguard-rules.pro")
         }
     }
     compileOptions {
@@ -105,8 +121,10 @@ android {
 }
 
 dependencies {
-    // Raster map view for Esri World Street Map tiles (screens 07 and 08).
-    implementation("org.osmdroid:osmdroid-android:6.1.20")
+    // MapLibre + OpenFreeMap tiles: no API key, free for commercial use.
+    // OpenGL ES renderer: the default artifact renders with Vulkan and crashes ("No Vulkan compatible GPU found")
+    // on phones without Vulkan, which includes the Android 8 emulator and many budget phones.
+    implementation("org.maplibre.gl:android-sdk-opengl:13.7.1")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
@@ -119,6 +137,8 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation("com.google.firebase:firebase-messaging")
+    // Crash reports for release builds (free on the Spark plan); see MaitriApp for what is and isn't sent.
+    implementation("com.google.firebase:firebase-crashlytics")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     implementation("androidx.navigation:navigation-compose:2.8.9")

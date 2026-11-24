@@ -20,11 +20,21 @@ from app.routes import router, ws_router
 from app.circle_sharing import router as circle_router, cleanup as cleanup_circle
 from app.volunteer import router as volunteer_router
 from app.files import router as files_router
+from app.inbox import router as inbox_router, send_pending_pushes, cleanup as cleanup_inbox
+from app.circle import router as circle_members_router
+from app.live_link import router as live_router
+from app.checkins import CheckInScheduler
+from app.admin import router as admin_router
+from app.privacy import router as privacy_router, purge_sos_media
+from app.maintenance import cleanup as retention_cleanup
+from app.services.outbox_worker import default_firebase_sender
 from app.services.realtime import hub
 
 
 def create_app(settings=None, *, initialize_firebase=True):
     settings = settings or load_settings()
+    from app.telemetry import init_sentry
+    init_sentry(settings)
     if os.getenv("FIREBASE_AUTH_EMULATOR_HOST") and settings.environment != "test":
         raise RuntimeError("Auth emulator requires an isolated test deployment")
     if not initialize_firebase and settings.environment != "test":
@@ -47,8 +57,15 @@ def create_app(settings=None, *, initialize_firebase=True):
                     async with app.state.sessions.begin() as db:
                         await tick(db, settings)
                         await cleanup_circle(db)
+                        await cleanup_inbox(db)
+                        # Retention: SOS locations 7 days after closing, expired grants and old audit rows.
+                        await retention_cleanup(db, settings)
                 except (SQLAlchemyError, OSError):
                     logging.getLogger("surakshanet").warning("Geofence batch unavailable")
+                try:
+                    await purge_sos_media(app.state.sessions, settings)
+                except (SQLAlchemyError, OSError):
+                    logging.getLogger("surakshanet").warning("SOS media retention unavailable")
                 try:
                     async with app.state.sessions.begin() as db:
                         expired = await expire_orphaned(db, settings)
@@ -66,12 +83,14 @@ def create_app(settings=None, *, initialize_firebase=True):
                 try:
                     firebase_app = getattr(app.state, "firebase", None)
                     fcm_sender = getattr(app.state, "fcm_sender", None)
-                    await process_outbox_batch(app.state.sessions, firebase_app, fcm_sender=fcm_sender, allowed_uids=settings.test_account_uids)
+                    await process_outbox_batch(app.state.sessions, firebase_app, fcm_sender=fcm_sender, allowed_uids=settings.allowed_uids())
+                    await send_pending_pushes(app.state.sessions, firebase_app, fcm_sender or default_firebase_sender)
                 except (SQLAlchemyError, OSError):
                     logging.getLogger("surakshanet").warning("Outbox worker batch unavailable")
 
         geofence_worker = None
         outbox_worker = None
+        checkin_worker = None
         try:
             if initialize_firebase:
                 print("[startup] Loading Firebase Admin credentials", flush=True)
@@ -91,11 +110,13 @@ def create_app(settings=None, *, initialize_firebase=True):
             await app_hub.start_distributed(redis_url, sessions=app.state.sessions, worker_id=settings.worker_id)
             geofence_worker = asyncio.create_task(periodic_geofence())
             outbox_worker = asyncio.create_task(periodic_outbox())
+            app.state.checkins = CheckInScheduler(app.state.sessions, on_items=app.state.activity.touch)
+            checkin_worker = asyncio.create_task(app.state.checkins.run())
             yield
         finally:
             app_hub = getattr(app.state, "hub", hub)
             await app_hub.stop_distributed()
-            for w in (geofence_worker, outbox_worker):
+            for w in (geofence_worker, outbox_worker, checkin_worker):
                 if w:
                     w.cancel()
                     with suppress(asyncio.CancelledError):
@@ -131,6 +152,11 @@ def create_app(settings=None, *, initialize_firebase=True):
     app.include_router(circle_router)
     app.include_router(volunteer_router)
     app.include_router(files_router)
+    app.include_router(inbox_router)
+    app.include_router(circle_members_router)
+    app.include_router(live_router)
+    app.include_router(admin_router)
+    app.include_router(privacy_router)
     app.include_router(ws_router)
 
     @app.get("/health")

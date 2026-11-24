@@ -10,6 +10,7 @@ from pydantic import Field
 from sqlalchemy import text
 from app.core import account, database
 from app.schemas import Input, Fix
+from app.inbox import add_item
 
 router = APIRouter(prefix="/api/circle-sharing")
 
@@ -30,6 +31,8 @@ class ShareRequest(Input):
     consent: Literal[True]
     location: Fix | None = None
     duration_minutes: int = Field(default=30, ge=5, le=120)
+    # CHECK_IN: minutes from now until the owner must check in; the circle is told if they don't.
+    due_minutes: int = Field(default=60, ge=5, le=1440)
 
 
 def now():
@@ -59,8 +62,8 @@ async def pairing(body: PairingRequest, request: Request, user=Depends(account),
     # Email lookup only matches owners whose email is verified; phone-only accounts have no email.
     owner = await one(db, """SELECT id FROM users WHERE lower(email)=lower(:email)
         AND id<>:recipient AND account_status='ACTIVE' AND email_verified
-        AND firebase_uid=ANY(CAST(:allowed AS text[]))""",
-        email=email, recipient=user.id, allowed=list(request.app.state.settings.test_account_uids))
+        AND (CAST(:allowed AS text[]) IS NULL OR firebase_uid = ANY(CAST(:allowed AS text[])))""",
+        email=email, recipient=user.id, allowed=request.app.state.settings.allowed_uids())
     if not owner:
         raise HTTPException(404, "Eligible sharing account unavailable")
     code = secrets.token_urlsafe(32)
@@ -118,8 +121,8 @@ async def recipient_links(db, owner, contacts, allowed, trip):
         AND c.id=ANY(CAST(:contacts AS uuid[])) AND l.revoked_at IS NULL
         AND (NOT :trip OR c.allow_live_tracking)
         AND u.account_status='ACTIVE' AND (u.email_verified OR u.phone_verified)
-        AND u.firebase_uid=ANY(CAST(:allowed AS text[]))"""),
-        {"owner": owner, "contacts": contacts, "allowed": list(allowed), "trip": trip})
+        AND (CAST(:allowed AS text[]) IS NULL OR u.firebase_uid = ANY(CAST(:allowed AS text[])))"""),
+        {"owner": owner, "contacts": contacts, "allowed": allowed, "trip": trip})
     ids = list(result.scalars())
     if len(ids) != len(contacts):
         raise HTTPException(403, "Every selected contact must be paired and eligible for sharing")
@@ -144,34 +147,48 @@ async def create(body: ShareRequest, request: Request, idempotency_key: UUID = H
     if body.kind == "TRIP" and body.location is None:
         raise HTTPException(422, "A fresh location is required to start a trip")
     recipients = await recipient_links(db, user.id, body.contact_ids,
-        request.app.state.settings.test_account_uids, body.kind == "TRIP")
+        request.app.state.settings.allowed_uids(), body.kind == "TRIP")
     if body.kind == "TRIP" and await db.scalar(text("""SELECT id FROM circle_sessions
         WHERE owner_id=:owner AND kind='TRIP' AND stopped_at IS NULL AND expires_at>now() LIMIT 1"""),
         {"owner": user.id}):
         raise HTTPException(409, "An active trip already exists. Resume or stop it first.")
-    expiry = now() + (timedelta(minutes=body.duration_minutes) if body.kind == "TRIP" else timedelta(hours=24))
+    due = now() + timedelta(minutes=body.due_minutes) if body.kind == "CHECK_IN" else None
+    # A check-in stays visible to the circle for 12 hours after it was due.
+    expiry = now() + timedelta(minutes=body.duration_minutes) if body.kind == "TRIP" else due + timedelta(hours=12)
     row = await one(db, """INSERT INTO circle_sessions
-        (owner_id,kind,idempotency_key,request_hash,expires_at,latest_fix,fix_received_at)
-        VALUES (:owner,:kind,:key,:hash,:expires,CAST(:fix AS jsonb),:received) RETURNING id""",
+        (owner_id,kind,idempotency_key,request_hash,expires_at,latest_fix,fix_received_at,due_at)
+        VALUES (:owner,:kind,:key,:hash,:expires,CAST(:fix AS jsonb),:received,:due) RETURNING id""",
         owner=user.id, kind=body.kind, key=idempotency_key, hash=digest, expires=expiry,
-        fix=body.location.model_dump_json() if body.location else None, received=now() if body.location else None)
+        fix=body.location.model_dump_json() if body.location else None, received=now() if body.location else None, due=due)
+    owner_name = (user.display_name or "").strip() or "Someone in your circle"
     for link in recipients:
         await db.execute(text("INSERT INTO circle_session_recipients(session_id,link_id) VALUES (:session,:link)"),
             {"session": row.id, "link": link})
+        recipient = await db.scalar(text("SELECT recipient_id FROM circle_links WHERE id=:id"), {"id": link})
+        if body.kind == "TRIP":
+            await add_item(db, recipient, "TRIP_STARTED", f"{owner_name} is sharing a trip with you",
+                           f"Follow along in Maitri for the next {body.duration_minutes} minutes.",
+                           data={"session_id": str(row.id)})
+        else:
+            await add_item(db, recipient, "CHECKIN_STARTED", f"{owner_name} set a check-in",
+                           "Maitri will tell you if they don't check in on time.",
+                           data={"session_id": str(row.id), "due_at": due.isoformat()})
+    if body.kind == "CHECK_IN":
+        wake_scheduler(request)
     return await snapshot(row.id, request, user, db)
 
 
 async def visible(db, session_id, user, allowed):
     row = await one(db, """SELECT s.* FROM circle_sessions s JOIN users owner ON owner.id=s.owner_id
         WHERE s.id=:id AND owner.account_status='ACTIVE'
-        AND owner.firebase_uid=ANY(CAST(:allowed AS text[]))
+        AND (CAST(:allowed AS text[]) IS NULL OR owner.firebase_uid = ANY(CAST(:allowed AS text[])))
         AND (s.owner_id=:user OR (s.stopped_at IS NULL AND s.expires_at>now() AND EXISTS (
             SELECT 1 FROM circle_session_recipients r
             JOIN circle_links l ON l.id=r.link_id
             JOIN trusted_contacts c ON c.id=l.contact_id
             WHERE r.session_id=s.id AND l.recipient_id=:user AND l.revoked_at IS NULL
             AND (s.kind<>'TRIP' OR c.allow_live_tracking))))""",
-        id=session_id, user=user.id, allowed=list(allowed))
+        id=session_id, user=user.id, allowed=allowed)
     if not row:
         raise HTTPException(404, "Sharing session unavailable or access expired")
     return row
@@ -179,11 +196,12 @@ async def visible(db, session_id, user, allowed):
 
 @router.get("/sessions/{session_id}")
 async def snapshot(session_id: UUID, request: Request, user=Depends(account), db=Depends(database)):
-    row = await visible(db, session_id, user, request.app.state.settings.test_account_uids)
+    row = await visible(db, session_id, user, request.app.state.settings.allowed_uids())
     active = row.stopped_at is None and row.expires_at > now()
     status = "STOPPED" if row.stopped_at else ("ACTIVE" if active else "EXPIRED")
     result = {"id": row.id, "kind": row.kind, "status": status, "created_at": row.created_at,
         "expires_at": row.expires_at, "latest_fix": row.latest_fix if active else None,
+        "due_at": row.due_at, "missed": row.missed_at is not None,
         "fix_received_at": row.fix_received_at if active else None, "is_owner": row.owner_id == user.id}
     if row.owner_id == user.id:
         recipients = await db.execute(text("""SELECT l.contact_id, r.notification_status, r.opened_at,
@@ -224,7 +242,7 @@ async def sessions(request: Request, user=Depends(account), db=Depends(database)
 
 @router.post("/sessions/{session_id}/opened")
 async def opened(session_id: UUID, request: Request, user=Depends(account), db=Depends(database)):
-    await visible(db, session_id, user, request.app.state.settings.test_account_uids)
+    await visible(db, session_id, user, request.app.state.settings.allowed_uids())
     await db.execute(text("""UPDATE circle_session_recipients r
         SET notification_status='OPENED', opened_at=coalesce(opened_at,now())
         FROM circle_links l WHERE r.link_id=l.id AND r.session_id=:id
@@ -248,13 +266,20 @@ async def update_location(session_id: UUID, body: Fix, request: Request, user=De
     return {"status": "SYNCED"}
 
 
+def wake_scheduler(request: Request):
+    scheduler = getattr(request.app.state, "checkins", None)
+    if scheduler is not None:
+        scheduler.wake()
+
+
 @router.post("/sessions/{session_id}/stop")
-async def stop(session_id: UUID, user=Depends(account), db=Depends(database)):
+async def stop(session_id: UUID, request: Request, user=Depends(account), db=Depends(database)):
     row = await one(db, """UPDATE circle_sessions SET stopped_at=coalesce(stopped_at,now()),
         latest_fix=NULL,fix_received_at=NULL WHERE id=:id AND owner_id=:owner RETURNING id""",
         id=session_id, owner=user.id)
     if not row:
         raise HTTPException(404, "Owned sharing session unavailable")
+    wake_scheduler(request)
     return {"status": "STOPPED"}
 
 

@@ -1,11 +1,17 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.Manifest
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -114,6 +120,7 @@ fun MaitriPermissions(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val preview = LocalInspectionMode.current
     var refresh by remember { mutableIntStateOf(0) }
     var info by remember { mutableStateOf<Int?>(null) }
+    var battery by remember { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh++ }
@@ -165,11 +172,30 @@ fun MaitriPermissions(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     if (state == AccessState.ALLOWED || state == AccessState.APPROXIMATE) p.accent else p.secondary, FontWeight.SemiBold)
             }
         }
-        SettingsText(strings.getString(S.perm_hint), 24, 682, 342, 22, 11, p.secondary, center = true)
+        // In the hint's place: alerts only arrive on time if the phone doesn't put Maitri to sleep.
+        SettingsText(tr("Keep Maitri alerts on time ›"), 24, 682, 342, 22, 12, p.accent, bold = true, center = true,
+            action = { battery = true })
         SettingsText(strings.getString(S.perm_open), 24, 724, 342, 52, 15,
             if (p.dark) p.background else Color.White, bold = true, center = true, action = ::appSettings)
     }
 
+    if (battery) {
+        val restricted = !preview && batteryRestricted(context)
+        AlertDialog(onDismissRequest = { battery = false },
+            title = { Text(tr("Keep Maitri alerts on time")) },
+            text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(if (restricted) tr("Battery optimisation is on for Maitri, so your phone may delay SOS requests and circle alerts.")
+                    else tr("Battery optimisation is off for Maitri. Good."), fontWeight = FontWeight.SemiBold)
+                Text(tr("On your {0} phone:", Build.MANUFACTURER.replaceFirstChar { it.uppercase() }))
+                batteryTips(Build.MANUFACTURER).forEach { Text("• $it") }
+                Text(strings.getString(S.perm_hint), color = p.secondary)
+            } },
+            confirmButton = { TextButton(onClick = {
+                battery = false
+                open(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }) { Text(tr("Open battery settings")) } },
+            dismissButton = { TextButton(onClick = { battery = false }) { Text(strings.getString(S.settings_close)) } })
+    }
     info?.let { id ->
         AlertDialog(onDismissRequest = { info = null }, text = { Text(strings.getString(id)) },
             confirmButton = { TextButton(onClick = { info = null }) { Text(strings.getString(S.settings_close)) } })
@@ -185,8 +211,7 @@ private fun readAccessCanPrompt(context: Context, row: PermissionRow): Boolean {
 @Composable
 private fun RowText(text: String, y: Int, height: Int, size: Int, color: Color, weight: FontWeight) {
     Box(Modifier.offset(52.dp, y.dp).width(256.dp)) {
-        Text(text, color = color, fontSize = size.sp, lineHeight = height.sp, fontWeight = weight,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        FitText(text, Modifier, color, size.toFloat(), height.toFloat(), weight)
     }
 }
 
@@ -200,4 +225,20 @@ private fun MaitriPermissionsLightPreview() {
 @Composable
 private fun MaitriPermissionsDarkPreview() {
     `in`.maitri.app.ui.theme.MaitriTheme { MaitriPermissions(onBack = {}) }
+}
+
+internal fun batteryRestricted(context: Context): Boolean =
+    context.getSystemService(android.os.PowerManager::class.java)?.isIgnoringBatteryOptimizations(context.packageName) != true
+
+/** Where each phone maker hides "let this app run in the background". */
+internal fun batteryTips(manufacturer: String): List<String> = when (manufacturer.lowercase()) {
+    "samsung" -> listOf(tr("Settings › Apps › Maitri › Battery › Unrestricted."),
+        tr("Settings › Battery › Background usage limits › Never sleeping apps › add Maitri."))
+    "xiaomi", "redmi", "poco" -> listOf(tr("Settings › Apps › Manage apps › Maitri › Autostart: on."),
+        tr("Same screen › Battery saver › No restrictions."))
+    "oppo", "realme", "oneplus" -> listOf(tr("Settings › Battery › More settings (or App battery management) › Maitri › Allow background activity."),
+        tr("Settings › Apps › Maitri › Auto launch: on."))
+    "vivo", "iqoo" -> listOf(tr("Settings › Battery › Background power consumption management › Maitri › Allow."),
+        tr("i Manager › App manager › Autostart › Maitri: on."))
+    else -> listOf(tr("Settings › Apps › Maitri › Battery › Unrestricted (or \"Don't optimise\")."))
 }

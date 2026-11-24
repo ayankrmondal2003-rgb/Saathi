@@ -147,7 +147,7 @@ async def test_workers_expiry_closure_and_retention(world):
     assert ending.json()["status"] == "CLOSED"
     assert (await call("owner","POST",path+"/location",json=fix(2000))).status_code == 409
     async with sessions.begin() as db:
-        await db.execute(text("UPDATE incidents SET ended_at=now()-interval '25 hours'"))
+        await db.execute(text("UPDATE incidents SET ended_at=now()-interval '169 hours'"))
     await batch(cleanup)
     await batch(cleanup)
     async with sessions.begin() as db:

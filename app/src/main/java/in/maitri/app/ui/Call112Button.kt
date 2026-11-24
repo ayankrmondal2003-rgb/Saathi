@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -30,13 +32,13 @@ fun Call112Button(modifier: Modifier = Modifier) {
     ExtendedFloatingActionButton(
         onClick = {
             try { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:112"))) }
-            catch (_: ActivityNotFoundException) { Toast.makeText(context, "No phone app found. Dial 112.", Toast.LENGTH_LONG).show() }
+            catch (_: ActivityNotFoundException) { Toast.makeText(context, tr("No phone app found. Dial 112."), Toast.LENGTH_LONG).show() }
         },
-        modifier = modifier.heightIn(min = 56.dp).semantics { contentDescription = "Call 112, emergency services" },
+        modifier = modifier.heightIn(min = 56.dp).semantics { contentDescription = tr("Call 112, emergency services") },
         shape = RoundedCornerShape(28.dp),
         containerColor = p.accent,
         contentColor = Color.White,
         icon = { Icon(Icons.Rounded.Call, contentDescription = null) },
-        text = { Text("Call 112", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+        text = { Text(tr("Call 112"), fontSize = 16.sp, fontWeight = FontWeight.Bold) }
     )
 }

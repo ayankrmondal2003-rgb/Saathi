@@ -1,5 +1,7 @@
 package `in`.maitri.app.network
 
+import `in`.maitri.app.tr
+
 import com.google.gson.annotations.SerializedName
 
 data class ContactDeliveryDto(@SerializedName("display_name") val name: String, @SerializedName("delivery_status") val status: String)
@@ -13,12 +15,12 @@ internal fun staleResponderFix(code: Int, reason: String?) =
 
 /** Plain wording for screen 08's circle row. Never upgrades a status: only FCM_ACCEPTED reads as sent. */
 internal fun contactDeliveryLabel(status: String): String = when (status) {
-    "NO_SMS_PROVIDER" -> "Not sent · SMS not connected"
-    "NOT_SENT" -> "Not sent"
-    "NOT_REQUESTED" -> "Alerts off"
-    "FCM_ACCEPTED" -> "Sent to app"
-    "PENDING", "QUEUED", "SENDING", "RETRY_SCHEDULED" -> "Sending…"
-    "FAILED", "PERMANENT_FAILURE" -> "Not delivered"
-    "CANCELLED" -> "Cancelled"
-    else -> "Delivery unconfirmed"
+    "NO_SMS_PROVIDER" -> tr("Not sent · SMS not connected")
+    "NOT_SENT" -> tr("Not sent")
+    "NOT_REQUESTED" -> tr("Alerts off")
+    "FCM_ACCEPTED" -> tr("Sent to app")
+    "PENDING", "QUEUED", "SENDING", "RETRY_SCHEDULED" -> tr("Sending…")
+    "FAILED", "PERMANENT_FAILURE" -> tr("Not delivered")
+    "CANCELLED" -> tr("Cancelled")
+    else -> tr("Delivery unconfirmed")
 }

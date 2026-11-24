@@ -16,11 +16,13 @@ import java.util.concurrent.TimeUnit
 data class HealthDto(@SerializedName("status") val status: String, @SerializedName("service") val service: String)
 data class ProfileDto(@SerializedName("display_name") val name: String, @SerializedName("email") val email: String,
                       @SerializedName("responder_opt_in") val optedIn: Boolean, @SerializedName("responder_available") val available: Boolean,
-                      @SerializedName("phone_number") val phoneNumber: String? = null, @SerializedName("city") val city: String? = null)
+                      @SerializedName("phone_number") val phoneNumber: String? = null, @SerializedName("city") val city: String? = null,
+                      @SerializedName("share_phone_in_sos") val sharePhoneInSos: Boolean = false)
 /** Screen 14 partial update. Responder flags are never sent, so editing details cannot change availability. */
 data class ProfileDetailsRequest(@SerializedName("display_name") val name: String,
                                  @SerializedName("phone_number") val phoneNumber: String,
-                                 @SerializedName("city") val city: String)
+                                 @SerializedName("city") val city: String,
+                                 @SerializedName("share_phone_in_sos") val sharePhoneInSos: Boolean? = null)
 data class ProfileRequest(@SerializedName("display_name") val name: String, @SerializedName("responder_opt_in") val optedIn: Boolean,
                           @SerializedName("responder_available") val available: Boolean)
 data class FixDto(@SerializedName("latitude") val latitude: Double, @SerializedName("longitude") val longitude: Double,
@@ -31,7 +33,9 @@ data class IncidentLocationDto(@SerializedName("latitude") val latitude: Double?
     @SerializedName("recorded_at") val recordedAt: String?, @SerializedName("received_at") val receivedAt: String?,
     @SerializedName("is_mock") val mock: Boolean?, @SerializedName("is_test") val test: Boolean)
 data class InvitationDto(@SerializedName("id") val id: String, @SerializedName("incident_id") val incidentId: String,
-    @SerializedName("expires_at") val expiresAt: String, @SerializedName("status") val status: String)
+    @SerializedName("expires_at") val expiresAt: String, @SerializedName("status") val status: String,
+    @SerializedName("distance_band") val distanceBand: String? = null,
+    @SerializedName("is_test") val isTest: Boolean = false)
 internal fun InvitationDto.canOpenIncoming(now: java.time.Instant = java.time.Instant.now()): Boolean =
     id.isNotBlank() && incidentId.isNotBlank() && status == "PENDING" &&
         runCatching { java.time.Instant.parse(expiresAt).isAfter(now) }.getOrDefault(false)
@@ -82,7 +86,11 @@ data class RequesterMembershipDto(
 data class ActiveResponderPublicDto(
     @SerializedName("responder_id") val responderId: String,
     @SerializedName("assistance_status") val assistanceStatus: String,
-    @SerializedName("updated_at") val updatedAt: String?
+    @SerializedName("updated_at") val updatedAt: String?,
+    @SerializedName("display_name") val displayName: String? = null,
+    @SerializedName("distance_meters") val distanceMeters: Double? = null,
+    @SerializedName("latitude") val latitude: Double? = null,
+    @SerializedName("longitude") val longitude: Double? = null
 )
 
 data class IncidentSnapshotDto(
@@ -93,7 +101,9 @@ data class IncidentSnapshotDto(
     @SerializedName(value = "latest_location", alternate = ["last_location"]) val lastLocation: IncidentLocationDetailDto?,
     @SerializedName(value = "responder_summary", alternate = ["responders_summary"]) val respondersSummary: ResponderSummaryDto,
     @SerializedName("active_responders") val activeResponders: List<ActiveResponderPublicDto> = emptyList(),
-    @SerializedName("requester_membership") val requesterMembership: RequesterMembershipDto?
+    @SerializedName("requester_membership") val requesterMembership: RequesterMembershipDto?,
+    @SerializedName("victim_phone") val victimPhone: String? = null,
+    @SerializedName("medical_notes") val medicalNotes: String? = null
 )
 
 data class SafetyPinSetupDto(
@@ -147,7 +157,9 @@ data class VolunteerStatusDto(
     @SerializedName("consent_declared") val consentDeclared: Boolean,
     @SerializedName("secure_storage_ready") val secureStorageReady: Boolean,
     @SerializedName("submitted_at") val submittedAt: String? = null,
-    @SerializedName("reviewer_notes") val reviewerNotes: String? = null
+    @SerializedName("reviewer_notes") val reviewerNotes: String? = null,
+    @SerializedName("reviewed_at") val reviewedAt: String? = null,
+    @SerializedName("documents") val documents: List<VolunteerDocumentDto>? = null
 )
 
 data class VolunteerIntentRequestDto(
@@ -186,6 +198,7 @@ interface BackendApi {
     @POST("api/responders/invitations/{id}/response") suspend fun respond(@Path("id") id: String, @Body decision: DecisionDto, @Tag account: ExpectedAccount? = null): StatusDto
 
     @GET("health") suspend fun health(): HealthDto
+    @POST("api/incidents/{id}/report") suspend fun reportIncident(@Path("id") id: String, @Body body: `in`.maitri.app.ui.ReportDto, @Tag expected: ExpectedAccount): retrofit2.Response<Unit>
     @POST("api/incidents/{id}/request-help") suspend fun requestHelp(@Path("id") id: String, @Tag expected: ExpectedAccount): RecruitmentDto
     /** Records circle alerts for the owner's confirmed incident. Idempotent server-side (one outbox row per contact). */
     @POST("api/incidents/{id}/trusted-contacts/alert") suspend fun alertCircle(@Path("id") id: String, @Tag expected: ExpectedAccount): com.google.gson.JsonObject
@@ -225,6 +238,9 @@ object BackendClient {
 
     val api: BackendApi by lazy { retrofit.create(BackendApi::class.java) }
     val contacts: TrustedContactApi by lazy { retrofit.create(TrustedContactApi::class.java) }
+    val circle: CircleApi by lazy { retrofit.create(CircleApi::class.java) }
+    val files: FilesApi by lazy { retrofit.create(FilesApi::class.java) }
+    val privacy: PrivacyApi by lazy { retrofit.create(PrivacyApi::class.java) }
 
     private val retrofit: Retrofit by lazy {
         val base = BuildConfig.API_BASE_URL.toHttpUrl()

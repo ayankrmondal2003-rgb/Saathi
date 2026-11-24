@@ -1,0 +1,67 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 2428 >>
+stream
+BT 0.722 0.125 0.333 rg /F2 10 Tf 56 780 Td (MAITRI) Tj ET
+BT 0.251 0.188 0.227 rg /F2 22 Tf 56 754 Td (Volunteer declaration) Tj ET
+BT 0.490 0.404 0.443 rg /F1 10 Tf 56 732 Td (Fill this in, sign it, and upload a photo or scan of it in the Maitri app \(Responder > volunteer\).) Tj ET
+BT 0.490 0.404 0.443 rg /F2 10 Tf 56 698 Td (Full name) Tj ET
+0.490 0.404 0.443 RG 0.6 w 56 676 m 539 676 l S
+BT 0.490 0.404 0.443 rg /F2 10 Tf 56 654 Td (Phone number) Tj ET
+0.490 0.404 0.443 RG 0.6 w 56 632 m 539 632 l S
+BT 0.490 0.404 0.443 rg /F2 10 Tf 56 610 Td (City or area) Tj ET
+0.490 0.404 0.443 RG 0.6 w 56 588 m 539 588 l S
+BT 0.251 0.188 0.227 rg /F2 12 Tf 56 560 Td (I declare that:) Tj ET
+BT 0.251 0.188 0.227 rg /F1 10.5 Tf 56 538 Td (1. I am 18 years of age or older.) Tj ET
+BT 0.251 0.188 0.227 rg /F1 10.5 Tf 56 519 Td (2. The information and documents I give Maitri are true and belong to me.) Tj ET
+BT 0.251 0.188 0.227 rg /F1 10.5 Tf 56 500 Td (3. I will only respond to a request when I can do so safely, and I will call 112 when) Tj ET
+BT 0.251 0.188 0.227 rg /F1 10.5 Tf 56 485 Td (    someone is in danger.) Tj ET
+BT 0.251 0.188 0.227 rg /F1 10.5 Tf 56 466 Td (4. I understand that Maitri volunteers are not police, medical or emergency services.) Tj ET
+BT 0.251 0.188 0.227 rg /F1 10.5 Tf 56 447 Td (5. I will use a person's location and details only to help them during that request, and) Tj ET
+BT 0.251 0.188 0.227 rg /F1 10.5 Tf 56 432 Td (    never share or keep them.) Tj ET
+BT 0.251 0.188 0.227 rg /F1 10.5 Tf 56 413 Td (6. I will treat everyone I help with respect, whatever their gender, religion, caste, age) Tj ET
+BT 0.251 0.188 0.227 rg /F1 10.5 Tf 56 398 Td (    or background.) Tj ET
+BT 0.251 0.188 0.227 rg /F1 10.5 Tf 56 379 Td (7. I will not ask for or accept money or favours for helping.) Tj ET
+BT 0.251 0.188 0.227 rg /F1 10.5 Tf 56 360 Td (8. I understand Maitri may suspend or remove me as a volunteer if I break this declaration,) Tj ET
+BT 0.251 0.188 0.227 rg /F1 10.5 Tf 56 345 Td (    and that I can withdraw at any time from the app.) Tj ET
+BT 0.490 0.404 0.443 rg /F2 10 Tf 56 306 Td (Signature) Tj ET
+0.490 0.404 0.443 RG 0.6 w 56 280 m 300 280 l S
+BT 0.490 0.404 0.443 rg /F2 10 Tf 56 256 Td (Date) Tj ET
+0.490 0.404 0.443 RG 0.6 w 56 230 m 300 230 l S
+BT 0.490 0.404 0.443 rg /F1 8.5 Tf 56 50 Td (Maitri keeps this document privately and deletes it when you delete your account.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+7 0 obj
+<< /Title (Maitri volunteer declaration) /Producer (tools/make_declaration_pdf.py) >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000257 00000 n 
+0000002737 00000 n 
+0000002834 00000 n 
+0000002936 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R /Info 7 0 R >>
+startxref
+3037
+%%EOF

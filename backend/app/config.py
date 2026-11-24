@@ -17,7 +17,18 @@ class Settings(BaseSettings):
     database_url: SecretStr
     firebase_project_id: str = Field(min_length=1)
     google_application_credentials: str | None = None
-    environment: Literal["development", "test", "production"] = "development"
+    environment: Literal["development", "test", "beta", "production"] = "development"
+    # Sentry project DSN for server error reports; unset means no reporting.
+    sentry_dsn: SecretStr | None = None
+    # Firebase web app config for the /admin sign-in page (public values from the Firebase console).
+    firebase_web_api_key: str | None = None
+    firebase_auth_domain: str | None = None
+    # Signs /l/<token> live-location links. Without it links break on every restart.
+    live_link_secret: SecretStr | None = None
+    # Public https origin used in live links (e.g. https://surakshanet-api.onrender.com); request host if empty.
+    public_url: str = ""
+    # Real SOS per owner per rolling hour (beta abuse control).
+    sos_per_hour: int = Field(default=3, ge=1, le=100)
     allowed_origins: Annotated[list[str], NoDecode] = []
     test_account_uids: Annotated[set[str], NoDecode] = Field(default_factory=set)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -25,6 +36,10 @@ class Settings(BaseSettings):
     worker_id: str | None = None
     max_accuracy_meters: float = Field(100, gt=0, le=1000)
     max_location_age_seconds: int = Field(120, gt=0, le=600)
+    # How old a volunteer's last reported location may be when choosing whom to invite. Phones report it when
+    # Maitri opens and every ~15 min in the background (if allowed); accepting still needs a fix under
+    # max_location_age_seconds, which the app sends right before accepting.
+    responder_location_max_age_seconds: int = Field(1800, ge=60, le=7200)
     # Victim SOS fixes: kept even when coarse ("Approximate" is 1-3 km); geofence matching still needs
     # max_accuracy_meters. The first SOS fix may be a last-known fix up to max_last_known_age_seconds old.
     max_sos_accuracy_meters: float = Field(5000, gt=0, le=10000)
@@ -35,7 +50,12 @@ class Settings(BaseSettings):
     movement_threshold_meters: float = Field(30, gt=0, le=1000)
     reevaluation_seconds: int = Field(30, ge=1, le=600)
     invitation_ttl_seconds: int = Field(300, ge=1, le=3600)
-    closed_location_hours: int = Field(24, ge=1)
+    # SOS locations are erased this long after the SOS closes (7 days).
+    closed_location_hours: int = Field(168, ge=1)
+    # SOS photos and voice notes are deleted this many days after upload.
+    sos_media_days: int = Field(30, ge=1)
+    # 32 bytes, base64: encrypts medical notes at rest. Losing it makes stored notes unreadable.
+    medical_notes_key: SecretStr | None = None
     expired_invitation_days: int = Field(7, ge=1)
     expired_grant_days: int = Field(7, ge=1)
     audit_days: int = Field(30, ge=1)
@@ -75,6 +95,19 @@ class Settings(BaseSettings):
         if url.drivername != "postgresql+asyncpg" or not url.database:
             raise PydanticCustomError("postgres_url", "Invalid PostgreSQL URL")
         return value
+
+    @property
+    def open_access(self) -> bool:
+        """Beta: any verified account may use the service. Every other environment keeps the allowlist."""
+        return self.environment == "beta"
+
+    @property
+    def real_incidents(self) -> bool:
+        return self.environment == "beta"
+
+    def allowed_uids(self) -> list[str] | None:
+        """For SQL: None means everyone (beta); otherwise the allowlist."""
+        return None if self.open_access else sorted(self.test_account_uids)
 
     @field_validator("allowed_origins", "test_account_uids", mode="before")
     @classmethod

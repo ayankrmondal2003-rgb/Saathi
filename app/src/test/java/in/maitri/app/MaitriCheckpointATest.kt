@@ -52,9 +52,9 @@ class MaitriCheckpointATest {
     }
 
     @Test fun emergencyArtworkKeepsOnlyStaticCopy() {
-        // Outlined text left in the 06-08 drawables is fixed copy (titles, buttons, tabs, "Illustrative map").
-        // Sample place names, distances and ETAs from the design must not be painted by artwork.
-        val expected = mapOf("06" to 14, "07" to 8, "08" to 8, "responder" to 3)
+        // Screens 06-08 paint no text at all from artwork: titles, buttons and tabs are native (ArtText), so they
+        // translate and scale with large text, and sample names, distances and ETAs from the design can't appear.
+        val expected = mapOf("06" to 0, "07" to 0, "08" to 0, "responder" to 3)
         for (theme in listOf("light", "dark")) for ((screen, count) in expected) {
             val xml = File("src/main/res/drawable/maitri_${theme}_$screen.xml").readText()
             val glyphs = Regex("""pathData="([^"]*)"""").findAll(xml).count { it.groupValues[1].length >= 1000 }

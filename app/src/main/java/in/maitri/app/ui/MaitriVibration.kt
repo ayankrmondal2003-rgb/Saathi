@@ -1,5 +1,8 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+import `in`.maitri.app.trKey
+
 import android.content.Context
 import android.os.Build
 import `in`.maitri.app.R
@@ -40,20 +43,20 @@ enum class VibrationPattern(
     val amplitudes: IntArray?
 ) {
     GENTLE(
-        title = "Gentle",
-        subtitle = "Short, soft pulses",
+        title = trKey("Gentle"),
+        subtitle = trKey("Short, soft pulses"),
         timings = longArrayOf(0, 150, 150, 150, 150, 150),
         amplitudes = intArrayOf(0, 100, 0, 100, 0, 100)
     ),
     STEADY(
-        title = "Steady",
-        subtitle = "Balanced, clear pulses",
+        title = trKey("Steady"),
+        subtitle = trKey("Balanced, clear pulses"),
         timings = longArrayOf(0, 350, 200, 350, 200, 350),
         amplitudes = intArrayOf(0, 180, 0, 180, 0, 180)
     ),
     STRONG(
-        title = "Strong",
-        subtitle = "Longer, stronger pulses",
+        title = trKey("Strong"),
+        subtitle = trKey("Longer, stronger pulses"),
         timings = longArrayOf(0, 700, 200, 700, 200, 700, 200, 700),
         amplitudes = intArrayOf(0, 255, 0, 255, 0, 255, 0, 255)
     )
@@ -71,7 +74,9 @@ fun MaitriVibration(
     val p = maitriPalette()
     val context = LocalContext.current
     val strings = settingsResources()
-    var selectedPattern by rememberSaveable { mutableStateOf(VibrationPattern.STEADY) }
+    val preview0 = androidx.compose.ui.platform.LocalInspectionMode.current
+    var selectedPattern by rememberSaveable { mutableStateOf(
+        if (preview0) VibrationPattern.STEADY else `in`.maitri.app.notification.AlertVibration.current(context)) }
     val preview = androidx.compose.ui.platform.LocalInspectionMode.current
     val vibrator = remember(context, preview) {
         if (preview) return@remember null
@@ -109,7 +114,11 @@ fun MaitriVibration(
             VibrationPattern.entries.forEachIndexed { index, pattern ->
                 val selected = selectedPattern == pattern
                 Box(Modifier.fillMaxWidth().height(54.dp).background(if (selected) p.card else p.surface)
-                    .selectable(selected, enabled = !testing, role = Role.RadioButton, onClick = { selectedPattern = pattern })) {
+                    .selectable(selected, enabled = !testing, role = Role.RadioButton, onClick = {
+                        selectedPattern = pattern
+                        // Saved at once: real SOS alerts use the chosen pattern too.
+                        if (!preview0) `in`.maitri.app.notification.AlertVibration.save(context, pattern)
+                    })) {
                     Column(Modifier.align(Alignment.CenterStart).padding(start = 16.dp)) {
                         Text(strings.getString(titles[index]), fontSize = 14.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold, color = p.primary)
                         Text(strings.getString(details[index]), fontSize = 10.sp, lineHeight = 14.sp, color = p.secondary)

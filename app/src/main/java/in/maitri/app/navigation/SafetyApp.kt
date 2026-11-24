@@ -1,5 +1,8 @@
 package `in`.maitri.app.navigation
 
+import `in`.maitri.app.tr
+import `in`.maitri.app.trKey
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -20,6 +23,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -39,11 +46,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import kotlinx.coroutines.launch
 
 internal val tabs = listOf(
-    NavTab("Home", "Home", Icons.Rounded.Home),
-    NavTab("Contacts", "Circle", Icons.Rounded.People),
-    NavTab("Responder", "Responder", Icons.Rounded.Shield),
-    NavTab("Profile", "Profile", Icons.Rounded.Person)
+    NavTab("Home", trKey("Home"), Icons.Rounded.Home),
+    NavTab("Contacts", trKey("Circle"), Icons.Rounded.People),
+    NavTab("Responder", trKey("Responder"), Icons.Rounded.Shield),
+    NavTab("Profile", trKey("Profile"), Icons.Rounded.Person)
 )
+
+/** Set by MainActivity when a circle notification without a link is tapped; Home's graph opens the inbox. */
+object PendingNavigation {
+    val openInbox = androidx.compose.runtime.mutableStateOf(false)
+}
 
 @Composable
 fun SafetyApp(
@@ -100,85 +112,37 @@ private fun SafetyNavigation(vm: SafetyViewModel, pendingInvitationId: String?, 
             Gate.SIGNED_OUT -> SignedOut(account, auth, isDemoMode)
             Gate.HOME -> {
                 if (isDemoMode || identity == null || `in`.maitri.app.BuildConfig.API_BASE_URL.isBlank()) {
-                    Page("Account profile") {
-                        Text("Account synchronization is unavailable.")
-                        TextButton(onClick = auth::logout) { Text("Sign out") }
+                    Page(tr("Account profile")) {
+                        Text(tr("Account synchronization is unavailable."))
+                        TextButton(onClick = auth::logout) { Text(tr("Sign out")) }
                     }
                 } else {
-                    var synced by remember { mutableStateOf(false) }
+                    // Home (and the SOS button) never waits for the server: a free-tier cold start can take a minute.
+                    // The account syncs in the background; only a refusal is shown, as a banner.
                     var attempt by remember { mutableIntStateOf(0) }
                     var failure by remember { mutableStateOf<String?>(null) }
-                    var isColdStart by remember { mutableStateOf(false) }
                     LaunchedEffect(attempt) {
                         failure = null
-                        isColdStart = false
-                        val timer = kotlinx.coroutines.CoroutineScope(coroutineContext).launch {
-                            kotlinx.coroutines.delay(5000)
-                            isColdStart = true
-                        }
-                        try {
-                            `in`.maitri.app.network.BackendClient.api.profile(
-                                `in`.maitri.app.network.ExpectedAccount(identity.uid)
-                            )
-                            timer.cancel()
-                            synced = true
-                        } catch (e: kotlinx.coroutines.CancellationException) {
-                            timer.cancel()
-                            throw e
-                        } catch (e: retrofit2.HttpException) {
-                            timer.cancel()
-                            failure = when (e.code()) {
-                                401 -> "Firebase session expired (HTTP 401). Sign out and sign in again."
-                                403 -> "Backend test allowlist denial (HTTP 403). Contact admin to add your UID (${identity.uid}) to TEST_ACCOUNT_UIDS."
-                                else -> "Profile sync failed (HTTP ${e.code()}). Server returned an error."
-                            }
-                        } catch (e: java.io.IOException) {
-                            timer.cancel()
-                            failure = when {
-                                e is java.net.SocketTimeoutException ->
-                                    "Connection timed out (Render free tier may still be spinning up). Tap retry."
-                                else ->
-                                    "Unable to reach the backend service: ${e.localizedMessage ?: "Network error"}. Check internet connection and retry."
+                        var wait = 5_000L
+                        while (true) {
+                            try {
+                                `in`.maitri.app.network.BackendClient.api.profile(
+                                    `in`.maitri.app.network.ExpectedAccount(identity.uid))
+                                break
+                            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+                            } catch (e: retrofit2.HttpException) {
+                                if (e.code() in 500..599) { kotlinx.coroutines.delay(wait); wait = (wait * 2).coerceAtMost(60_000L); continue }
+                                failure = accountSyncMessage(e.code())
+                                break
+                            } catch (e: java.io.IOException) {
+                                // Offline or the server is still waking up; "Connecting to Maitri…" covers it.
+                                kotlinx.coroutines.delay(wait); wait = (wait * 2).coerceAtMost(60_000L)
                             }
                         }
                     }
-                    if (!synced) {
-                        Page("Account profile") {
-                            val p = maitriPalette()
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                if (failure == null) {
-                                    CircularProgressIndicator(color = p.accent)
-                                    Text(
-                                        text = if (isColdStart)
-                                            "Waking up Render backend service...\n(Free tier spin-up may take up to 60 seconds)"
-                                        else
-                                            "Syncing your verified account…",
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                        color = p.primary
-                                    )
-                                } else {
-                                    Text(
-                                        text = failure!!,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                        color = p.accent,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Button(
-                                        onClick = { attempt++ },
-                                        colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = androidx.compose.ui.graphics.Color.White)
-                                    ) { Text("Retry profile sync") }
-                                }
-                                TextButton(onClick = auth::logout) {
-                                    Text("Sign out", color = p.secondary)
-                                }
-                            }
-                        }
-                    } else {
-                        val state by vm.state.collectAsStateWithLifecycle()
+                    val state by vm.state.collectAsStateWithLifecycle()
+                    val connecting by `in`.maitri.app.network.BackendLatency.connecting.collectAsStateWithLifecycle()
+                    Box(Modifier.fillMaxSize()) {
                         if (state.user?.uid == identity.uid) {
                             MainGraph(
                                 state = state,
@@ -193,6 +157,9 @@ private fun SafetyNavigation(vm: SafetyViewModel, pendingInvitationId: String?, 
                                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                             }
                         }
+                        AccountBanner(failure ?: if (connecting) tr("Connecting to Maitri…") else null,
+                            retry = if (failure != null) ({ attempt++ }) else null, signOut = if (failure != null) auth::logout else null,
+                            modifier = Modifier.align(Alignment.TopCenter))
                     }
                 }
             }
@@ -253,6 +220,13 @@ internal fun MainGraph(
         }
     }
 
+    val inboxRequested by PendingNavigation.openInbox
+    LaunchedEffect(inboxRequested) {
+        if (inboxRequested) {
+            PendingNavigation.openInbox.value = false
+            nav.navigate("Inbox") { launchSingleTop = true }
+        }
+    }
     LaunchedEffect(pendingInvitationId) {
         if (!pendingInvitationId.isNullOrBlank()) {
             tab("Responder")
@@ -273,7 +247,8 @@ internal fun MainGraph(
     val navBarBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val density = LocalDensity.current
     var dockHeight by remember { mutableStateOf(92.dp) }
-    val floatingNavBottomPadding = navBarBottomInset + if (isTabScreen) dockHeight + 24.dp else 24.dp
+    // The dock's measured height already includes the system navigation bar it sits over.
+    val floatingNavBottomPadding = if (isTabScreen) dockHeight + 24.dp else navBarBottomInset + 24.dp
 
     CompositionLocalProvider(LocalFloatingNavBarPadding provides floatingNavBottomPadding) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -295,13 +270,6 @@ internal fun MainGraph(
                 }
             ) {
                 composable("Home") {
-                    var localPractice by rememberSaveable { mutableStateOf(false) }
-                    if (localPractice) {
-                        AlertDialog(onDismissRequest = { localPractice = false },
-                            title = { Text("Local practice session") },
-                            text = { Text("This practice session is on this device only.") },
-                            confirmButton = { TextButton(onClick = { vm.end(); localPractice = false }) { Text("End practice") } })
-                    }
                     var requested by rememberSaveable { mutableStateOf(false) }
                     val syncState by sync.status.collectAsStateWithLifecycle()
                     val id = sync.getActiveIncidentId(uid)
@@ -312,9 +280,9 @@ internal fun MainGraph(
                                 if (snapshot.incidentId == id && snapshot.status == "ACTIVE" && sync.getActiveIncidentId(uid) == id) {
                                     confirmedActive = id
                                     nav.navigate("Active") { launchSingleTop = true }
-                                } else android.widget.Toast.makeText(context, "Incident is no longer active", android.widget.Toast.LENGTH_SHORT).show()
+                                } else android.widget.Toast.makeText(context, tr("Incident is no longer active"), android.widget.Toast.LENGTH_SHORT).show()
                             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-                            catch (e: Exception) { android.widget.Toast.makeText(context, "Could not confirm the incident", android.widget.Toast.LENGTH_SHORT).show() }
+                            catch (e: Exception) { android.widget.Toast.makeText(context, tr("Could not confirm the incident"), android.widget.Toast.LENGTH_SHORT).show() }
                             requested = false
                         }
                     }
@@ -326,13 +294,13 @@ internal fun MainGraph(
                     val onStartIncident: (Boolean) -> Unit = { share ->
                         sync.dismissProblem(uid)
                         if (state.incident?.status != IncidentStatus.ACTIVE) {
-                            vm.start(share)
+                            vm.start(true)
                             startDemoTracking(context, uid)
                         }
                         if (!context.preciseLocationAllowed()) sosLocationPermission.launch(arrayOf(
                             android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION))
                         val session = LocalTrackingRepository.get(context).session.value
-                        if (sync.isShared(uid, session.id)) requested = true else localPractice = true
+                        if (sync.isShared(uid, session.id)) requested = true
                     }
                     val ownStatus = syncState.uid == uid
                     val problem = if (ownStatus) syncState.problem else null
@@ -342,18 +310,32 @@ internal fun MainGraph(
                     val sessionMessage = when {
                         problem == SyncProblem.ENDED -> syncState.message
                         connecting && (requested || state.incident?.status == IncidentStatus.ACTIVE) ->
-                            "Connecting to Maitri… Your SOS keeps retrying in the background."
+                            tr("Connecting to Maitri… Your SOS keeps retrying in the background.")
                         problem != null -> syncState.message
-                        requested && id == null -> "Connecting your SOS to Maitri…"
+                        requested && id == null -> tr("Connecting your SOS to Maitri…")
                         else -> null
                     }
                     val onContactsClick = remember { { tab("Contacts") } }
                     val active = state.incident?.status == IncidentStatus.ACTIVE
 
+                    // Unread inbox count for the bell, refreshed while Home is visible.
+                    var unread by remember { mutableIntStateOf(0) }
+                    val homeLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+                    LaunchedEffect(uid) {
+                        homeLifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+                            while (true) {
+                                try { unread = `in`.maitri.app.network.BackendClient.circle.inbox(ExpectedAccount(uid)).unreadCount }
+                                catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
+                                kotlinx.coroutines.delay(60_000)
+                            }
+                        }
+                    }
                     MaitriHome(
                         state = state,
                         start = onStartIncident,
                         contacts = onContactsClick,
+                        onInbox = { nav.navigate("Inbox") { launchSingleTop = true } },
+                        unread = unread,
                         session = {
                             SosSessionPanel(maitriPalette(), active, sessionMessage, problem,
                                 onResume = { onStartIncident(false) },
@@ -435,7 +417,7 @@ internal fun MainGraph(
                         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
                         catch (e: Exception) { /* Return to the inbox for retry. */ }
                         if (match == null) {
-                            android.widget.Toast.makeText(context, "Invitation unavailable", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(context, tr("Invitation unavailable"), android.widget.Toast.LENGTH_SHORT).show()
                             nav.popBackStack()
                         }
                     }
@@ -487,11 +469,18 @@ internal fun MainGraph(
                                 `in`.maitri.app.notification.DeviceRepository.get(context).unregisterDevice()
                             }
                             if (state.incident?.status == IncidentStatus.ACTIVE) {
-                                android.widget.Toast.makeText(context, "Signing out stops local sharing. Your server incident remains open until closure is confirmed.", android.widget.Toast.LENGTH_LONG).show()
+                                android.widget.Toast.makeText(context, tr("Signing out stops local sharing. Your server incident remains open until closure is confirmed."), android.widget.Toast.LENGTH_LONG).show()
                             }
                             logout()
                         }
                     )
+                }
+                composable("BetaInfo") { MaitriBetaInfo(onBack = { nav.popBackStack() }) }
+                composable("PrivacyData") {
+                    MaitriPrivacyData(onBack = { nav.popBackStack() }, onDeleted = {
+                        android.widget.Toast.makeText(context, tr("Your Maitri account was deleted."), android.widget.Toast.LENGTH_LONG).show()
+                        logout()
+                    })
                 }
                 composable("EditProfile") {
                     MaitriEditProfile(
@@ -516,6 +505,11 @@ internal fun MainGraph(
                         onBack = { nav.popBackStack() }
                     )
                 }
+                composable("Inbox") {
+                    MaitriInbox(uid, onBack = { nav.popBackStack() }, onInvitation = { id ->
+                        nav.navigate("Incoming?invitationId=" + android.net.Uri.encode(id)) { launchSingleTop = true }
+                    })
+                }
                 composable("Language") {
                     MaitriLanguage(
                         onBack = { nav.popBackStack() }
@@ -534,9 +528,7 @@ internal fun MainGraph(
                 visible = isTabScreen,
                 enter = fadeIn(animationSpec = tween(220)) + slideInVertically(initialOffsetY = { it }, animationSpec = tween(260)),
                 exit = fadeOut(animationSpec = tween(180)) + slideOutVertically(targetOffsetY = { it }, animationSpec = tween(200)),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
+                modifier = Modifier.align(Alignment.BottomCenter)
             ) {
                 MaitriBottomBar(
                     currentRoute = dockRoute,
@@ -546,5 +538,27 @@ internal fun MainGraph(
                 )
             }
         }
+    }
+}
+
+/** Why the server refused this account, in words (never an HTTP code). */
+internal fun accountSyncMessage(code: Int): String = when (code) {
+    401 -> tr("Your sign-in has expired. Sign out and sign in again.")
+    403 -> tr("This account can't use Maitri yet. Check that your email is verified, then retry.")
+    else -> tr("Maitri couldn't load your account. Retry in a moment.")
+}
+
+@Composable
+private fun AccountBanner(text: String?, retry: (() -> Unit)?, signOut: (() -> Unit)?, modifier: Modifier = Modifier) {
+    if (text == null) return
+    val p = `in`.maitri.app.ui.maitriPalette()
+    Row(modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 6.dp)
+        .background(p.surface, androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+        .padding(horizontal = 14.dp, vertical = 8.dp)
+        .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
+        verticalAlignment = Alignment.CenterVertically) {
+        Text(text, Modifier.weight(1f, fill = false), color = p.accent, fontSize = 12.sp)
+        retry?.let { TextButton(onClick = it) { Text(tr("Retry"), color = p.accent) } }
+        signOut?.let { TextButton(onClick = it) { Text(tr("Sign out"), color = p.secondary) } }
     }
 }

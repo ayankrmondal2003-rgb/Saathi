@@ -1,5 +1,7 @@
 package `in`.maitri.app.network
 
+import `in`.maitri.app.tr
+
 import `in`.maitri.app.data.EmergencyContact
 import com.google.gson.JsonParser
 import com.google.gson.annotations.SerializedName
@@ -115,13 +117,13 @@ internal suspend fun uploadLocalContacts(api: TrustedContactApi, account: Expect
 
 /** Plain message for a failed circle sync. Never implies the contact will be alerted. */
 internal fun contactSyncFailure(error: Exception): String {
-    if (error is IOException) return "Couldn't reach the server. Circle changes weren't saved, so they won't be used for SOS alerts."
+    if (error is IOException) return tr("Couldn't reach the server. Circle changes weren't saved, so they won't be used for SOS alerts.")
     val detail = (error as? HttpException)?.let { e ->
         runCatching { JsonParser.parseString(e.response()?.errorBody()?.string()).asJsonObject["detail"].asString }.getOrNull()
     }
     return when {
         detail != null && (error as HttpException).code() in setOf(409, 422) -> detail
-        error is HttpException && error.code() in setOf(401, 403) -> "Sign in again to save your circle."
-        else -> "Circle changes couldn't be saved to the server, so they won't be used for SOS alerts."
+        error is HttpException && error.code() in setOf(401, 403) -> tr("Sign in again to save your circle.")
+        else -> tr("Circle changes couldn't be saved to the server, so they won't be used for SOS alerts.")
     }
 }

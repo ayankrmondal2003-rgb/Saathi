@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -88,55 +90,59 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
     }
     val confirmed = authorized
     if (confirmed == null) {
-        Page("Responder") { Text("Checking incident access…") }
+        Page(tr("Responder")) { Text(tr("Checking incident access…")) }
         return
     }
     val fix = listOfNotNull(confirmed.lastLocation, live.latestLocation).maxByOrNull {
         runCatching { java.time.Instant.parse(it.recordedAt).toEpochMilli() }.getOrDefault(0L)
     }
-    // The responder's own recent fix, only for a labelled straight-line distance (no routing service, no ETA).
+    // The responder's own recent fix: the "You" marker and an approximate straight-line distance and walk.
     var own by remember { mutableStateOf<Pair<Double, Double>?>(null) }
-    LaunchedEffect(fix?.recordedAt) {
+    LaunchedEffect(Unit) { while (true) {
         val permitted = androidx.core.content.ContextCompat.checkSelfPermission(context,
             android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
             androidx.core.content.ContextCompat.checkSelfPermission(context,
             android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (!permitted) { own = null; return@LaunchedEffect }
-        own = try {
+        own = if (!permitted) null else try {
             @Suppress("MissingPermission")
             val last: android.location.Location? = com.google.android.gms.location.LocationServices
                 .getFusedLocationProviderClient(context).lastLocation.await()
             last?.takeIf { System.currentTimeMillis() - it.time < 5 * 60_000 }?.let { it.latitude to it.longitude }
         } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
-    }
+        kotlinx.coroutines.delay(15_000)
+    } }
     val distance = if (fix != null && own != null)
         straightLineMeters(own!!.first, own!!.second, fix.latitude, fix.longitude) else null
-    fun dial() {
-        try { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:112"))) }
-        catch (_: android.content.ActivityNotFoundException) { message = "Dialer unavailable" }
+    fun dial(number: String = "112") {
+        try { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number)))) }
+        catch (_: android.content.ActivityNotFoundException) { message = tr("Dialer unavailable") }
     }
+    // Only when the person in need agreed to share their number with responders (screen 14).
+    val victimPhone = confirmed.victimPhone?.takeIf { it.isNotBlank() }
+    var reporting by remember { mutableStateOf(false) }
     fun requestHelp() {
         if (busy) return
         busy = true
         scope.launch {
             try {
                 val queued = BackendClient.api.requestHelp(incidentId, account).queued
-                message = if (queued == 0) "No new eligible responders nearby." else "Invitations queued: $queued"
+                message = if (queued == 0) tr("No new eligible responders nearby.") else tr("Invitations queued: {0}", queued)
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { message = "Additional invitations could not be confirmed." }
+            catch (_: Exception) { message = tr("Additional invitations could not be confirmed.") }
             finally { busy = false }
         }
     }
     fun openMaps() {
         fix?.let {
             try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:${it.latitude},${it.longitude}?q=${it.latitude},${it.longitude}"))) }
-            catch (_: android.content.ActivityNotFoundException) { message = "Maps unavailable" }
+            catch (_: android.content.ActivityNotFoundException) { message = tr("Maps unavailable") }
         }
     }
     MaitriResponderJourneyBoard(p, confirmed.requesterMembership?.assistanceStatus, fix?.let { it.latitude to it.longitude },
-        busy, onStatus = { chooseStatus = true }, onMaps = ::openMaps, onHelp = ::requestHelp, onDial = ::dial,
-        distanceMeters = distance)
-    if (chooseStatus) AlertDialog(onDismissRequest = { chooseStatus = false }, title = { Text("Responder status") },
+        busy, onStatus = { chooseStatus = true }, onMaps = ::openMaps, onHelp = ::requestHelp, onDial = { dial() },
+        distanceMeters = distance, self = own, onCallPerson = victimPhone?.let { number -> { dial(number) } },
+        onMedicalNotes = confirmed.medicalNotes?.takeIf { it.isNotBlank() }?.let { notes -> { message = tr("Medical notes\n\n{0}", notes) } })
+    if (chooseStatus) AlertDialog(onDismissRequest = { chooseStatus = false }, title = { Text(tr("Responder status")) },
         text = { Column {
             for (status in listOf("ON_THE_WAY", "HELPING", "UNABLE_TO_HELP", "LEFT_INCIDENT")) {
                 TextButton(enabled = !busy, onClick = {
@@ -146,37 +152,88 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
                             if (repo.updateAssistanceStatus(status)) {
                                 chooseStatus = false
                                 if (status == "LEFT_INCIDENT") onIncidentClosed()
-                            } else message = "Status change could not be confirmed."
+                            } else message = tr("Status change could not be confirmed.")
                         } finally { busy = false }
                     }
-                }) { Text(status.replace('_', ' ')) }
+                }) { Text(responderStatusLabel(status).let { if (status == "LEFT_INCIDENT") tr("Leave this SOS") else it }) }
+            }
+            TextButton(enabled = !busy, onClick = { chooseStatus = false; reporting = true }) {
+                Text(tr("Report a false alarm or a problem"), color = MaterialTheme.colorScheme.error)
             }
         } }, confirmButton = {})
+    if (reporting) {
+        var reason by remember { mutableStateOf("FALSE_ALARM") }
+        var note by remember { mutableStateOf("") }
+        AlertDialog(onDismissRequest = { reporting = false }, title = { Text(tr("Report this SOS")) },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(tr("Maitri reviews reports. The person in need isn't told."))
+                listOf("FALSE_ALARM" to tr("False alarm"), "UNSAFE" to tr("I felt unsafe"), "OTHER" to tr("Something else")).forEach { (value, label) ->
+                    Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(reason == value, { reason = value }); Text(label) }
+                }
+                OutlinedTextField(note, { note = it.take(500) }, label = { Text(tr("What happened (optional)")) })
+            } },
+            confirmButton = { TextButton(enabled = !busy, onClick = {
+                busy = true
+                scope.launch {
+                    try {
+                        BackendClient.api.reportIncident(incidentId, ReportDto(reason, note), account)
+                        reporting = false
+                        message = tr("Thanks. Your report was sent.")
+                    } catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { message = tr("The report couldn't be sent. Try again.") }
+                    finally { busy = false }
+                }
+            }) { Text(tr("Send report")) } },
+            dismissButton = { TextButton(onClick = { reporting = false }) { Text(tr("Cancel")) } })
+    }
     message?.let { AlertDialog(onDismissRequest = { message = null }, text = { Text(it) },
-        confirmButton = { TextButton(onClick = { message = null }) { Text("Close") } }) }
+        confirmButton = { TextButton(onClick = { message = null }) { Text(tr("Close")) } }) }
 }
 
 /** Screen 07 board. Stateless: shows only server-confirmed status and the last reported coordinates, if any. */
 @Composable
 internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: String?, coordinates: Pair<Double, Double>?,
                                          busy: Boolean, onStatus: () -> Unit, onMaps: () -> Unit,
-                                         onHelp: () -> Unit, onDial: () -> Unit, distanceMeters: Double? = null) {
+                                         onHelp: () -> Unit, onDial: () -> Unit, distanceMeters: Double? = null,
+                                         self: Pair<Double, Double>? = null, onCallPerson: (() -> Unit)? = null,
+                                         onMedicalNotes: (() -> Unit)? = null) {
     EmergencyBoard(if (p.dark) R.drawable.maitri_dark_07 else R.drawable.maitri_light_07,
-        "On your way. Keep both of you safe. Request more responders before you approach.") {
-        BoardLabel(84, 59, 270, "RESPONDER · " + (assistanceStatus ?: "AUTHORIZED").replace('_', ' '), p.accent, 11)
-        BoardAction(24, 51, 342, 65, "Update responder status", !busy, onStatus)
-        // Live Esri map over the crop's map area (342 x 320 at 24,140).
-        EsriMap(coordinates, "Person in need", "Awaiting location", Modifier.offset(24.dp, (140 - 28).dp).size(342.dp, 320.dp))
-        BoardLabel(40, 489, 308, "Person in need", p.primary, 16)
-        BoardLabel(40, 515, 308, coordinates?.let { "${it.first}, ${it.second}" } ?: "Awaiting location", p.secondary)
-        BoardLabel(40, 546, 306, when {
-            coordinates == null -> "Distance and ETA unavailable"
-            distanceMeters != null -> straightLineLabel(distanceMeters) + " · Open in Maps"
-            else -> "Open last reported location in Maps"
-        }, p.accent)
-        BoardAction(24, 476, 342, 104, "Open last reported location in Maps", coordinates != null, onMaps)
-        BoardAction(24, 654, 226, 48, "Bring in help", !busy, onHelp)
-        BoardAction(262, 654, 104, 48, "Call emergency services", onClick = onDial)
-        BoardAction(24, 704, 220, 44, "Contact emergency services", onClick = onDial)
+        tr("On your way. Keep both of you safe. Request more responders before you approach.")) {
+        BoardLabel(84, 59, 270, tr("RESPONDER · ") + (assistanceStatus?.let { responderStatusLabel(it) } ?: tr("Accepted")).uppercase(), p.accent, 11)
+        ArtText(tr("On your way"), 84f, 107.7f, 280f, 26f, p.primary, FontWeight.SemiBold)
+        ArtText(tr("Keep both of you safe"), 24f, 612.9f, 340f, 16f, p.primary, FontWeight.SemiBold)
+        ArtText(tr("Request more responders before you approach."), 24f, 636.9f, 342f, 11f, p.secondary)
+        ArtText(tr("Bring in help"), 24f, 682.9f, 226f, 14f, if (p.dark) p.background else Color.White, FontWeight.SemiBold,
+            center = true)
+        ArtText(tr("Contact emergency services"), 24f, 727.7f, 300f, 11f, p.accent, FontWeight.Medium)
+        BoardAction(24, 51, 342, 65, tr("Update responder status"), !busy, onStatus)
+        // Live map over the crop's map area (342 x 320 at 24,140): the person in need and, when known, you.
+        MaitriMap(listOfNotNull(coordinates?.let { MapMarker(it.first, it.second, MarkerKind.PERSON_IN_NEED) },
+            self?.let { MapMarker(it.first, it.second, MarkerKind.YOU) }),
+            tr("Awaiting location"), Modifier.offset(24.dp, (140 - 28).dp).size(342.dp, 320.dp))
+        BoardLabel(40, 489, 308, tr("Person in need"), p.primary, 16)
+        // Shared by the person in need for this SOS only; gone when it ends.
+        if (onMedicalNotes != null) {
+            BoardLabel(236, 491, 120, tr("Medical notes ›"), p.accent, 12)
+            BoardAction(228, 480, 130, 32, tr("Read their medical notes"), onClick = onMedicalNotes)
+        }
+        BoardLabel(40, 515, 308, coordinates?.let { "${it.first}, ${it.second}" } ?: tr("Awaiting location"), p.secondary)
+        // Two lines at most, kept inside the card (its bottom edge is 34 units below).
+        BoardLabel(40, 546, 306, height = 32, label = when {
+            coordinates == null -> tr("Distance and ETA unavailable")
+            distanceMeters != null -> approxDistanceAndWalk(distanceMeters) + tr(" · Open in Maps")
+            else -> tr("Open last reported location in Maps")
+        }, color = p.accent)
+        BoardAction(24, 476, 342, 104, tr("Open last reported location in Maps"), coordinates != null, onMaps)
+        BoardAction(24, 654, 226, 48, tr("Bring in help"), !busy, onHelp)
+        // The artwork's "Call" pill calls the person in need, only with their consent; otherwise it's covered.
+        if (onCallPerson != null) {
+            ArtText(tr("Call"), 309.8f, 683.2f, 54f, 14f, p.accent, FontWeight.SemiBold)
+            BoardAction(262, 654, 104, 48, tr("Call the person in need"), onClick = onCallPerson)
+        } else Box(Modifier.offset(258.dp, (650 - 28).dp).size(112.dp, 56.dp).background(p.background))
+        BoardAction(24, 704, 220, 44, tr("Contact emergency services"), onClick = onDial)
     }
 }
+
+data class ReportDto(@com.google.gson.annotations.SerializedName("reason") val reason: String,
+                     @com.google.gson.annotations.SerializedName("note") val note: String)

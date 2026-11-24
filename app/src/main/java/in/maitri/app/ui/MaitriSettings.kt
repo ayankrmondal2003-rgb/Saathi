@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -68,7 +70,7 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
                 context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
             } catch (_: android.content.ActivityNotFoundException) { appSettings() }
         }
-        ProfileRow(666, 52, S.settings_privacy, S.settings_privacy_sub) { dialog = S.settings_privacy }
+        ProfileRow(666, 52, S.settings_privacy, S.settings_privacy_sub) { onNavigate("PrivacyData") }
         SettingsText(strings.getString(S.settings_help), 74, 721, 290, 36, 13, p.secondary, action = { dialog = S.settings_help })
         BoardAction(24, 721, 50, 36, strings.getString(S.settings_help)) { dialog = S.settings_help }
     }
@@ -86,7 +88,15 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
                     dialog = null
                     if (id == S.settings_privacy) appSettings()
                 }) { Text(strings.getString(if (id == S.settings_privacy) S.settings_manage else S.settings_close)) }
-            })
+            }, dismissButton = if (id == S.settings_help) ({
+                Row {
+                    TextButton(onClick = { dialog = null; onNavigate("BetaInfo") }) { Text(tr("Beta info")) }
+                    TextButton(onClick = {
+                        dialog = null
+                        runCatching { context.startActivity(supportEmailIntent("Maitri help")) }
+                    }) { Text(tr("Email support")) }
+                }
+            }) else null)
     }
 }
 
@@ -96,9 +106,9 @@ private fun ProfileRow(y: Int, height: Int, title: Int, detail: Int, value: Stri
     val p = maitriPalette()
     Box(settingsSlot(24, y, 342, height).clickable(role = Role.Button, onClick = onClick)) {
         Column(Modifier.align(Alignment.CenterStart).padding(start = 56.dp, end = if (value == null) 26.dp else 83.dp)) {
-            Text(strings.getString(title), color = p.primary, fontSize = 14.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
+            FitText(strings.getString(title), Modifier, p.primary, 14f, 16f, FontWeight.SemiBold)
             Spacer(Modifier.height(3.dp))
-            Text(strings.getString(detail), color = p.secondary, fontSize = 10.sp, lineHeight = 12.sp, maxLines = 2)
+            FitText(strings.getString(detail), Modifier, p.secondary, 10f, 12f)
         }
         if (value != null) Text(value, Modifier.align(Alignment.CenterEnd).padding(end = if (title == S.settings_vibrations) 24.dp else 36.dp),
             color = if (title == S.settings_vibrations) p.accent else p.secondary, fontSize = 11.sp)
