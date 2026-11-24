@@ -33,6 +33,8 @@ from app.services.realtime import hub
 
 def create_app(settings=None, *, initialize_firebase=True):
     settings = settings or load_settings()
+    from app.telemetry import init_sentry
+    init_sentry(settings)
     if os.getenv("FIREBASE_AUTH_EMULATOR_HOST") and settings.environment != "test":
         raise RuntimeError("Auth emulator requires an isolated test deployment")
     if not initialize_firebase and settings.environment != "test":
