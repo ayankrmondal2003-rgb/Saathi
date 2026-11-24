@@ -1,0 +1,68 @@
+package `in`.maitri.app.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+/** Help & support › Beta info: the short version of TESTER_GUIDE.md. */
+internal val BETA_SECTIONS = listOf(
+    "Maitri doesn't replace 112" to "Maitri alerts your circle and nearby volunteers. It never calls the police or an ambulance. If you're in danger, call 112.",
+    "Testing an SOS safely" to "Tell your circle before you test. Hold SOS for 3 seconds, check that they got it, then end it on the SOS screen with your Safety PIN. You can send at most 3 SOS an hour.",
+    "Known limits" to "• The first request after a quiet spell can take up to a minute while the server wakes up; your SOS keeps retrying.\n" +
+        "• Contacts without Maitri get an SMS only when you tap Send in your messaging app.\n" +
+        "• Missed check-ins reach only circle members who have Maitri.\n" +
+        "• Trip sharing updates while Maitri is open.\n" +
+        "• Volunteers only get requests after a reviewer approves them.\n" +
+        "• Translations are machine-drafted and still being checked.",
+    "Reporting a problem" to "Tap Send feedback below. It opens an email with the app and phone versions; add what happened. Please don't include passwords, PINs or other people's details.",
+)
+
+@Composable
+fun MaitriBetaInfo(onBack: () -> Unit) {
+    val p = maitriPalette()
+    val context = LocalContext.current
+    Column(Modifier.fillMaxSize().background(p.background).statusBarsPadding().verticalScroll(rememberScrollState())
+        .padding(horizontal = 24.dp)) {
+        Spacer(Modifier.height(20.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack, modifier = Modifier.size(44.dp).background(p.surface, CircleShape)) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = p.primary)
+            }
+            Spacer(Modifier.width(16.dp))
+            Column {
+                Text("HELP & SUPPORT", color = p.accent, fontSize = 10.sp, letterSpacing = 1.3.sp, fontWeight = FontWeight.SemiBold)
+                Text("Beta info", color = p.primary, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text("Version ${`in`.maitri.app.BuildConfig.VERSION_NAME}", color = p.secondary, fontSize = 12.sp)
+        Spacer(Modifier.height(12.dp))
+        BETA_SECTIONS.forEachIndexed { index, (title, body) ->
+            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)
+                .background(if (index == 0) p.card else p.surface, RoundedCornerShape(20.dp)).padding(16.dp)) {
+                Text(title, color = p.primary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(4.dp))
+                Text(body, color = p.secondary, fontSize = 13.sp, lineHeight = 18.sp)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Button(onClick = { runCatching { context.startActivity(supportEmailIntent("Maitri beta feedback")) } },
+            colors = ButtonDefaults.buttonColors(containerColor = p.accent), modifier = Modifier.fillMaxWidth().height(48.dp)) {
+            Text("Send feedback", fontWeight = FontWeight.SemiBold)
+        }
+        Spacer(Modifier.height(LocalFloatingNavBarPadding.current))
+    }
+}

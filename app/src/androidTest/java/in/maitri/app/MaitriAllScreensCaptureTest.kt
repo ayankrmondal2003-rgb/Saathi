@@ -96,7 +96,10 @@ class MaitriAllScreensCaptureTest {
                             .hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)
                     }
                     SystemClock.sleep(500)
-                    val shot = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
+                    // The emulator's screenshot service occasionally returns null under load; retry briefly.
+                    val shot = requireNotNull(generateSequence { instrumentation.uiAutomation.takeScreenshot()
+                        ?: null.also { SystemClock.sleep(700) } }.take(5).firstOrNull { it != null }
+                        ?: instrumentation.uiAutomation.takeScreenshot()) { "Screenshot failed for $screen" }
                     File(out, "${if (dark) "dark" else "light"}-$screen.png").outputStream()
                         .use { shot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
                 }

@@ -44,10 +44,12 @@ import `in`.maitri.app.data.ProfileRules
 import `in`.maitri.app.data.UserProfile
 import `in`.maitri.app.network.BackendClient
 import `in`.maitri.app.network.ExpectedAccount
+import `in`.maitri.app.network.MedicalNotesDto
 import `in`.maitri.app.network.ProfileDetailsRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import java.io.IOException
@@ -78,6 +80,8 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
     var city by remember(uid) { mutableStateOf("") }
     var notes by remember(uid) { mutableStateOf("") }
     var sharePhone by remember(uid) { mutableStateOf(false) }
+    var notesNote by remember { mutableStateOf<String?>(null) }
+    var changeEmail by remember { mutableStateOf(false) }
     var dirty by remember(uid) { mutableStateOf(false) }
     var loading by remember(uid) { mutableStateOf(!preview && uid.isNotBlank()) }
     var saving by remember { mutableStateOf(false) }
@@ -86,8 +90,18 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
 
     LaunchedEffect(uid) {
         if (preview || uid.isBlank()) return@LaunchedEffect
-        val savedNotes = withContext(Dispatchers.IO) { runCatching { store.readMedicalNotes(uid) } }
-        savedNotes.onSuccess { if (!dirty) notes = it }.onFailure { message = S.edit_notes_failed }
+        // Medical notes live on the server (encrypted) so a responder can see them during an SOS. A copy left on
+        // this phone by an older version is moved there once, then removed from the phone.
+        val local = withContext(Dispatchers.IO) { runCatching { store.readMedicalNotes(uid) }.getOrDefault("") }
+        try {
+            val account = ExpectedAccount(uid)
+            var server = BackendClient.privacy.notes(account).notes
+            if (server.isBlank() && local.isNotBlank()) server = BackendClient.privacy.saveNotes(MedicalNotesDto(local), account).notes
+            if (local.isNotBlank()) withContext(Dispatchers.IO) { runCatching { store.writeMedicalNotes(uid, "") } }
+            if (!dirty) notes = server
+        } catch (e: CancellationException) { throw e } catch (_: Exception) {
+            if (!dirty) notes = local
+        }
         photo = withContext(Dispatchers.IO) {
             store.photo(uid)?.let { file -> runCatching { BitmapFactory.decodeFile(file.path)?.asImageBitmap() }.getOrNull() }
         }
@@ -167,8 +181,14 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
             try {
                 val saved = BackendClient.api.profileDetails(ProfileDetailsRequest(name.trim(), phone.trim(), city.trim(), sharePhone), ExpectedAccount(uid))
                 onProfileUpdated(requireNotNull(user).copy(name = saved.name, phone = saved.phoneNumber))
-                val notesSaved = withContext(Dispatchers.IO) { runCatching { store.writeMedicalNotes(uid, notes) }.isSuccess }
-                if (!notesSaved) { message = S.edit_notes_failed; return@launch }
+                val notesSaved = try {
+                    BackendClient.privacy.saveNotes(MedicalNotesDto(notes.trim()), ExpectedAccount(uid)); true
+                } catch (e: CancellationException) { throw e } catch (_: Exception) {
+                    // Not lost: kept on this phone and moved to the server next time this screen opens.
+                    withContext(Dispatchers.IO) { runCatching { store.writeMedicalNotes(uid, notes) } }
+                    false
+                }
+                if (!notesSaved) { notesNote = "Medical notes saved on this phone only for now."; return@launch }
                 android.widget.Toast.makeText(context, strings.getString(S.edit_saved), android.widget.Toast.LENGTH_LONG).show()
                 onBack()
             } catch (e: CancellationException) { throw e } catch (e: HttpException) {
@@ -183,6 +203,7 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
         }
     }
 
+    if (changeEmail) ChangeEmailDialog(p) { changeEmail = false }
     SettingsBoard(if (p.dark) R.drawable.maitri_dark_14 else R.drawable.maitri_light_14, 788, modifier) {
         SettingsHeader(strings.getString(S.edit_title), strings.getString(S.settings_profile), strings.getString(S.settings_back), onBack)
 
@@ -205,10 +226,15 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
         SettingsText(strings.getString(S.edit_email), 24, 374, 300, 20, 11, p.primary)
         ProfileField(user?.email.orEmpty(), {}, 397, 42, S.edit_email_hint, S.edit_email, "profile_email",
             KeyboardOptions(keyboardType = KeyboardType.Email), readOnly = true)
+        // The email is the sign-in identity: it changes only after the new address is verified (Firebase).
+        if (!preview) BoardAction(24, 397, 342, 42, "Change email") { changeEmail = true }
         SettingsText(strings.getString(S.edit_city), 24, 442, 300, 20, 11, p.primary)
         ProfileField(city, { edit { city = it } }, 465, 42, S.edit_city_hint, S.edit_city, "profile_city",
             KeyboardOptions(KeyboardCapitalization.Words, imeAction = ImeAction.Next))
-        SettingsText(strings.getString(S.edit_notes), 24, 535, 320, 20, 12, p.primary)
+        SettingsText(strings.getString(S.edit_notes), 24, 535, 170, 20, 12, p.primary)
+        // One-line consent note: who can read them.
+        SettingsText(notesNote ?: "Seen only by a responder helping you", 190, 537, 176, 20, 10,
+            if (notesNote != null) p.accent else p.secondary, maxLines = 1)
         ProfileField(notes, { if (it.length <= ProfileLocalStore.MEDICAL_NOTES_LIMIT) edit { notes = it } }, 564, 72,
             S.edit_notes_hint, S.edit_notes, "profile_notes",
             KeyboardOptions(KeyboardCapitalization.Sentences, imeAction = ImeAction.Default), single = false)
@@ -263,4 +289,56 @@ private fun MaitriEditProfileLightPreview() {
 @Composable
 private fun MaitriEditProfileDarkPreview() {
     `in`.maitri.app.ui.theme.MaitriTheme { MaitriEditProfile(user = null, onBack = {}) }
+}
+
+/** Firebase "verify before update": the address changes only after the link sent to it is opened. */
+@Composable
+private fun ChangeEmailDialog(p: MaitriPalette, dismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val user = remember { runCatching { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser }.getOrNull() }
+    val google = user?.providerData?.any { it.providerId == com.google.firebase.auth.GoogleAuthProvider.PROVIDER_ID } == true
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<String?>(null) }
+    androidx.compose.material3.AlertDialog(onDismissRequest = dismiss,
+        containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
+        title = { Text("Change email") },
+        text = {
+            androidx.compose.foundation.layout.Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                if (google) Text("You sign in with Google, so your email comes from your Google account. To use another " +
+                    "address, sign out and sign in with that Google account.")
+                else {
+                    Text("We'll send a link to the new address. Your email changes when you open it.")
+                    androidx.compose.material3.OutlinedTextField(email, { email = it.trim() }, singleLine = true,
+                        label = { Text("New email") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+                    androidx.compose.material3.OutlinedTextField(password, { password = it }, singleLine = true,
+                        label = { Text("Current password") },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+                }
+                result?.let { Text(it, color = p.accent) }
+            }
+        },
+        confirmButton = {
+            if (!google) androidx.compose.material3.TextButton(
+                enabled = !busy && android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() && password.isNotBlank(),
+                onClick = {
+                    val u = user ?: return@TextButton
+                    busy = true
+                    scope.launch {
+                        result = try {
+                            u.reauthenticate(com.google.firebase.auth.EmailAuthProvider.getCredential(u.email.orEmpty(), password)).await()
+                            u.verifyBeforeUpdateEmail(email).await()
+                            "Check $email for the link. Until you open it, you still sign in with your current email."
+                        } catch (e: CancellationException) { throw e }
+                        catch (_: com.google.firebase.auth.FirebaseAuthInvalidCredentialsException) { "That password isn't right, or the email isn't valid." }
+                        catch (_: com.google.firebase.auth.FirebaseAuthUserCollisionException) { "That email already has a Maitri account." }
+                        catch (_: Exception) { "Couldn't send the link. Check your connection and try again." }
+                        busy = false
+                        password = ""
+                    }
+                }) { Text("Send link", color = p.accent) }
+        },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = dismiss) { Text("Close", color = p.secondary) } })
 }

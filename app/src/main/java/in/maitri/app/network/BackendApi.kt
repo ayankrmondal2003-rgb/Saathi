@@ -101,7 +101,8 @@ data class IncidentSnapshotDto(
     @SerializedName(value = "responder_summary", alternate = ["responders_summary"]) val respondersSummary: ResponderSummaryDto,
     @SerializedName("active_responders") val activeResponders: List<ActiveResponderPublicDto> = emptyList(),
     @SerializedName("requester_membership") val requesterMembership: RequesterMembershipDto?,
-    @SerializedName("victim_phone") val victimPhone: String? = null
+    @SerializedName("victim_phone") val victimPhone: String? = null,
+    @SerializedName("medical_notes") val medicalNotes: String? = null
 )
 
 data class SafetyPinSetupDto(
@@ -238,6 +239,7 @@ object BackendClient {
     val contacts: TrustedContactApi by lazy { retrofit.create(TrustedContactApi::class.java) }
     val circle: CircleApi by lazy { retrofit.create(CircleApi::class.java) }
     val files: FilesApi by lazy { retrofit.create(FilesApi::class.java) }
+    val privacy: PrivacyApi by lazy { retrofit.create(PrivacyApi::class.java) }
 
     private val retrofit: Retrofit by lazy {
         val base = BuildConfig.API_BASE_URL.toHttpUrl()

@@ -471,6 +471,13 @@ internal fun MainGraph(
                         }
                     )
                 }
+                composable("BetaInfo") { MaitriBetaInfo(onBack = { nav.popBackStack() }) }
+                composable("PrivacyData") {
+                    MaitriPrivacyData(onBack = { nav.popBackStack() }, onDeleted = {
+                        android.widget.Toast.makeText(context, "Your Maitri account was deleted.", android.widget.Toast.LENGTH_LONG).show()
+                        logout()
+                    })
+                }
                 composable("EditProfile") {
                     MaitriEditProfile(
                         user = state.user,

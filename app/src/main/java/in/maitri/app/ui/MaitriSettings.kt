@@ -68,7 +68,7 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
                 context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
             } catch (_: android.content.ActivityNotFoundException) { appSettings() }
         }
-        ProfileRow(666, 52, S.settings_privacy, S.settings_privacy_sub) { dialog = S.settings_privacy }
+        ProfileRow(666, 52, S.settings_privacy, S.settings_privacy_sub) { onNavigate("PrivacyData") }
         SettingsText(strings.getString(S.settings_help), 74, 721, 290, 36, 13, p.secondary, action = { dialog = S.settings_help })
         BoardAction(24, 721, 50, 36, strings.getString(S.settings_help)) { dialog = S.settings_help }
     }
@@ -86,7 +86,15 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
                     dialog = null
                     if (id == S.settings_privacy) appSettings()
                 }) { Text(strings.getString(if (id == S.settings_privacy) S.settings_manage else S.settings_close)) }
-            })
+            }, dismissButton = if (id == S.settings_help) ({
+                Row {
+                    TextButton(onClick = { dialog = null; onNavigate("BetaInfo") }) { Text("Beta info") }
+                    TextButton(onClick = {
+                        dialog = null
+                        runCatching { context.startActivity(supportEmailIntent("Maitri help")) }
+                    }) { Text("Email support") }
+                }
+            }) else null)
     }
 }
 

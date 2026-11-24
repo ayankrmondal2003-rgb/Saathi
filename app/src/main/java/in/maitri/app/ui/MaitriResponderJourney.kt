@@ -138,7 +138,8 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
     }
     MaitriResponderJourneyBoard(p, confirmed.requesterMembership?.assistanceStatus, fix?.let { it.latitude to it.longitude },
         busy, onStatus = { chooseStatus = true }, onMaps = ::openMaps, onHelp = ::requestHelp, onDial = { dial() },
-        distanceMeters = distance, self = own, onCallPerson = victimPhone?.let { number -> { dial(number) } })
+        distanceMeters = distance, self = own, onCallPerson = victimPhone?.let { number -> { dial(number) } },
+        onMedicalNotes = confirmed.medicalNotes?.takeIf { it.isNotBlank() }?.let { notes -> { message = "Medical notes\n\n$notes" } })
     if (chooseStatus) AlertDialog(onDismissRequest = { chooseStatus = false }, title = { Text("Responder status") },
         text = { Column {
             for (status in listOf("ON_THE_WAY", "HELPING", "UNABLE_TO_HELP", "LEFT_INCIDENT")) {
@@ -192,7 +193,8 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
 internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: String?, coordinates: Pair<Double, Double>?,
                                          busy: Boolean, onStatus: () -> Unit, onMaps: () -> Unit,
                                          onHelp: () -> Unit, onDial: () -> Unit, distanceMeters: Double? = null,
-                                         self: Pair<Double, Double>? = null, onCallPerson: (() -> Unit)? = null) {
+                                         self: Pair<Double, Double>? = null, onCallPerson: (() -> Unit)? = null,
+                                         onMedicalNotes: (() -> Unit)? = null) {
     EmergencyBoard(if (p.dark) R.drawable.maitri_dark_07 else R.drawable.maitri_light_07,
         "On your way. Keep both of you safe. Request more responders before you approach.") {
         BoardLabel(84, 59, 270, "RESPONDER · " + (assistanceStatus ?: "AUTHORIZED").replace('_', ' '), p.accent, 11)
@@ -202,6 +204,11 @@ internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: Str
             self?.let { MapMarker(it.first, it.second, MarkerKind.YOU) }),
             "Awaiting location", Modifier.offset(24.dp, (140 - 28).dp).size(342.dp, 320.dp))
         BoardLabel(40, 489, 308, "Person in need", p.primary, 16)
+        // Shared by the person in need for this SOS only; gone when it ends.
+        if (onMedicalNotes != null) {
+            BoardLabel(236, 491, 120, "Medical notes ›", p.accent, 12)
+            BoardAction(228, 480, 130, 32, "Read their medical notes", onClick = onMedicalNotes)
+        }
         BoardLabel(40, 515, 308, coordinates?.let { "${it.first}, ${it.second}" } ?: "Awaiting location", p.secondary)
         BoardLabel(40, 546, 306, when {
             coordinates == null -> "Distance and ETA unavailable"

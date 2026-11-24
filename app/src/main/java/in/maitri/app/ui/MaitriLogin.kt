@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.withLink
 import `in`.maitri.app.R
 import `in`.maitri.app.state.AuthState
 import `in`.maitri.app.state.AuthViewModel
@@ -528,7 +529,14 @@ internal fun MaitriLoginContent(
 
             // Terms & Privacy notice
             Text(
-                text = "By continuing, you agree to the Terms of Service\nand Privacy Policy.",
+                text = androidx.compose.ui.text.buildAnnotatedString {
+                    val link = androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = p.accent))
+                    append("By continuing, you agree to the ")
+                    withLink(androidx.compose.ui.text.LinkAnnotation.Url(`in`.maitri.app.network.MaitriLinks.TERMS, link)) { append("Terms of Service") }
+                    append("\nand ")
+                    withLink(androidx.compose.ui.text.LinkAnnotation.Url(`in`.maitri.app.network.MaitriLinks.PRIVACY, link)) { append("Privacy Policy") }
+                    append(".")
+                },
                 color = p.secondary,
                 fontSize = 10.sp,
                 textAlign = TextAlign.Center,
