@@ -114,6 +114,7 @@
  "Couldn't load your application. Check your connection.",
  "Couldn't load your circle from the server. Contacts shown here may not be used for SOS alerts.",
  "Couldn't load your inbox. Check your connection.",
+ "Couldn't open the camera",
  "Couldn't reach Maitri. Check your connection and try again.",
  "Couldn't reach Maitri. Check your connection.",
  "Couldn't reach the server. Circle changes weren't saved, so they won't be used for SOS alerts.",

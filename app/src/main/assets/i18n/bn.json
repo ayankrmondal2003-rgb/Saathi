@@ -115,6 +115,7 @@
  "Couldn't load your application. Check your connection.": "আপনার আবেদন লোড করা যায়নি। সংযোগ দেখুন।",
  "Couldn't load your circle from the server. Contacts shown here may not be used for SOS alerts.": "সার্ভার থেকে আপনার সার্কেল লোড করা যায়নি। এখানে দেখানো পরিচিতি SOS সতর্কবার্তায় ব্যবহার নাও হতে পারে।",
  "Couldn't load your inbox. Check your connection.": "আপনার ইনবক্স লোড করা যায়নি। সংযোগ দেখুন।",
+ "Couldn't open the camera": "ক্যামেরা খোলা যায়নি",
  "Couldn't reach Maitri. Check your connection and try again.": "Maitri-তে পৌঁছানো যায়নি। সংযোগ দেখে আবার চেষ্টা করুন।",
  "Couldn't reach Maitri. Check your connection.": "Maitri-তে পৌঁছানো যায়নি। সংযোগ দেখুন।",
  "Couldn't reach the server. Circle changes weren't saved, so they won't be used for SOS alerts.": "সার্ভারে পৌঁছানো যায়নি। সার্কেলের পরিবর্তন সংরক্ষিত হয়নি, তাই SOS সতর্কবার্তায় ব্যবহার হবে না।",

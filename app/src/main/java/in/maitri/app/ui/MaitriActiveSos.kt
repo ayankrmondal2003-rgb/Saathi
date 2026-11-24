@@ -175,7 +175,12 @@ fun MaitriActiveSos(
         try {
             takePicture.launch(androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", file))
         } catch (_: android.content.ActivityNotFoundException) {
+            photoFile = null; file.delete()
             Toast.makeText(context, tr("No camera app available"), Toast.LENGTH_SHORT).show()
+        } catch (_: IllegalArgumentException) {
+            // Never let a camera setup problem close the app in the middle of an SOS.
+            photoFile = null; file.delete()
+            Toast.makeText(context, tr("Couldn't open the camera"), Toast.LENGTH_SHORT).show()
         }
     }
     LaunchedEffect(recorder) {
