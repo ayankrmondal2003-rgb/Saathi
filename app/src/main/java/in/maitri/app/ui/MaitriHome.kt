@@ -165,7 +165,8 @@ internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Bool
             Column(Modifier.weight(1f)) {
                 Text(tr("Keep your people close"), color = p.primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(6.dp))
-                Text(if(contactCount == 0) tr("Add your first trusted contact") else tr("{0} saved contacts", contactCount),
+                Text(when (contactCount) { 0 -> tr("Add your first trusted contact"); 1 -> tr("1 saved contact")
+                    else -> tr("{0} saved contacts", contactCount) },
                     color = p.secondary, fontSize = 11.sp)
             }
             Icon(painterResource(R.drawable.maitri_plus), tr("Add trusted contact"), tint = p.accent,
@@ -245,19 +246,22 @@ fun MaitriBottomBar(currentRoute: String?, onTabSelected: (String) -> Unit, modi
         Triple("Contacts", tr("Circle"), R.drawable.maitri_circle),
         Triple("Responder", tr("Responder"), R.drawable.maitri_responder),
         Triple("Profile", tr("Profile"), R.drawable.maitri_profile))
-    Column(modifier.fillMaxWidth().background(p.background).padding(horizontal = 24.dp)) {
+    // The background runs down behind the system navigation buttons, which are transparent edge-to-edge
+    // (3-button navigation on Xiaomi and others); otherwise content shows through under the dock.
+    Column(modifier.fillMaxWidth().background(p.background).navigationBarsPadding().padding(horizontal = 24.dp)) {
         HorizontalDivider(color = p.divider, thickness = 1.dp)
-        Row(Modifier.fillMaxWidth().height(62.dp)) {
+        // At least the design's 62 dp, taller when large text needs it (the content's bottom padding follows).
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).heightIn(min = 62.dp)) {
             items.forEach { (route, label, icon) ->
                 val selected = currentRoute == route
                 Column(Modifier.weight(1f).fillMaxHeight().selectable(selected, onClick = { onTabSelected(route) })
-                    .padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    .padding(top = 8.dp, bottom = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.size(48.dp,29.dp).background(if(selected) p.card else Color.Transparent, RoundedCornerShape(14.5.dp)),
                         contentAlignment = Alignment.Center) {
                         Icon(painterResource(icon), null, tint = if(selected) p.accent else p.secondary, modifier = Modifier.size(22.dp))
                     }
                     Spacer(Modifier.height(3.dp))
-                    Text(label, color = if(selected) p.accent else p.secondary, fontSize = 10.sp)
+                    FitText(label, Modifier, if (selected) p.accent else p.secondary, 10f)
                 }
             }
         }

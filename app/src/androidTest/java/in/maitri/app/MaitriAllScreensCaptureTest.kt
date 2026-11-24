@@ -41,7 +41,7 @@ class MaitriAllScreensCaptureTest {
         CompositionLocalProvider(LocalFloatingNavBarPadding provides 116.dp) {
             Box(Modifier.fillMaxSize()) {
                 content()
-                MaitriBottomBar(route, {}, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+                MaitriBottomBar(route, {}, Modifier.align(Alignment.BottomCenter))
             }
         }
     }

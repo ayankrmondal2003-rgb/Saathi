@@ -247,7 +247,8 @@ internal fun MainGraph(
     val navBarBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val density = LocalDensity.current
     var dockHeight by remember { mutableStateOf(92.dp) }
-    val floatingNavBottomPadding = navBarBottomInset + if (isTabScreen) dockHeight + 24.dp else 24.dp
+    // The dock's measured height already includes the system navigation bar it sits over.
+    val floatingNavBottomPadding = if (isTabScreen) dockHeight + 24.dp else navBarBottomInset + 24.dp
 
     CompositionLocalProvider(LocalFloatingNavBarPadding provides floatingNavBottomPadding) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -527,9 +528,7 @@ internal fun MainGraph(
                 visible = isTabScreen,
                 enter = fadeIn(animationSpec = tween(220)) + slideInVertically(initialOffsetY = { it }, animationSpec = tween(260)),
                 exit = fadeOut(animationSpec = tween(180)) + slideOutVertically(targetOffsetY = { it }, animationSpec = tween(200)),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
+                modifier = Modifier.align(Alignment.BottomCenter)
             ) {
                 MaitriBottomBar(
                     currentRoute = dockRoute,
