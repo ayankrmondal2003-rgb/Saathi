@@ -21,11 +21,13 @@ enum class LocationHint {
 const val SEARCH_GRACE_MS = 15_000L
 
 fun locationHint(airplaneMode: Boolean, locationOn: Boolean, allowed: Boolean, precise: Boolean,
-                 accuracyMeters: Float?, serverConfirmed: Boolean, waitedMs: Long): LocationHint = when {
+                 accuracyMeters: Float?, serverConfirmed: Boolean, waitedMs: Long, online: Boolean = true): LocationHint = when {
     !allowed -> LocationHint.PERMISSION_MISSING
     !locationOn -> LocationHint.LOCATION_OFF
-    airplaneMode && !serverConfirmed -> LocationHint.AIRPLANE_MODE
-    !precise && (accuracyMeters == null || accuracyMeters > TrackingConfig.PRECISE_METRES) -> LocationHint.PRECISE_NOT_ALLOWED
+    // Airplane mode only matters when it actually cut the connection (Wi-Fi can stay on in airplane mode).
+    airplaneMode && !online && !serverConfirmed -> LocationHint.AIRPLANE_MODE
+    // Always said while precise is off: an older precise fix on screen doesn't mean new ones can be precise.
+    !precise -> LocationHint.PRECISE_NOT_ALLOWED
     accuracyMeters == null -> if (waitedMs < SEARCH_GRACE_MS) LocationHint.SEARCHING else LocationHint.WEAK_SIGNAL
     accuracyMeters > TrackingConfig.PRECISE_METRES -> LocationHint.WEAK_SIGNAL
     else -> LocationHint.NONE
@@ -60,8 +62,14 @@ data class ShownFix(val latitude: Double, val longitude: Double, val accuracyMet
                     val timeMillis: Long, val shared: Boolean)
 
 /**
- * The newest of the server-confirmed fix and the phone's own fix. The local one is shown at once ("Sending…")
- * and is "Location shared" once the server holds a fix at least as new.
+ * Fixes arrive every few seconds and the server is polled every few seconds, so the server's copy always trails
+ * the phone a little. Within this window the location counts as shared.
+ */
+const val SHARED_LAG_MS = 30_000L
+
+/**
+ * What screen 08 draws: always the newest position (usually the phone's own), labelled "Location shared" when
+ * the server holds a fix from the last [SHARED_LAG_MS] of it, otherwise "Sending…".
  */
 fun shownLocation(serverLat: Double?, serverLon: Double?, serverAccuracy: Double?, serverTimeMillis: Long?,
                   local: LocationUpdate?): ShownFix? {
@@ -71,8 +79,7 @@ fun shownLocation(serverLat: Double?, serverLon: Double?, serverAccuracy: Double
     val phone = local?.let { ShownFix(it.latitude, it.longitude, it.accuracyMeters.toDouble(), it.timestampMillis, false) }
     return when {
         server == null -> phone
-        // Server timestamps have second precision at worst; treat the same fix as shared.
-        phone == null || server.timeMillis >= phone.timeMillis - 1000 -> server
-        else -> phone
+        phone == null || server.timeMillis >= phone.timeMillis -> server
+        else -> phone.copy(shared = server.timeMillis >= phone.timeMillis - SHARED_LAG_MS)
     }
 }

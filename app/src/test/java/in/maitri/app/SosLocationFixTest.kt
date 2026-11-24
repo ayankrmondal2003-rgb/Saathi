@@ -42,15 +42,18 @@ class SosLocationFixTest {
 
     @Test fun reasonsComeInTheOrderTheUserCanFixThem() {
         fun hint(airplane: Boolean = false, on: Boolean = true, allowed: Boolean = true, precise: Boolean = true,
-                 accuracy: Float? = null, confirmed: Boolean = false, waited: Long = 60_000) =
-            locationHint(airplane, on, allowed, precise, accuracy, confirmed, waited)
+                 accuracy: Float? = null, confirmed: Boolean = false, waited: Long = 60_000, online: Boolean = !airplane) =
+            locationHint(airplane, on, allowed, precise, accuracy, confirmed, waited, online)
         assertEquals(LocationHint.PERMISSION_MISSING, hint(allowed = false, on = false, airplane = true))
         assertEquals(LocationHint.LOCATION_OFF, hint(on = false, airplane = true))
         assertEquals(LocationHint.AIRPLANE_MODE, hint(airplane = true, accuracy = 8f))
-        // Once the server has the fix, airplane mode is no longer the problem.
+        // Once the server has the fix, or Wi-Fi is on in airplane mode, airplane mode is not the problem.
         assertEquals(LocationHint.NONE, hint(airplane = true, accuracy = 8f, confirmed = true))
+        assertEquals(LocationHint.NONE, hint(airplane = true, accuracy = 8f, online = true))
         assertEquals(LocationHint.PRECISE_NOT_ALLOWED, hint(precise = false, accuracy = 1_500f))
         assertEquals(LocationHint.PRECISE_NOT_ALLOWED, hint(precise = false))
+        // Seen on the SM-E625F: an old ±29 m server fix on screen hid the reason while only Approximate was allowed.
+        assertEquals(LocationHint.PRECISE_NOT_ALLOWED, hint(precise = false, accuracy = 29f, confirmed = true))
         assertEquals(LocationHint.SEARCHING, hint(waited = 5_000))
         assertEquals(LocationHint.WEAK_SIGNAL, hint(waited = 20_000))
         assertEquals(LocationHint.WEAK_SIGNAL, hint(accuracy = 600f))
@@ -75,12 +78,13 @@ class SosLocationFixTest {
         val sending = shownLocation(null, null, null, null, local)!!
         assertFalse(sending.shared)
         assertEquals(1_500.0, sending.accuracyMeters, 0.0)
-        // Server holds the same fix (second precision): shared.
-        assertTrue(shownLocation(28.61, 77.20, 1_500.0, now - 400, local)!!.shared)
-        // Server still has an older fix: show the newer local one as sending.
-        val newer = shownLocation(28.60, 77.19, 30.0, now - 60_000, local)!!
-        assertFalse(newer.shared)
-        assertEquals(28.61, newer.latitude, 0.0)
+        // Server trails the phone by a poll or two (seen on the SM-E625F): shared, drawn at the newest position.
+        val trailing = shownLocation(28.60, 77.19, 30.0, now - 6_000, local)!!
+        assertTrue(trailing.shared)
+        assertEquals(28.61, trailing.latitude, 0.0)
+        // Server's last fix is a minute behind: uploads are not getting through.
+        assertFalse(shownLocation(28.60, 77.19, 30.0, now - 60_000, local)!!.shared)
+        assertTrue(shownLocation(28.61, 77.20, 1_500.0, now, local)!!.shared)
         assertNull(shownLocation(null, null, null, null, null))
     }
 

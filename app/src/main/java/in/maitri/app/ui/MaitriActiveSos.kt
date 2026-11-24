@@ -153,8 +153,9 @@ fun MaitriActiveSos(
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         environment = LocationEnvironment.read(context)
         startDemoTracking(context, uid)
-        // Denied without a dialog (permanently): the only way left is the app's settings page.
-        if (result.values.none { it } && !shouldAskAgain(context)) openAppSettings(context)
+        // Precise location refused without a dialog (the choice is fixed, e.g. after "Keep approximate"): the only
+        // way left is the app's settings page. Checked on FINE, since COARSE alone is still granted then.
+        if (result[android.Manifest.permission.ACCESS_FINE_LOCATION] != true && !shouldAskAgain(context)) openAppSettings(context)
     }
     val locationPermissions = arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION)
     fun locationAction(hint: LocationHint): Pair<String, () -> Unit>? = when (hint) {
@@ -227,7 +228,7 @@ fun MaitriActiveSos(
         val shown = shownLocation(server?.latitude, server?.longitude, server?.accuracyMeters,
             server?.recordedAt?.let { `in`.maitri.app.network.serverTimeMillis(it) }, localFix)
         val hint = locationHint(environment.airplane, environment.locationOn, environment.allowed, environment.precise,
-            shown?.accuracyMeters?.toFloat(), server != null, elapsedSeconds * 1000)
+            shown?.accuracyMeters?.toFloat(), shown?.shared == true, elapsedSeconds * 1000, environment.online)
         BoardLabel(24, 98, 330, locationLine(shown, hint),
             if (hint == LocationHint.NONE || hint == LocationHint.SEARCHING) p.secondary else p.accent)
         // Live Esri map over the crop's map area (342 x 252 at 24,136): the phone's own fix at once, then the server's.
@@ -331,10 +332,17 @@ fun MaitriActiveSos(
 
 
 /** Phone settings that decide whether a location can be found and sent. Cheap reads, polled while screen 08 is open. */
-internal data class LocationEnvironment(val airplane: Boolean, val locationOn: Boolean, val allowed: Boolean, val precise: Boolean) {
+internal data class LocationEnvironment(val airplane: Boolean, val locationOn: Boolean, val allowed: Boolean,
+                                         val precise: Boolean, val online: Boolean) {
     companion object {
         fun read(context: android.content.Context) = LocationEnvironment(context.airplaneModeOn(), context.locationEnabled(),
-            context.locationAllowed(), context.preciseLocationAllowed())
+            context.locationAllowed(), context.preciseLocationAllowed(), online(context))
+
+        private fun online(context: android.content.Context): Boolean {
+            val manager = context.getSystemService(android.net.ConnectivityManager::class.java) ?: return true
+            val caps = manager.getNetworkCapabilities(manager.activeNetwork) ?: return false
+            return caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        }
     }
 }
 
