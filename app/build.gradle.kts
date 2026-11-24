@@ -58,8 +58,11 @@ android {
         applicationId = "in.maitri.app"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        // versionCode = major*10000 + minor*100 + patch. A later beta of the same version must bump patch
+        // (0.9.1-beta.2 -> 901), because Android rejects an update with an equal or lower versionCode.
+        val (major, minor, patch) = listOf(0, 9, 0)
+        versionCode = major * 10000 + minor * 100 + patch
+        versionName = "$major.$minor.$patch-beta.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "ESRI_API_KEY", esriApiKey())
