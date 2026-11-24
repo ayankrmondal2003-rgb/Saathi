@@ -226,10 +226,11 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
         ProfileField(phone, { edit { phone = it } }, 329, 42, S.edit_phone_hint, S.edit_phone, "profile_phone",
             KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next))
         SettingsText(strings.getString(S.edit_email), 24, 374, 300, 20, 11, p.primary)
-        ProfileField(user?.email.orEmpty(), {}, 397, 42, S.edit_email_hint, S.edit_email, "profile_email",
-            KeyboardOptions(keyboardType = KeyboardType.Email), readOnly = true)
         // The email is the sign-in identity: it changes only after the new address is verified (Firebase).
-        if (!preview) BoardAction(24, 397, 342, 42, tr("Change email")) { changeEmail = true }
+        // The field itself is the "Change email" button, so screen readers still hear the current address.
+        ProfileField(user?.email.orEmpty(), {}, 397, 42, S.edit_email_hint, S.edit_email, "profile_email",
+            KeyboardOptions(keyboardType = KeyboardType.Email), readOnly = true,
+            onClick = if (preview) null else ({ changeEmail = true }), clickLabel = tr("Change email"))
         SettingsText(strings.getString(S.edit_city), 24, 442, 300, 20, 11, p.primary)
         ProfileField(city, { edit { city = it } }, 465, 42, S.edit_city_hint, S.edit_city, "profile_city",
             KeyboardOptions(KeyboardCapitalization.Words, imeAction = ImeAction.Next))
@@ -260,16 +261,20 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
 /** Native input placed over a field background from the crop (342 wide, text inset 14). */
 @Composable
 private fun ProfileField(value: String, onValue: (String) -> Unit, y: Int, height: Int, hint: Int, label: Int, tag: String,
-                         keyboard: KeyboardOptions, readOnly: Boolean = false, single: Boolean = true) {
+                         keyboard: KeyboardOptions, readOnly: Boolean = false, single: Boolean = true,
+                         onClick: (() -> Unit)? = null, clickLabel: String? = null) {
     val p = maitriPalette()
     val strings = settingsResources()
     val description = strings.getString(label)
     val readOnlyNote = strings.getString(S.edit_email_readonly)
-    BasicTextField(value, onValue, settingsSlot(24, y, 342, height).testTag(tag).semantics {
+    val slot = settingsSlot(24, y, 342, height).testTag(tag)
+    // A disabled field leaves taps to the click handler; its text stays in the accessibility tree.
+    BasicTextField(value, onValue, (if (onClick != null) slot.clickable(role = Role.Button, onClickLabel = clickLabel,
+            onClick = onClick) else slot).semantics {
             contentDescription = description
             if (readOnly) stateDescription = readOnlyNote
         },
-        readOnly = readOnly, singleLine = single, maxLines = if (single) 1 else 3, keyboardOptions = keyboard,
+        enabled = onClick == null, readOnly = readOnly, singleLine = single, maxLines = if (single) 1 else 3, keyboardOptions = keyboard,
         textStyle = TextStyle(color = if (readOnly) p.secondary else p.primary, fontSize = 13.sp, lineHeight = 17.sp),
         cursorBrush = SolidColor(p.accent),
         decorationBox = { inner ->

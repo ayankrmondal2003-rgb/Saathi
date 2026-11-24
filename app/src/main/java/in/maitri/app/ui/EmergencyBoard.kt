@@ -60,9 +60,31 @@ internal fun FitText(text: String, modifier: Modifier, color: Color, size: Float
 internal fun designBreaks(text: String): String =
     if (LocalDensity.current.fontScale > 1.01f) text.replace('\n', ' ') else text
 
+/**
+ * Text that used to be baked into the 06/07/08 artwork, now drawn natively at the design's position: `baseline` is
+ * the glyph baseline in board units (the SVG's y minus 972), so it lines up with the shapes around it. Translatable,
+ * and it grows with large text through FitText.
+ */
 @Composable
-internal fun BoardLabel(x: Int, y: Int, width: Int, label: String, color: Color, size: Int = 12) {
-    FitText(label, Modifier.offset(x.dp, (y - 28).dp).width(width.dp), color, size.toFloat(), size + 3f, maxLines = 2)
+internal fun ArtText(text: String, x: Float, baseline: Float, width: Float, size: Float, color: Color,
+                     weight: androidx.compose.ui.text.font.FontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
+                     center: Boolean = false, letterSpacing: TextUnit = TextUnit.Unspecified) {
+    // Line top = baseline - ascent (Roboto's ascent is 0.928 em); boards keep a 28-unit status inset.
+    FitText(text, Modifier.offset(x.dp, (baseline - 0.928f * size - 28f).dp).width(width.dp), color, size,
+        weight = weight, align = if (center) androidx.compose.ui.text.style.TextAlign.Center else null,
+        letterSpacing = letterSpacing)
+}
+
+/** Text under screen 06's dimmed backdrop: the design darkens it with the same scrim as the artwork. */
+internal fun scrimmed(color: Color, dark: Boolean): Color =
+    androidx.compose.ui.graphics.lerp(color, Color.Black, if (dark) 0.62f else 0.325f)
+
+@Composable
+internal fun BoardLabel(x: Int, y: Int, width: Int, label: String, color: Color, size: Int = 12,
+                        height: Int? = null, maxLines: Int = 2) {
+    // With a height, large text shrinks to stay inside it instead of growing into the line below.
+    val box = Modifier.offset(x.dp, (y - 28).dp).width(width.dp)
+    FitText(label, if (height != null) box.height(height.dp) else box, color, size.toFloat(), size + 3f, maxLines = maxLines)
 }
 
 @Composable

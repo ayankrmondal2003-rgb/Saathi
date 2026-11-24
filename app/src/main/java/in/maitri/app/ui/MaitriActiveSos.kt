@@ -364,6 +364,9 @@ fun MaitriActiveSos(
 
     EmergencyBoard(if (p.dark) R.drawable.maitri_dark_08 else R.drawable.maitri_light_08,
         tr("SOS is active. Circle notified.")) {
+        ArtText(tr("SOS is active"), 24f, 85.3f, 250f, 27f, p.primary, FontWeight.SemiBold)
+        ArtText(tr("End SOS"), 282f, 83.1f, 84f, 11.5f, p.accent, FontWeight.SemiBold, center = true)
+        ArtText(tr("Circle notified"), 24f, 557.2f, 300f, 17f, p.primary, FontWeight.SemiBold)
         val server = snapshot?.lastLocation?.takeIf { updated }
         val shown = shownLocation(server?.latitude, server?.longitude, server?.accuracyMeters,
             server?.recordedAt?.let { `in`.maitri.app.network.serverTimeMillis(it) }, localFix)
@@ -415,14 +418,15 @@ fun MaitriActiveSos(
                 .clickable(onClickLabel = tr("Text your circle")) { showSmsOffer = true }.padding(horizontal = 8.dp),
                 color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
-        // Over the artwork's "Tap to record" / "Tap to open" captions: what the capture is doing right now.
-        // Each tile shows its own uploads: voice under Voice, photos under Camera.
+        // Tile captions: "Tap to record" / "Tap to open", or what that tile's capture is doing right now.
         val voiceLine = if (recorder != null) tr("● Recording {0} · tap to stop", "%d:%02d".format(recordingSeconds / 60, recordingSeconds % 60))
             else voiceStatus
-        voiceLine?.let { Text(it, Modifier.offset(74.dp, (667 - 28).dp).size(112.dp, 22.dp).background(p.card), color = p.accent,
-            fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
-        photoStatus?.let { Text(it, Modifier.offset(251.dp, (667 - 28).dp).size(112.dp, 22.dp).background(p.card), color = p.accent,
-            fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+        ArtText(tr("Voice"), 72f, 663.1f, 112f, 14f, p.accent, FontWeight.SemiBold)
+        ArtText(voiceLine ?: tr("Tap to record"), 72f, 683.9f, 112f, 10f, if (voiceLine != null) p.accent else p.secondary,
+            if (voiceLine != null) FontWeight.SemiBold else FontWeight.Normal)
+        ArtText(tr("Camera"), 249.5f, 663.1f, 112f, 14f, p.accent, FontWeight.SemiBold)
+        ArtText(photoStatus ?: tr("Tap to open"), 249.5f, 683.9f, 112f, 10f, if (photoStatus != null) p.accent else p.secondary,
+            if (photoStatus != null) FontWeight.SemiBold else FontWeight.Normal)
         BoardAction(24, 638, 165, 64, if (recorder != null) tr("Stop recording") else tr("Record a voice note")) { voice() }
         BoardAction(201, 638, 165, 64, tr("Take a photo")) { camera() }
         BoardLabel(66, 719, 280, when {

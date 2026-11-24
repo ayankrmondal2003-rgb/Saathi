@@ -131,10 +131,27 @@ internal fun MaitriIncomingContent(
 ) {
     EmergencyBoard(if (p.dark) R.drawable.maitri_dark_06 else R.drawable.maitri_light_06,
         tr("Someone needs help. Only accept if you can respond safely."), 816) {
-        BoardLabel(86, 410, 252, approxLocality, p.primary, 15)
-        BoardLabel(86, 434, 252, tr("Location private until accepted"), p.secondary)
-        BoardLabel(54, 466, 154, estimatedEta, p.accent)
-        BoardLabel(215, 466, 132, approxDistance, p.primary)
+        // Behind the dimmed backdrop: the Responder tab's header and tab bar, as in the design.
+        ArtText(tr("NEARBY SUPPORT"), 84f, 71.1f, 270f, 10f, scrimmed(p.accent, p.dark), FontWeight.SemiBold,
+            letterSpacing = 1.2.sp)
+        ArtText(tr("Responder"), 84f, 108f, 270f, 26f, scrimmed(p.primary, p.dark), FontWeight.SemiBold)
+        listOf(tr("Home") to 67f, tr("Circle") to 152.3f, tr("Responder") to 238f, tr("Profile") to 323.5f).forEach { (label, cx) ->
+            val selected = cx == 238f
+            ArtText(label, cx - 45f, 807.1f, 90f, 10f, scrimmed(if (selected) p.accent else p.secondary, p.dark),
+                if (selected) FontWeight.SemiBold else FontWeight.Normal, center = true)
+        }
+        // The request card.
+        ArtText(tr("NEARBY SOS REQUEST"), 40f, 313.6f, 310f, 11f, p.accent, FontWeight.SemiBold, center = true)
+        ArtText(tr("Someone needs help"), 40f, 349.7f, 310f, 21f, p.primary, FontWeight.SemiBold, center = true)
+        ArtText(tr("Someone nearby is asking for help."), 40f, 375f, 310f, 12f, p.secondary, center = true)
+        ArtText(tr("Only accept if you can respond safely."), 40f, 521.9f, 310f, 11f, p.secondary, center = true)
+        ArtText(tr("Accept"), 40f, 577f, 148f, 14f, if (p.dark) p.background else Color.White, FontWeight.SemiBold, center = true)
+        ArtText(tr("Decline"), 202f, 577.1f, 148f, 14f, p.accent, FontWeight.SemiBold, center = true)
+        // The card's rows are 24 units apart: each label keeps to its row at any text size.
+        BoardLabel(86, 410, 252, approxLocality, p.primary, 15, height = 24, maxLines = 1)
+        BoardLabel(86, 434, 252, tr("Location private until accepted"), p.secondary, height = 18, maxLines = 1)
+        BoardLabel(54, 466, 154, estimatedEta, p.accent, height = 18, maxLines = 1)
+        BoardLabel(215, 466, 132, approxDistance, p.primary, height = 18, maxLines = 1)
         BoardAction(40, 548, 148, 48, tr("Accept"), !isSubmitting, onAccept)
         BoardAction(202, 548, 148, 48, tr("Decline"), !isSubmitting, onDecline)
     }

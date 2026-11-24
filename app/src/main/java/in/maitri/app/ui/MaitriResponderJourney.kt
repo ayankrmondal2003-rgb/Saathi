@@ -200,6 +200,12 @@ internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: Str
     EmergencyBoard(if (p.dark) R.drawable.maitri_dark_07 else R.drawable.maitri_light_07,
         tr("On your way. Keep both of you safe. Request more responders before you approach.")) {
         BoardLabel(84, 59, 270, tr("RESPONDER · ") + (assistanceStatus?.let { responderStatusLabel(it) } ?: tr("Accepted")).uppercase(), p.accent, 11)
+        ArtText(tr("On your way"), 84f, 107.7f, 280f, 26f, p.primary, FontWeight.SemiBold)
+        ArtText(tr("Keep both of you safe"), 24f, 612.9f, 340f, 16f, p.primary, FontWeight.SemiBold)
+        ArtText(tr("Request more responders before you approach."), 24f, 636.9f, 342f, 11f, p.secondary)
+        ArtText(tr("Bring in help"), 24f, 682.9f, 226f, 14f, if (p.dark) p.background else Color.White, FontWeight.SemiBold,
+            center = true)
+        ArtText(tr("Contact emergency services"), 24f, 727.7f, 300f, 11f, p.accent, FontWeight.Medium)
         BoardAction(24, 51, 342, 65, tr("Update responder status"), !busy, onStatus)
         // Live map over the crop's map area (342 x 320 at 24,140): the person in need and, when known, you.
         MaitriMap(listOfNotNull(coordinates?.let { MapMarker(it.first, it.second, MarkerKind.PERSON_IN_NEED) },
@@ -212,16 +218,19 @@ internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: Str
             BoardAction(228, 480, 130, 32, tr("Read their medical notes"), onClick = onMedicalNotes)
         }
         BoardLabel(40, 515, 308, coordinates?.let { "${it.first}, ${it.second}" } ?: tr("Awaiting location"), p.secondary)
-        BoardLabel(40, 546, 306, when {
+        // Two lines at most, kept inside the card (its bottom edge is 34 units below).
+        BoardLabel(40, 546, 306, height = 32, label = when {
             coordinates == null -> tr("Distance and ETA unavailable")
             distanceMeters != null -> approxDistanceAndWalk(distanceMeters) + tr(" · Open in Maps")
             else -> tr("Open last reported location in Maps")
-        }, p.accent)
+        }, color = p.accent)
         BoardAction(24, 476, 342, 104, tr("Open last reported location in Maps"), coordinates != null, onMaps)
         BoardAction(24, 654, 226, 48, tr("Bring in help"), !busy, onHelp)
         // The artwork's "Call" pill calls the person in need, only with their consent; otherwise it's covered.
-        if (onCallPerson != null) BoardAction(262, 654, 104, 48, tr("Call the person in need"), onClick = onCallPerson)
-        else Box(Modifier.offset(258.dp, (650 - 28).dp).size(112.dp, 56.dp).background(p.background))
+        if (onCallPerson != null) {
+            ArtText(tr("Call"), 309.8f, 683.2f, 54f, 14f, p.accent, FontWeight.SemiBold)
+            BoardAction(262, 654, 104, 48, tr("Call the person in need"), onClick = onCallPerson)
+        } else Box(Modifier.offset(258.dp, (650 - 28).dp).size(112.dp, 56.dp).background(p.background))
         BoardAction(24, 704, 220, 44, tr("Contact emergency services"), onClick = onDial)
     }
 }

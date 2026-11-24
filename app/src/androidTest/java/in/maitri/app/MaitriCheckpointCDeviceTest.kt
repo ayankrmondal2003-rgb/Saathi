@@ -102,7 +102,9 @@ class MaitriCheckpointCDeviceTest {
         ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
             for (dark in listOf(false, true)) {
                 themed(scenario, dark) { MaitriPermissions(onBack = {}) }
-                text(R.string.perm_banner); text(R.string.perm_open); text(R.string.perm_hint)
+                // perm_hint now lives in the "Keep Maitri alerts on time" dialog that replaced the footer hint.
+                text(R.string.perm_banner); text(R.string.perm_open)
+                node { it.text?.toString() == tr("Keep Maitri alerts on time ›") }
                 var expected = emptyMap<PermissionRow, AccessState>()
                 scenario.onActivity { activity -> expected = PermissionRow.entries.associateWith { readAccess(activity, it) } }
                 for (row in PermissionRow.entries) {
