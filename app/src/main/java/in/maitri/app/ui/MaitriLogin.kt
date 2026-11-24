@@ -206,7 +206,7 @@ internal fun MaitriLoginContent(
             Text(
                 text = tr("Welcome to maitri"),
                 color = p.primary,
-                fontSize = 24.sp,
+                fontSize = 26.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -214,7 +214,7 @@ internal fun MaitriLoginContent(
             Text(
                 text = tr("A little peace of mind starts here."),
                 color = p.secondary,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -312,7 +312,7 @@ internal fun MaitriLoginContent(
                 Spacer(Modifier.width(10.dp))
                 Text(
                     text = tr("Continue with Google"),
-                    fontSize = 14.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -365,10 +365,10 @@ internal fun MaitriLoginContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.Email,
+                    painter = painterResource(R.drawable.maitri_mail),
                     contentDescription = null,
                     tint = p.secondary,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(24.dp)
                 )
                 Spacer(Modifier.width(12.dp))
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
@@ -412,10 +412,10 @@ internal fun MaitriLoginContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.Lock,
+                    painter = painterResource(R.drawable.maitri_lock),
                     contentDescription = null,
                     tint = p.secondary,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(24.dp)
                 )
                 Spacer(Modifier.width(12.dp))
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
@@ -445,12 +445,11 @@ internal fun MaitriLoginContent(
                     onClick = onPasswordVisibilityToggle,
                     modifier = Modifier.size(24.dp)
                 ) {
-                    Icon(
-                        imageVector = if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                        contentDescription = tr("Toggle password visibility"),
-                        tint = p.secondary,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    // The design draws the open eye; the crossed-out state has no design, so it stays Material.
+                    if (passwordVisible) Icon(Icons.Rounded.VisibilityOff, tr("Toggle password visibility"),
+                        tint = p.secondary, modifier = Modifier.size(18.dp))
+                    else Icon(painterResource(R.drawable.maitri_eye), tr("Toggle password visibility"),
+                        tint = p.secondary, modifier = Modifier.size(24.dp))
                 }
             }
 
@@ -499,7 +498,7 @@ internal fun MaitriLoginContent(
                 } else {
                     Text(
                         text = if (selectedTab == 0) tr("Log in with email") else tr("Sign up with email"),
-                        fontSize = 14.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }

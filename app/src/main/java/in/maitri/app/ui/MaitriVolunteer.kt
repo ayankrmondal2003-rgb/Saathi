@@ -33,12 +33,13 @@ import androidx.compose.ui.unit.sp
 import `in`.maitri.app.R
 import kotlinx.coroutines.launch
 
-enum class VolunteerDocType(val title: String, val subtitle: String, val icon: ImageVector) {
-    GOVT_ID(trKey("Government issued identity proof"), trKey("Upload document"), Icons.Rounded.Badge),
-    ADDRESS_PROOF(trKey("Address proof"), trKey("Upload document"), Icons.Rounded.Home),
-    POLICE_CERT(trKey("Police character certificate"), trKey("Upload document"), Icons.Rounded.Security),
-    PHOTO(trKey("Recent photograph"), trKey("Upload photo"), Icons.Rounded.Image),
-    DECLARATION(trKey("Signed volunteer declaration"), trKey("Upload document"), Icons.Rounded.Description)
+/** Icons are the design's outline drawings (24dp boxes at the design's scale). */
+enum class VolunteerDocType(val title: String, val subtitle: String, val icon: Int) {
+    GOVT_ID(trKey("Government issued identity proof"), trKey("Upload document"), R.drawable.maitri_id_card),
+    ADDRESS_PROOF(trKey("Address proof"), trKey("Upload document"), R.drawable.maitri_house),
+    POLICE_CERT(trKey("Police character certificate"), trKey("Upload document"), R.drawable.maitri_shield_outline),
+    PHOTO(trKey("Recent photograph"), trKey("Upload photo"), R.drawable.maitri_image),
+    DECLARATION(trKey("Signed volunteer declaration"), trKey("Upload document"), R.drawable.maitri_document)
 }
 
 enum class DocState { EMPTY, UPLOADING, UPLOADED, FAILED }
@@ -296,7 +297,7 @@ internal fun MaitriVolunteerContent(
             Text(
                 text = tr("Be there for someone."),
                 color = p.primary,
-                fontSize = 24.sp,
+                fontSize = 26.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -336,12 +337,12 @@ internal fun MaitriVolunteerContent(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Check,
+                        painter = painterResource(R.drawable.maitri_check),
                         contentDescription = null,
                         tint = if (isHelp) p.accent else p.secondary,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(24.dp)
                     )
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(2.dp))
                     FitText(tr("Yes, I'd like to help"), Modifier, if (isHelp) p.accent else p.secondary, 13f,
                         weight = FontWeight.SemiBold)
                 }
@@ -379,7 +380,7 @@ internal fun MaitriVolunteerContent(
             Text(
                 text = tr("Volunteer verification"),
                 color = p.primary,
-                fontSize = 14.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -422,14 +423,14 @@ internal fun MaitriVolunteerContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = docType.icon,
+                            painter = painterResource(docType.icon),
                             contentDescription = null,
-                            tint = if (isUploaded) p.accent else p.secondary,
-                            modifier = Modifier.size(20.dp)
+                            tint = p.accent,
+                            modifier = Modifier.size(24.dp)
                         )
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier.width(8.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            FitText(tr(docType.title), Modifier, p.primary, 12f, weight = FontWeight.SemiBold)
+                            FitText(tr(docType.title), Modifier, p.primary, 12.5f, weight = FontWeight.Medium)
                             Spacer(Modifier.height(2.dp))
                             FitText(
                                 text = when (doc.state) {
@@ -458,10 +459,10 @@ internal fun MaitriVolunteerContent(
                         ) {
                             if (doc.state == DocState.UPLOADING) CircularProgressIndicator(Modifier.size(16.dp), color = p.accent, strokeWidth = 2.dp)
                             else Icon(
-                                imageVector = when (doc.state) {
-                                    DocState.UPLOADED -> Icons.Rounded.Check
-                                    DocState.FAILED -> Icons.Rounded.Refresh
-                                    else -> Icons.Rounded.FileUpload
+                                painter = when (doc.state) {
+                                    DocState.UPLOADED -> painterResource(R.drawable.maitri_check)
+                                    DocState.FAILED -> androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Rounded.Refresh)
+                                    else -> painterResource(R.drawable.maitri_upload)
                                 },
                                 contentDescription = when (doc.state) {
                                     DocState.UPLOADED -> tr("Uploaded")
@@ -469,7 +470,7 @@ internal fun MaitriVolunteerContent(
                                     else -> tr("Upload")
                                 },
                                 tint = p.accent,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(if (doc.state == DocState.FAILED) 16.dp else 24.dp)
                             )
                         }
                     }
@@ -564,13 +565,14 @@ internal fun MaitriVolunteerContent(
                 shape = RoundedCornerShape(24.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (readyToSubmit) p.accent else p.card,
-                    contentColor = if (readyToSubmit) (if (p.dark) p.background else Color.White) else p.accent
+                    // Not ready yet: greyed out, as in the design.
+                    contentColor = if (readyToSubmit) (if (p.dark) p.background else Color.White) else p.secondary
                 ),
                 elevation = null
             ) {
                 Text(
                     text = if (locked) tr("Submitted") else tr("Submit for review"),
-                    fontSize = 14.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }

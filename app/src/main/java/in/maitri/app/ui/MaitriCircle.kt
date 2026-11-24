@@ -313,16 +313,15 @@ internal fun MaitriCircleContent(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(p.card),
+                            .size(36.dp),
                         contentAlignment = Alignment.Center
                     ) {
+                        // The design's outline shield-check, without a backing circle.
                         Icon(
-                            imageVector = Icons.Rounded.Shield,
+                            painter = painterResource(R.drawable.maitri_shield_check),
                             contentDescription = null,
                             tint = p.accent,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                     Column(modifier = Modifier.weight(1f)) {
@@ -602,7 +601,7 @@ private fun ContactCardItem(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        FitText(contact.displayName, Modifier, palette.primary, 15f, weight = FontWeight.SemiBold)
+                        FitText(contact.displayName, Modifier, palette.primary, 16f, weight = FontWeight.Medium)
                     }
                     Spacer(modifier = Modifier.height(2.dp))
                     FitText(if (contact.isPrimary) tr("{0} · Primary contact", contact.label) else contact.label,
@@ -619,10 +618,10 @@ private fun ContactCardItem(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Edit,
+                        painter = painterResource(R.drawable.maitri_pencil),
                         contentDescription = tr("Edit contact"),
                         tint = palette.accent,
-                        modifier = Modifier.size(17.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
@@ -664,7 +663,7 @@ private fun ContactCardItem(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     FitText(if (contact.notifyOnSos) tr("SOS alerts on") else tr("SOS alerts off"), Modifier,
-                        if (contact.notifyOnSos) palette.primary else palette.secondary, 11f, weight = FontWeight.Medium)
+                        palette.secondary, 10f)
                 }
 
                 // Middle: whether SOS alerts reach this person as a push (linked Maitri account) or by your SMS.
@@ -683,8 +682,8 @@ private fun ContactCardItem(
                 // Right: Remove button
                 Text(
                     text = tr("Remove"),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Medium,
                     color = palette.accent,
                     maxLines = 1, softWrap = false,
                     modifier = Modifier

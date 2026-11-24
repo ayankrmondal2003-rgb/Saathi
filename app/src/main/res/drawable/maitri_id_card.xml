@@ -1,0 +1,9 @@
+<!-- Outline icon from design-reference/crops/light-04.svg, at the design's scale. Tint with Icon(tint). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <group android:translateX="-1358.000" android:translateY="-409.000">
+        <path android:pathData="M1364.17 415.167H1375.83C1377.21 415.167 1378.33 416.286 1378.33 417.667V424.333C1378.33 425.714 1377.21 426.833 1375.83 426.833H1364.17C1362.79 426.833 1361.67 425.714 1361.67 424.333V417.667C1361.67 416.286 1362.79 415.167 1364.17 415.167Z" android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+        <path android:pathData="M1368.33 420.167C1368.33 421.087 1367.59 421.833 1366.67 421.833C1365.75 421.833 1365 421.087 1365 420.167C1365 419.246 1365.75 418.5 1366.67 418.5C1367.59 418.5 1368.33 419.246 1368.33 420.167Z" android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+        <path android:pathData="M1364.17 424.333C1364.17 423.67 1364.43 423.034 1364.9 422.565C1365.37 422.097 1366 421.833 1366.67 421.833C1367.33 421.833 1367.97 422.097 1368.43 422.565C1368.9 423.034 1369.17 423.67 1369.17 424.333M1371.67 419.333H1375M1371.67 422.667H1375" android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+    </group>
+</vector>

@@ -1,0 +1,9 @@
+<!-- Outline icon from design-reference/crops/light-04.svg, at the design's scale. Tint with Icon(tint). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <group android:translateX="-1358.000" android:translateY="-586.600">
+        <path android:pathData="M1365 591.1H1375C1376.38 591.1 1377.5 592.219 1377.5 593.6V603.6C1377.5 604.981 1376.38 606.1 1375 606.1H1365C1363.62 606.1 1362.5 604.981 1362.5 603.6V593.6C1362.5 592.219 1363.62 591.1 1365 591.1Z" android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+        <path android:pathData="M1368.33 595.267C1368.33 596.187 1367.59 596.933 1366.67 596.933C1365.75 596.933 1365 596.187 1365 595.267C1365 594.346 1365.75 593.6 1366.67 593.6C1367.59 593.6 1368.33 594.346 1368.33 595.267Z" android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+        <path android:pathData="M1362.5 602.767L1366.67 598.6L1370 601.933L1373.33 596.933L1377.5 602.767" android:strokeColor="#FF000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+    </group>
+</vector>
