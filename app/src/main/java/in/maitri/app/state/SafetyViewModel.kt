@@ -101,84 +101,13 @@ class SafetyViewModel(app: Application) : AndroidViewModel(app) {
         if (current.incident?.status != IncidentStatus.ACTIVE) {
             tracking.begin(user.uid)
             if (share) tracking.sync.enable(user.uid, tracking.session.value.id)
-            val session = tracking.session.value
-            val lat = session.latest?.latitude
-            val lng = session.latest?.longitude
-            val statuses = `in`.maitri.app.notification.SosContactNotifierHelper.buildContactAlertStatuses(
-                contacts = current.contacts,
-                latitude = lat,
-                longitude = lng,
-                recordedAtMillis = session.startedAt.takeIf { it > 0 } ?: System.currentTimeMillis(),
-                isSimulated = true
-            )
-            mutable.value = current.copy(
-                incident = SosIncident(SystemClock.elapsedRealtime()),
-                contactAlertStatuses = statuses,
-                lastAlertBatchDispatchedAt = System.currentTimeMillis()
-            )
+            // Circle delivery is recorded by the server and shown on screen 08; nothing is claimed locally.
+            mutable.value = current.copy(incident = SosIncident(SystemClock.elapsedRealtime()))
         }
     }
     fun end() {
         tracking.close()
-        val closureStatuses = current.contactAlertStatuses.map { alert ->
-            val contact = current.contacts.find { it.id == alert.contactId }
-            if (contact?.notifyOnClosure == true) {
-                alert.copy(
-                    deliveryStatus = ContactDeliveryStatus.PROVIDER_ACCEPTED,
-                    messagePreview = "Maitri SOS: Incident has been resolved. I am safe.",
-                    updatedAt = System.currentTimeMillis()
-                )
-            } else {
-                alert
-            }
-        }
-        mutable.value = current.copy(
-            incident = current.incident?.copy(status = IncidentStatus.ENDED),
-            contactAlertStatuses = closureStatuses
-        )
-    }
-
-    fun dispatchSosContactAlerts(lat: Double? = null, lng: Double? = null, isSimulated: Boolean = true) {
-        val session = tracking.session.value
-        val effectiveLat = lat ?: session.latest?.latitude
-        val effectiveLng = lng ?: session.latest?.longitude
-        val statuses = `in`.maitri.app.notification.SosContactNotifierHelper.buildContactAlertStatuses(
-            contacts = current.contacts,
-            latitude = effectiveLat,
-            longitude = effectiveLng,
-            recordedAtMillis = System.currentTimeMillis(),
-            isSimulated = isSimulated
-        )
-        mutable.value = current.copy(
-            contactAlertStatuses = statuses,
-            lastAlertBatchDispatchedAt = System.currentTimeMillis()
-        )
-    }
-
-    fun testContactAlert(contactId: String) {
-        val session = tracking.session.value
-        val lat = session.latest?.latitude
-        val lng = session.latest?.longitude
-        val contact = current.contacts.find { it.id == contactId } ?: return
-        val testStatus = ContactAlertStatus(
-            contactId = contact.id,
-            displayName = contact.displayName,
-            maskedPhone = EmergencyContact.maskPhone(contact.phoneNumber),
-            isPrimary = contact.isPrimary,
-            deliveryStatus = ContactDeliveryStatus.PROVIDER_ACCEPTED,
-            messagePreview = `in`.maitri.app.notification.SosContactNotifierHelper.formatEmergencyMessage(
-                contactName = contact.displayName,
-                latitude = lat,
-                longitude = lng,
-                recordedAtMillis = System.currentTimeMillis(),
-                includeLocation = contact.includeLocationLink
-            ),
-            locationDisclosed = contact.includeLocationLink && lat != null && lng != null,
-            trackingGranted = contact.allowLiveTracking,
-            updatedAt = System.currentTimeMillis()
-        )
-        val updated = current.contactAlertStatuses.filterNot { it.contactId == contactId } + testStatus
-        mutable.value = current.copy(contactAlertStatuses = updated)
+        mutable.value = current.copy(incident = current.incident?.copy(status = IncidentStatus.ENDED))
     }
 
     fun enable(enabled: Boolean) = updatePreferences(Responder(enabled))

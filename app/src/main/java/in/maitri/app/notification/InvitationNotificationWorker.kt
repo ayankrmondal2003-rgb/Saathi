@@ -1,5 +1,6 @@
 package `in`.maitri.app.notification
 
+import `in`.maitri.app.data.isMaitriVerified
 import android.content.Context
 import androidx.work.*
 import `in`.maitri.app.network.BackendClient
@@ -16,7 +17,7 @@ class InvitationNotificationWorker(context: Context, params: WorkerParameters) :
         val incident = inputData.getString("incident") ?: return Result.failure()
         val expires = inputData.getLong("expires", 0)
         fun eligible() = expires > System.currentTimeMillis() && FirebaseAuth.getInstance().currentUser?.let {
-            it.uid == uid && it.isEmailVerified
+            it.uid == uid && it.isMaitriVerified()
         } == true
         if (!eligible()) return Result.success()
         try {

@@ -95,8 +95,7 @@ data class ContactAlertStatus(
 )
 
 enum class IncidentStatus { ACTIVE, ENDED }
-data class SosIncident(val started: Long, val status: IncidentStatus = IncidentStatus.ACTIVE,
-                       val notified: Int = 3, val accepted: Int = 1)
+data class SosIncident(val started: Long, val status: IncidentStatus = IncidentStatus.ACTIVE)
 enum class Response { PENDING, ACCEPTED, DECLINED }
 data class Responder(val enabled: Boolean = false, val available: Boolean = false, val response: Response = Response.PENDING)
 data class DemoState(
@@ -104,8 +103,6 @@ data class DemoState(
     val contacts: List<EmergencyContact> = emptyList(),
     val incident: SosIncident? = null,
     val responder: Responder = Responder(),
-    val contactAlertStatuses: List<ContactAlertStatus> = emptyList(),
-    val lastAlertBatchDispatchedAt: Long? = null,
     /** Result of the last circle sync with the server, shown once on screen 05. */
     val contactsMessage: String? = null
 )

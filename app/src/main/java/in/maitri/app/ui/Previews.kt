@@ -62,9 +62,7 @@ fun PreviewActiveIncident() {
         ActiveIncident(
             incident = SosIncident(
                 status = IncidentStatus.ACTIVE,
-                started = System.currentTimeMillis() - 145000L,
-                notified = 4,
-                accepted = 1
+                started = System.currentTimeMillis() - 145000L
             ),
             uid = "uid-123",
             end = {}

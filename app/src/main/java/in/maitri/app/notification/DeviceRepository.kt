@@ -1,5 +1,6 @@
 package `in`.maitri.app.notification
 
+import `in`.maitri.app.data.isMaitriVerified
 import android.content.Context
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -96,7 +97,7 @@ class DeviceRepository private constructor(private val context: Context) {
         val authUser = runCatching { FirebaseAuth.getInstance().currentUser }.getOrNull()
         val effectiveUid = authUser?.uid
 
-        if (authUser == null || !authUser.isEmailVerified || effectiveUid.isNullOrBlank() ||
+        if (authUser == null || !authUser.isMaitriVerified() || effectiveUid.isNullOrBlank() ||
             (explicitUser != null && explicitUser != effectiveUid)) {
             val state = FcmTokenState.AuthenticationRequired(token)
             _tokenState.value = state

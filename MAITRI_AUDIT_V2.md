@@ -188,7 +188,7 @@ Tests at `efdc70d`:
 - Device 26/26 on SM-E625F.
 - Isolated backend 116/116 (Alembic head 0011).
 
-Found during phase 1, not yet fixed: `SafetyViewModel` still builds local `contactAlertStatuses` marked `PROVIDER_ACCEPTED` (test alert and closure). No screen displays them, but they should be removed in phase D.
+Found during phase 1: `SafetyViewModel` built local `contactAlertStatuses` marked `PROVIDER_ACCEPTED`. Removed (see "SOS path fixes" below).
 
 ### Maps (Esri World Street Map), commit after `e4cc31c`
 
@@ -217,3 +217,13 @@ Tests at `cdbd1af` plus the contract-test path fix:
 - Android JVM 140/140.
 - Isolated backend 116/116 (Alembic head 0011). `test_android_api_contract_consistency` still pointed at the old `com/example/surakshanet` path; it now reads `in/maitri/app`.
 - Device suite not re-run: it uninstalls the app.
+
+### SOS path fixes
+
+| Item | Now |
+|---|---|
+| Phone-OTP users could not raise an SOS. `TestIncidentSync`, `SosLocationService`, `DeviceRepository` (FCM token) and `InvitationNotificationWorker` still required `isEmailVerified`, so the incident was never created, location tracking stopped, and invitations never arrived. All now use `FirebaseUser.isMaitriVerified()` (same rule as `core.identity`) | fixed; `PhoneIdentityTest.sosPathsDoNotRequireAnEmail` guards it |
+| Local fake SOS data: `contactAlertStatuses` / `PROVIDER_ACCEPTED` on start, closure and "test alert"; `SosIncident.notified = 3, accepted = 1` defaults | removed. Screen 08 shows only server delivery status (`contactDelivery`) |
+| SOS still defaults to a local-only practice session unless "share" is ticked, and the server accepts only test incidents (R2) | open, Phase E |
+
+Tests: Android JVM 141/141.

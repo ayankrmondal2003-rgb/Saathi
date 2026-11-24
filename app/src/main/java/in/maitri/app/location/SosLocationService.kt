@@ -1,5 +1,6 @@
 package `in`.maitri.app.location
 
+import `in`.maitri.app.data.isMaitriVerified
 import android.app.*
 import android.content.*
 import android.content.pm.ServiceInfo
@@ -27,7 +28,7 @@ class SosLocationService : Service() {
     private fun authorized(): Boolean {
         val user = auth?.currentUser
         if (auth != null) {
-            return user != null && user.isEmailVerified && user.uid == repo.session.value.owner
+            return user != null && user.isMaitriVerified() && user.uid == repo.session.value.owner
         }
         val localUser = LocalAuthRepository.get(this).current
         return localUser != null && localUser.verified && localUser.uid == repo.session.value.owner

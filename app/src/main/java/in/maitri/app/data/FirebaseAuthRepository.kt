@@ -1,14 +1,18 @@
 package `in`.maitri.app.data
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.UserProfileChangeRequest
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
+/** The server's account rule (verified email or OTP-confirmed phone) for a Firebase user; see [accountVerified]. */
+fun FirebaseUser.isMaitriVerified(): Boolean = accountVerified(isEmailVerified, phoneNumber)
+
 class FirebaseAuthRepository(private val auth: FirebaseAuth) : AuthRepository {
     override val current get() = auth.currentUser?.let {
-        Identity(it.uid, it.displayName.orEmpty(), it.email.orEmpty(), accountVerified(it.isEmailVerified, it.phoneNumber),
+        Identity(it.uid, it.displayName.orEmpty(), it.email.orEmpty(), it.isMaitriVerified(),
             it.metadata?.creationTimestamp, it.phoneNumber)
     }
 
@@ -31,7 +35,7 @@ class FirebaseAuthRepository(private val auth: FirebaseAuth) : AuthRepository {
     override suspend fun refresh() {
         val user = requireNotNull(auth.currentUser)
         user.reload().await()
-        if (user.isEmailVerified) user.getIdToken(true).await()
+        if (user.isMaitriVerified()) user.getIdToken(true).await()
     }
     override suspend fun reset(email: String) { auth.sendPasswordResetEmail(email).await() }
     override fun logout() = auth.signOut()

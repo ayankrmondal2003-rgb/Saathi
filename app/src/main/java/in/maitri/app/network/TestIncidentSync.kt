@@ -7,6 +7,7 @@ import `in`.maitri.app.location.LocationUpdate
 import `in`.maitri.app.location.LocalTrackingRepository
 import `in`.maitri.app.location.TrackingSession
 import com.google.firebase.auth.FirebaseAuth
+import `in`.maitri.app.data.isMaitriVerified
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,7 +79,7 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
     fun isShared(uid: String, key: String) = key in keys(uid)
     private fun keys(uid: String) = prefs.getStringSet(uid, emptySet()).orEmpty().toSet()
     private fun user(uid: String) = runCatching { FirebaseAuth.getInstance().currentUser }
-        .getOrNull()?.takeIf { it.uid == uid && it.isEmailVerified }
+        .getOrNull()?.takeIf { it.uid == uid && it.isMaitriVerified() }
     private fun active(uid: String, key: String) = session().let { it.owner == uid && it.id == key } && isShared(uid, key)
 
     fun record(uid: String, key: String, fix: LocationUpdate) {
