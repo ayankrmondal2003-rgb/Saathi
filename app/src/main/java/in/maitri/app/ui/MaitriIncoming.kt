@@ -87,11 +87,26 @@ fun MaitriIncoming(
         }
     }
 
+    // Expiry countdown; the server sends only a distance band before acceptance, never a place or coordinates.
+    val expiresAt = remember(invitation.expiresAt) { runCatching { java.time.Instant.parse(invitation.expiresAt) }.getOrNull() }
+    var secondsLeft by remember { mutableLongStateOf(Long.MAX_VALUE) }
+    LaunchedEffect(expiresAt) {
+        while (expiresAt != null) {
+            secondsLeft = java.time.Duration.between(java.time.Instant.now(), expiresAt).seconds.coerceAtLeast(0)
+            if (secondsLeft == 0L) break
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+    val expired = expiresAt != null && secondsLeft == 0L
     MaitriIncomingContent(
         p = p,
-        approxLocality = approxLocality,
-        approxDistance = approxDistance,
-        estimatedEta = estimatedEta,
+        approxLocality = if (approxLocality == "Nearby emergency") "Nearby emergency" else approxLocality,
+        approxDistance = invitation.distanceBand ?: approxDistance,
+        estimatedEta = when {
+            expired -> "Request expired"
+            expiresAt != null -> "Answer within %d:%02d".format(secondsLeft / 60, secondsLeft % 60)
+            else -> estimatedEta
+        },
         isSubmitting = isSubmitting,
         errorMessage = errorMessage,
         onAccept = { submitDecision("ACCEPTED") },

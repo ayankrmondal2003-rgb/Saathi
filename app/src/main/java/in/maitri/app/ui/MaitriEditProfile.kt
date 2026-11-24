@@ -77,6 +77,7 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
     var phone by remember(uid) { mutableStateOf(user?.phone.orEmpty()) }
     var city by remember(uid) { mutableStateOf("") }
     var notes by remember(uid) { mutableStateOf("") }
+    var sharePhone by remember(uid) { mutableStateOf(false) }
     var dirty by remember(uid) { mutableStateOf(false) }
     var loading by remember(uid) { mutableStateOf(!preview && uid.isNotBlank()) }
     var saving by remember { mutableStateOf(false) }
@@ -105,6 +106,7 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
                 name = server.name
                 phone = server.phoneNumber.orEmpty()
                 city = server.city.orEmpty()
+                sharePhone = server.sharePhoneInSos
             }
         } catch (e: CancellationException) { throw e } catch (_: Exception) {
             // Keep the locally known name and phone; saving will surface any server problem.
@@ -163,7 +165,7 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
         saving = true; message = null
         scope.launch {
             try {
-                val saved = BackendClient.api.profileDetails(ProfileDetailsRequest(name.trim(), phone.trim(), city.trim()), ExpectedAccount(uid))
+                val saved = BackendClient.api.profileDetails(ProfileDetailsRequest(name.trim(), phone.trim(), city.trim(), sharePhone), ExpectedAccount(uid))
                 onProfileUpdated(requireNotNull(user).copy(name = saved.name, phone = saved.phoneNumber))
                 val notesSaved = withContext(Dispatchers.IO) { runCatching { store.writeMedicalNotes(uid, notes) }.isSuccess }
                 if (!notesSaved) { message = S.edit_notes_failed; return@launch }
@@ -211,6 +213,10 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
             S.edit_notes_hint, S.edit_notes, "profile_notes",
             KeyboardOptions(KeyboardCapitalization.Sentences, imeAction = ImeAction.Default), single = false)
 
+        // Consent for screen 07's "Call": accepted responders may call this number during an active SOS.
+        SettingsText((if (sharePhone) "☑ " else "☐ ") + "Let responders who accept my SOS call this number",
+            24, 648, 342, 40, 11, if (sharePhone) p.primary else p.secondary, line = 15,
+            action = { edit { sharePhone = !sharePhone } })
         val helper = message ?: if (loading) S.edit_loading else S.edit_helper
         SettingsText(strings.getString(helper), 36, 703, 318, 34, 11, if (message != null && message != S.edit_saved) p.accent else p.secondary,
             center = true, line = 15)

@@ -110,12 +110,88 @@ fun MaitriActiveSos(
     }
     var delivery by remember(uid, incident.started) { mutableStateOf<List<`in`.maitri.app.network.ContactDeliveryDto>?>(null) }
     var updated by remember { mutableStateOf(false) }
-    fun openCapture(action: String) {
-        try { context.startActivity(android.content.Intent(action)) }
-        catch (_: android.content.ActivityNotFoundException) { Toast.makeText(context, "No capture app available", Toast.LENGTH_SHORT).show() }
-        catch (_: SecurityException) { Toast.makeText(context, "Capture permission unavailable", Toast.LENGTH_SHORT).show() }
+    // SOS voice notes and photos: captured here, uploaded in the background (see network/SosMedia.kt).
+    val mediaPrefs = remember(context) { context.getSharedPreferences("sos_media", android.content.Context.MODE_PRIVATE) }
+    var recorder by remember { mutableStateOf<android.media.MediaRecorder?>(null) }
+    var recordingFile by remember { mutableStateOf<java.io.File?>(null) }
+    var recordingStarted by remember { mutableLongStateOf(0L) }
+    var recordingSeconds by remember { mutableIntStateOf(0) }
+    var askVoiceConsent by remember { mutableStateOf(false) }
+    var photoFile by rememberSaveable { mutableStateOf<String?>(null) }
+    val pendingMedia by remember(incidentId) {
+        androidx.work.WorkManager.getInstance(context).getWorkInfosByTagFlow("${`in`.maitri.app.network.SosMedia.TAG}:$incidentId")
+    }.collectAsStateWithLifecycle(emptyList())
+    val uploadingMedia = pendingMedia.count { !it.state.isFinished }
+    val savedMedia = pendingMedia.count { it.state == androidx.work.WorkInfo.State.SUCCEEDED }
+    fun stopRecording() {
+        val r = recorder ?: return
+        recorder = null
+        val file = recordingFile
+        recordingFile = null
+        val ok = runCatching { r.stop() }.isSuccess
+        r.release()
+        if (ok && file != null && file.length() > 0)
+            `in`.maitri.app.network.SosMedia.enqueue(context, file, "SOS_VOICE", "audio/mp4", incidentId)
+        else file?.delete()
     }
+    fun startRecording() {
+        val file = `in`.maitri.app.network.SosMedia.newFile(context, "voice", "m4a")
+        try {
+            val r = `in`.maitri.app.network.SosMedia.recorder(context, file)
+            r.setOnInfoListener { _, what, _ ->
+                if (what == android.media.MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) stopRecording()
+            }
+            r.start()
+            recorder = r; recordingFile = file; recordingStarted = SystemClock.elapsedRealtime()
+        } catch (_: Exception) {
+            file.delete()
+            Toast.makeText(context, "Couldn't start recording", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startRecording() else Toast.makeText(context, "Allow the microphone to record a voice note", Toast.LENGTH_LONG).show()
+    }
+    fun voice() {
+        when {
+            recorder != null -> stopRecording()
+            !mediaPrefs.getBoolean("voice_consent", false) -> askVoiceConsent = true
+            androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED -> micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+            else -> startRecording()
+        }
+    }
+    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        val file = photoFile?.let { java.io.File(it) }
+        photoFile = null
+        if (saved && file != null && file.length() > 0)
+            `in`.maitri.app.network.SosMedia.enqueue(context, file, "SOS_PHOTO", "image/jpeg", incidentId)
+        else file?.delete()
+    }
+    fun camera() {
+        val file = `in`.maitri.app.network.SosMedia.newFile(context, "photo", "jpg")
+        photoFile = file.absolutePath
+        try {
+            takePicture.launch(androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", file))
+        } catch (_: android.content.ActivityNotFoundException) {
+            Toast.makeText(context, "No camera app available", Toast.LENGTH_SHORT).show()
+        }
+    }
+    LaunchedEffect(recorder) {
+        while (recorder != null) { recordingSeconds = ((SystemClock.elapsedRealtime() - recordingStarted) / 1000).toInt(); delay(500) }
+    }
+    DisposableEffect(Unit) { onDispose { stopRecording() } }
 
+    if (askVoiceConsent) androidx.compose.material3.AlertDialog(onDismissRequest = { askVoiceConsent = false },
+        containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
+        title = { Text("Record a voice note?") },
+        text = { Text("Up to 60 seconds, recorded only while you can see the red indicator. It's stored privately for this SOS; " +
+            "only you can play it, and it's deleted after 30 days.") },
+        confirmButton = { TextButton(onClick = {
+            askVoiceConsent = false
+            mediaPrefs.edit().putBoolean("voice_consent", true).apply()
+            voice()
+        }) { Text("Record", color = p.accent) } },
+        dismissButton = { TextButton(onClick = { askVoiceConsent = false }) { Text("Cancel", color = p.secondary) } })
     if (showSmsOffer) smsAlert?.let { alert ->
         val names = alert.smsContacts.joinToString { it.name }
         androidx.compose.material3.AlertDialog(onDismissRequest = { showSmsOffer = false },
@@ -289,7 +365,10 @@ fun MaitriActiveSos(
         BoardLabel(24, 98, 330, locationLine(shown, hint),
             if (hint == LocationHint.NONE || hint == LocationHint.SEARCHING) p.secondary else p.accent)
         // Live map over the crop's map area (342 x 252 at 24,136): the phone's own fix at once, then the server's.
-        MaitriMap(listOfNotNull(shown?.let { MapMarker(it.latitude, it.longitude, MarkerKind.PERSON_IN_NEED) }),
+        MaitriMap(listOfNotNull(shown?.let { MapMarker(it.latitude, it.longitude, MarkerKind.PERSON_IN_NEED) }) +
+            snapshot?.activeResponders.orEmpty().mapNotNull { r ->
+                if (r.latitude != null && r.longitude != null) MapMarker(r.latitude, r.longitude, MarkerKind.RESPONDER) else null
+            },
             locationHintText(hint) ?: "Finding your location…", Modifier.offset(24.dp, (136 - 28).dp).size(342.dp, 252.dp),
             accuracyMeters = shown?.accuracyMeters)
         locationAction(hint)?.let { (label, act) ->
@@ -298,11 +377,26 @@ fun MaitriActiveSos(
                 .padding(horizontal = 14.dp, vertical = 12.dp), color = p.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         }
         BoardAction(282, 56, 84, 48, "End SOS") { showPinDialog = true; pinValue = ""; pinError = null }
-        BoardLabel(24, 405, 342, snapshot?.let { "${it.respondersSummary.acceptedCount} responders accepted" } ?: "Checking responders…", p.primary, 16)
+        BoardLabel(24, 405, 342, snapshot?.let { s ->
+            val n = s.activeResponders.size
+            if (n == 0) "No responder yet" else "$n ${if (n == 1) "responder" else "responders"} accepted"
+        } ?: "Checking responders…", p.primary, 16)
         Column(Modifier.offset(40.dp, 412.dp).size(310.dp, 80.dp).verticalScroll(rememberScrollState())) {
-            snapshot?.activeResponders.orEmpty().forEach { responder ->
-                Text("${responder.responderId} · ${responder.assistanceStatus.replace('_', ' ')}",
-                    color = p.primary, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
+            val responders = snapshot?.activeResponders.orEmpty()
+            if (snapshot != null && responders.isEmpty()) Text("Nearby volunteers have been asked. Your circle has your live location.",
+                color = p.secondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
+            responders.forEach { responder ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(responder.displayName ?: "Responder", color = p.primary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(responderStatusLabel(responder.assistanceStatus) +
+                            (responder.distanceMeters?.let { " · ≈ " + distanceLabel(it) + " away" } ?: ""),
+                            color = p.secondary, fontSize = 11.sp)
+                    }
+                    responder.distanceMeters?.let {
+                        Text("approx. ${walkingMinutes(it)} min", color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
             }
         }
         Row(Modifier.offset(30.dp, 549.dp).width(330.dp).horizontalScroll(rememberScrollState())) {
@@ -314,8 +408,15 @@ fun MaitriActiveSos(
                 .clickable(onClickLabel = "Text your circle") { showSmsOffer = true }.padding(horizontal = 8.dp),
                 color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
-        BoardAction(24, 638, 165, 64, "Voice recorder") { openCapture(android.provider.MediaStore.Audio.Media.RECORD_SOUND_ACTION) }
-        BoardAction(201, 638, 165, 64, "Open camera") { openCapture(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA) }
+        // Over the artwork's "Tap to record" / "Tap to open" captions: what the capture is doing right now.
+        if (recorder != null || uploadingMedia > 0 || savedMedia > 0) {
+            Text(if (recorder != null) "● Recording %d:%02d · tap to stop".format(recordingSeconds / 60, recordingSeconds % 60)
+                else if (uploadingMedia > 0) "Uploading $uploadingMedia…" else "$savedMedia saved",
+                Modifier.offset(74.dp, (667 - 28).dp).size(112.dp, 22.dp).background(p.card), color = p.accent,
+                fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        }
+        BoardAction(24, 638, 165, 64, if (recorder != null) "Stop recording" else "Record a voice note") { voice() }
+        BoardAction(201, 638, 165, 64, "Take a photo") { camera() }
         BoardLabel(66, 719, 280, when {
             connecting -> "Connecting to Maitri… · $timerString"
             updated -> "Updates connected · $timerString"
@@ -447,4 +548,12 @@ internal fun shouldAskAgain(context: android.content.Context): Boolean {
     prefs.edit().putBoolean("asked", true).apply()
     return !asked || androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(activity,
         android.Manifest.permission.ACCESS_FINE_LOCATION)
+}
+
+internal fun responderStatusLabel(status: String) = when (status) {
+    "ACCEPTED" -> "Accepted"
+    "ON_THE_WAY" -> "On the way"
+    "HELPING" -> "With you"
+    "UNABLE_TO_HELP" -> "Can't help"
+    else -> status.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }
 }

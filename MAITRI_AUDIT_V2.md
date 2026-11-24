@@ -207,6 +207,8 @@ Status "server-tested" means covered by the isolated backend suite and Android u
 | P0 | R15 lint, R19 legacy screens | works (0 lint errors; dead screens removed) |
 | P1 | R1 beta access, R2 real incidents, R17 beta label and 3 SOS/hour; 02 SOS hold, no-PIN path; 03 Google in the phone slot, phone OTP removed; cold start no longer blocks Home | server-tested |
 | P2 | R16 maps; 07 map, distance and approx. walk; 08 map | works on the emulator (MapLibre + OpenFreeMap, both themes) |
+| P4 | R5/R6/R7 volunteer uploads to R2, declaration template, application status, /admin review with audit log; 14 profile photo | server-tested |
+| P5 | 08 in-app voice (60 s, consent, indicator) and photo uploaded via WorkManager; responders' names, approx. distance/ETA and map pins; 07 Call only with consent, false-alarm report; 06 distance band + expiry countdown; 11 pattern saved and used for alerts; full-screen request where Android allows; 12 battery tips; 14 call consent | server-tested |
 | P3 | R4 circle alerts without SMS; R9 missed check-in; 02 bell inbox, Share my trip, Check in; 05 pairing; 08 Circle notified | server-tested |
 
 P3 detail:
@@ -217,6 +219,10 @@ P3 detail:
 - **Check-ins:** due time, reminder 5 minutes before, circle told once when missed, "I'm safe, check in now". Trips share location while Maitri is open.
 
 Open limits:
+- No background location: SOS tracking is a foreground service started from the open app, and volunteers share
+  their position only while the app is open, so `ACCESS_BACKGROUND_LOCATION` is deliberately not requested.
+- Photos use the phone's camera app (no CAMERA permission); the crop is an automatic centre square.
+- Full-screen requests need the user's "full-screen notifications" permission on Android 14+; otherwise heads-up.
 - Missed check-ins reach only circle members with the app.
 - Trip updates stop when Maitri is closed.
 - WhatsApp needs one share per chat.

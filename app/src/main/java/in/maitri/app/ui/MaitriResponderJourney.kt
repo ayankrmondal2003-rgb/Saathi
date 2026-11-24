@@ -111,10 +111,13 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
     } }
     val distance = if (fix != null && own != null)
         straightLineMeters(own!!.first, own!!.second, fix.latitude, fix.longitude) else null
-    fun dial() {
-        try { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:112"))) }
+    fun dial(number: String = "112") {
+        try { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number)))) }
         catch (_: android.content.ActivityNotFoundException) { message = "Dialer unavailable" }
     }
+    // Only when the person in need agreed to share their number with responders (screen 14).
+    val victimPhone = confirmed.victimPhone?.takeIf { it.isNotBlank() }
+    var reporting by remember { mutableStateOf(false) }
     fun requestHelp() {
         if (busy) return
         busy = true
@@ -134,8 +137,8 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
         }
     }
     MaitriResponderJourneyBoard(p, confirmed.requesterMembership?.assistanceStatus, fix?.let { it.latitude to it.longitude },
-        busy, onStatus = { chooseStatus = true }, onMaps = ::openMaps, onHelp = ::requestHelp, onDial = ::dial,
-        distanceMeters = distance, self = own)
+        busy, onStatus = { chooseStatus = true }, onMaps = ::openMaps, onHelp = ::requestHelp, onDial = { dial() },
+        distanceMeters = distance, self = own, onCallPerson = victimPhone?.let { number -> { dial(number) } })
     if (chooseStatus) AlertDialog(onDismissRequest = { chooseStatus = false }, title = { Text("Responder status") },
         text = { Column {
             for (status in listOf("ON_THE_WAY", "HELPING", "UNABLE_TO_HELP", "LEFT_INCIDENT")) {
@@ -149,9 +152,37 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
                             } else message = "Status change could not be confirmed."
                         } finally { busy = false }
                     }
-                }) { Text(status.replace('_', ' ')) }
+                }) { Text(responderStatusLabel(status).let { if (status == "LEFT_INCIDENT") "Leave this SOS" else it }) }
+            }
+            TextButton(enabled = !busy, onClick = { chooseStatus = false; reporting = true }) {
+                Text("Report a false alarm or a problem", color = MaterialTheme.colorScheme.error)
             }
         } }, confirmButton = {})
+    if (reporting) {
+        var reason by remember { mutableStateOf("FALSE_ALARM") }
+        var note by remember { mutableStateOf("") }
+        AlertDialog(onDismissRequest = { reporting = false }, title = { Text("Report this SOS") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Maitri reviews reports. The person in need isn't told.")
+                listOf("FALSE_ALARM" to "False alarm", "UNSAFE" to "I felt unsafe", "OTHER" to "Something else").forEach { (value, label) ->
+                    Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(reason == value, { reason = value }); Text(label) }
+                }
+                OutlinedTextField(note, { note = it.take(500) }, label = { Text("What happened (optional)") })
+            } },
+            confirmButton = { TextButton(enabled = !busy, onClick = {
+                busy = true
+                scope.launch {
+                    try {
+                        BackendClient.api.reportIncident(incidentId, ReportDto(reason, note), account)
+                        reporting = false
+                        message = "Thanks. Your report was sent."
+                    } catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { message = "The report couldn't be sent. Try again." }
+                    finally { busy = false }
+                }
+            }) { Text("Send report") } },
+            dismissButton = { TextButton(onClick = { reporting = false }) { Text("Cancel") } })
+    }
     message?.let { AlertDialog(onDismissRequest = { message = null }, text = { Text(it) },
         confirmButton = { TextButton(onClick = { message = null }) { Text("Close") } }) }
 }
@@ -161,7 +192,7 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
 internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: String?, coordinates: Pair<Double, Double>?,
                                          busy: Boolean, onStatus: () -> Unit, onMaps: () -> Unit,
                                          onHelp: () -> Unit, onDial: () -> Unit, distanceMeters: Double? = null,
-                                         self: Pair<Double, Double>? = null) {
+                                         self: Pair<Double, Double>? = null, onCallPerson: (() -> Unit)? = null) {
     EmergencyBoard(if (p.dark) R.drawable.maitri_dark_07 else R.drawable.maitri_light_07,
         "On your way. Keep both of you safe. Request more responders before you approach.") {
         BoardLabel(84, 59, 270, "RESPONDER · " + (assistanceStatus ?: "AUTHORIZED").replace('_', ' '), p.accent, 11)
@@ -179,7 +210,12 @@ internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: Str
         }, p.accent)
         BoardAction(24, 476, 342, 104, "Open last reported location in Maps", coordinates != null, onMaps)
         BoardAction(24, 654, 226, 48, "Bring in help", !busy, onHelp)
-        BoardAction(262, 654, 104, 48, "Call emergency services", onClick = onDial)
+        // The artwork's "Call" pill calls the person in need, only with their consent; otherwise it's covered.
+        if (onCallPerson != null) BoardAction(262, 654, 104, 48, "Call the person in need", onClick = onCallPerson)
+        else Box(Modifier.offset(258.dp, (650 - 28).dp).size(112.dp, 56.dp).background(p.background))
         BoardAction(24, 704, 220, 44, "Contact emergency services", onClick = onDial)
     }
 }
+
+data class ReportDto(@com.google.gson.annotations.SerializedName("reason") val reason: String,
+                     @com.google.gson.annotations.SerializedName("note") val note: String)

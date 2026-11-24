@@ -47,8 +47,9 @@ class MaitriCheckpointCTest {
     @Test
     fun manifestDoesNotDeclareUnusedSensitivePermissions() {
         val manifest = File("src/main/AndroidManifest.xml").readText()
-        listOf("READ_CONTACTS", "RECORD_AUDIO", "android.permission.CAMERA").forEach { assertFalse(it, manifest.contains(it)) }
-        listOf("ACCESS_FINE_LOCATION", "POST_NOTIFICATIONS").forEach { assertTrue(it, manifest.contains(it)) }
+        // RECORD_AUDIO is used since P5 (SOS voice notes); contacts and camera still go through system pickers/apps.
+        listOf("READ_CONTACTS", "android.permission.CAMERA\"").forEach { assertFalse(it, manifest.contains(it)) }
+        listOf("ACCESS_FINE_LOCATION", "POST_NOTIFICATIONS", "RECORD_AUDIO").forEach { assertTrue(it, manifest.contains(it)) }
     }
 
     // Screen 13 ----------------------------------------------------------------

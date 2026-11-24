@@ -72,6 +72,9 @@ object Uploads {
         return ByteArrayOutputStream().also { scaled.compress(Bitmap.CompressFormat.JPEG, 88, it) }.toByteArray()
     }
 
+    /** Re-encodes an image that is over the limit; null if it still doesn't fit. */
+    fun fitImage(bytes: ByteArray): ByteArray? = shrinkImage(bytes, 2560)
+
     private fun shrinkImage(bytes: ByteArray, maxSide: Int): ByteArray? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)

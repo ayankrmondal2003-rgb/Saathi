@@ -9,6 +9,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- SOS voice notes, recorded only while screen 08 is open and the user taps Voice. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Nearby SOS requests open full screen where Android allows it; otherwise a heads-up notification. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <application
         android:allowBackup="true"
