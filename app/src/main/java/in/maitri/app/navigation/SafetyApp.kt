@@ -20,6 +20,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -105,80 +108,32 @@ private fun SafetyNavigation(vm: SafetyViewModel, pendingInvitationId: String?, 
                         TextButton(onClick = auth::logout) { Text("Sign out") }
                     }
                 } else {
-                    var synced by remember { mutableStateOf(false) }
+                    // Home (and the SOS button) never waits for the server: a free-tier cold start can take a minute.
+                    // The account syncs in the background; only a refusal is shown, as a banner.
                     var attempt by remember { mutableIntStateOf(0) }
                     var failure by remember { mutableStateOf<String?>(null) }
-                    var isColdStart by remember { mutableStateOf(false) }
                     LaunchedEffect(attempt) {
                         failure = null
-                        isColdStart = false
-                        val timer = kotlinx.coroutines.CoroutineScope(coroutineContext).launch {
-                            kotlinx.coroutines.delay(5000)
-                            isColdStart = true
-                        }
-                        try {
-                            `in`.maitri.app.network.BackendClient.api.profile(
-                                `in`.maitri.app.network.ExpectedAccount(identity.uid)
-                            )
-                            timer.cancel()
-                            synced = true
-                        } catch (e: kotlinx.coroutines.CancellationException) {
-                            timer.cancel()
-                            throw e
-                        } catch (e: retrofit2.HttpException) {
-                            timer.cancel()
-                            failure = when (e.code()) {
-                                401 -> "Firebase session expired (HTTP 401). Sign out and sign in again."
-                                403 -> "Backend test allowlist denial (HTTP 403). Contact admin to add your UID (${identity.uid}) to TEST_ACCOUNT_UIDS."
-                                else -> "Profile sync failed (HTTP ${e.code()}). Server returned an error."
-                            }
-                        } catch (e: java.io.IOException) {
-                            timer.cancel()
-                            failure = when {
-                                e is java.net.SocketTimeoutException ->
-                                    "Connection timed out (Render free tier may still be spinning up). Tap retry."
-                                else ->
-                                    "Unable to reach the backend service: ${e.localizedMessage ?: "Network error"}. Check internet connection and retry."
+                        var wait = 5_000L
+                        while (true) {
+                            try {
+                                `in`.maitri.app.network.BackendClient.api.profile(
+                                    `in`.maitri.app.network.ExpectedAccount(identity.uid))
+                                break
+                            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+                            } catch (e: retrofit2.HttpException) {
+                                if (e.code() in 500..599) { kotlinx.coroutines.delay(wait); wait = (wait * 2).coerceAtMost(60_000L); continue }
+                                failure = accountSyncMessage(e.code())
+                                break
+                            } catch (e: java.io.IOException) {
+                                // Offline or the server is still waking up; "Connecting to Maitri…" covers it.
+                                kotlinx.coroutines.delay(wait); wait = (wait * 2).coerceAtMost(60_000L)
                             }
                         }
                     }
-                    if (!synced) {
-                        Page("Account profile") {
-                            val p = maitriPalette()
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                if (failure == null) {
-                                    CircularProgressIndicator(color = p.accent)
-                                    Text(
-                                        text = if (isColdStart)
-                                            "Waking up Render backend service...\n(Free tier spin-up may take up to 60 seconds)"
-                                        else
-                                            "Syncing your verified account…",
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                        color = p.primary
-                                    )
-                                } else {
-                                    Text(
-                                        text = failure!!,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                        color = p.accent,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Button(
-                                        onClick = { attempt++ },
-                                        colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = androidx.compose.ui.graphics.Color.White)
-                                    ) { Text("Retry profile sync") }
-                                }
-                                TextButton(onClick = auth::logout) {
-                                    Text("Sign out", color = p.secondary)
-                                }
-                            }
-                        }
-                    } else {
-                        val state by vm.state.collectAsStateWithLifecycle()
+                    val state by vm.state.collectAsStateWithLifecycle()
+                    val connecting by `in`.maitri.app.network.BackendLatency.connecting.collectAsStateWithLifecycle()
+                    Box(Modifier.fillMaxSize()) {
                         if (state.user?.uid == identity.uid) {
                             MainGraph(
                                 state = state,
@@ -193,6 +148,9 @@ private fun SafetyNavigation(vm: SafetyViewModel, pendingInvitationId: String?, 
                                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                             }
                         }
+                        AccountBanner(failure ?: if (connecting) "Connecting to Maitri…" else null,
+                            retry = if (failure != null) ({ attempt++ }) else null, signOut = if (failure != null) auth::logout else null,
+                            modifier = Modifier.align(Alignment.TopCenter))
                     }
                 }
             }
@@ -539,5 +497,27 @@ internal fun MainGraph(
                 )
             }
         }
+    }
+}
+
+/** Why the server refused this account, in words (never an HTTP code). */
+internal fun accountSyncMessage(code: Int): String = when (code) {
+    401 -> "Your sign-in has expired. Sign out and sign in again."
+    403 -> "This account can't use Maitri yet. Check that your email is verified, then retry."
+    else -> "Maitri couldn't load your account. Retry in a moment."
+}
+
+@Composable
+private fun AccountBanner(text: String?, retry: (() -> Unit)?, signOut: (() -> Unit)?, modifier: Modifier = Modifier) {
+    if (text == null) return
+    val p = `in`.maitri.app.ui.maitriPalette()
+    Row(modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 6.dp)
+        .background(p.surface, androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+        .padding(horizontal = 14.dp, vertical = 8.dp)
+        .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
+        verticalAlignment = Alignment.CenterVertically) {
+        Text(text, Modifier.weight(1f, fill = false), color = p.accent, fontSize = 12.sp)
+        retry?.let { TextButton(onClick = it) { Text("Retry", color = p.accent) } }
+        signOut?.let { TextButton(onClick = it) { Text("Sign out", color = p.secondary) } }
     }
 }
