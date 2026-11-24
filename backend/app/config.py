@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     worker_id: str | None = None
     max_accuracy_meters: float = Field(100, gt=0, le=1000)
     max_location_age_seconds: int = Field(120, gt=0, le=600)
+    # Victim SOS fixes: kept even when coarse ("Approximate" is 1-3 km); geofence matching still needs
+    # max_accuracy_meters. The first SOS fix may be a last-known fix up to max_last_known_age_seconds old.
+    max_sos_accuracy_meters: float = Field(5000, gt=0, le=10000)
+    max_last_known_age_seconds: int = Field(600, gt=0, le=1800)
 
     radius_meters: int = Field(1000, gt=0, le=1000)
     min_search_interval_seconds: float = Field(2, ge=0, le=30)

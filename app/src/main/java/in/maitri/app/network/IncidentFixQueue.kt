@@ -43,7 +43,7 @@ internal class IncidentFixQueue(context: Context, databaseName: String = "incide
     fun hasPending(): Boolean = readableDatabase.rawQuery("SELECT 1 FROM fixes LIMIT 1", null).use { it.moveToFirst() }
 
     fun offer(uid: String, incident: String, fix: LocationUpdate, now: Long = System.currentTimeMillis()) {
-        if (!fix.valid() || fix.timestampMillis !in (now - TTL)..(now + 5000) || fix.accuracyMeters > 100) return
+        if (!fix.valid() || fix.timestampMillis !in (now - TTL)..(now + 5000) || fix.accuracyMeters > `in`.maitri.app.location.TrackingConfig.MAX_SOS_ACCURACY_METRES) return
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key)
         cipher.updateAAD(binding(uid, incident, fix.timestampMillis))

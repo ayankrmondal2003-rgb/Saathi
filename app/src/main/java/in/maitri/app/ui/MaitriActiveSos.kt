@@ -35,6 +35,19 @@ import `in`.maitri.app.data.ContactDeliveryStatus
 import `in`.maitri.app.data.EmergencyContact
 import `in`.maitri.app.data.SosIncident
 import `in`.maitri.app.location.LocalTrackingRepository
+import `in`.maitri.app.location.FixPolicy
+import `in`.maitri.app.location.LocationHint
+import `in`.maitri.app.location.ShownFix
+import `in`.maitri.app.location.accuracyLabel
+import `in`.maitri.app.location.airplaneModeOn
+import `in`.maitri.app.location.locationAllowed
+import `in`.maitri.app.location.locationEnabled
+import `in`.maitri.app.location.locationHint
+import `in`.maitri.app.location.locationHintText
+import `in`.maitri.app.location.preciseLocationAllowed
+import `in`.maitri.app.location.shownLocation
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import `in`.maitri.app.network.BackendClient
 import `in`.maitri.app.network.MISSING_PRIMARY_PIN
 import `in`.maitri.app.network.pinFailure
@@ -122,6 +135,39 @@ fun MaitriActiveSos(
         }
     }
 
+    // Phone-side location: the fix this phone has (shown before the server confirms it) and why it may be missing.
+    val session by tracking.session.collectAsStateWithLifecycle()
+    val localFix = session.latest?.takeIf { session.owner == uid }
+    var environment by remember { mutableStateOf(LocationEnvironment.read(context)) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            // Back from Settings or a permission dialog: restart tracking if it can run now, then keep watching.
+            startDemoTracking(context, uid)
+            while (true) {
+                environment = LocationEnvironment.read(context)
+                delay(3000)
+            }
+        }
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        environment = LocationEnvironment.read(context)
+        startDemoTracking(context, uid)
+        // Precise location refused without a dialog (the choice is fixed, e.g. after "Keep approximate"): the only
+        // way left is the app's settings page. Checked on FINE, since COARSE alone is still granted then.
+        if (result[android.Manifest.permission.ACCESS_FINE_LOCATION] != true && !shouldAskAgain(context)) openAppSettings(context)
+    }
+    val locationPermissions = arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION)
+    fun locationAction(hint: LocationHint): Pair<String, () -> Unit>? = when (hint) {
+        LocationHint.PERMISSION_MISSING -> "Allow location" to { permissionLauncher.launch(locationPermissions) }
+        LocationHint.PRECISE_NOT_ALLOWED -> "Allow precise location" to {
+            if (shouldAskAgain(context)) permissionLauncher.launch(locationPermissions) else openAppSettings(context)
+        }
+        LocationHint.LOCATION_OFF -> "Turn on location" to { openSettings(context, android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS) }
+        LocationHint.AIRPLANE_MODE -> "Open settings" to { openSettings(context, android.provider.Settings.ACTION_AIRPLANE_MODE_SETTINGS) }
+        else -> null
+    }
+
     // Elapsed timer calculation
     val elapsedSeconds by produceState(0L, incident.started) {
         while (true) {
@@ -178,11 +224,23 @@ fun MaitriActiveSos(
 
     EmergencyBoard(if (p.dark) R.drawable.maitri_dark_08 else R.drawable.maitri_light_08,
         "SOS is active. Circle notified.") {
-        val location = snapshot?.lastLocation
-        BoardLabel(24, 98, 330, if (location != null && updated) "Location last recorded ${location.recordedAt}" else "Awaiting current location", p.secondary)
-        // Live Esri map over the crop's map area (342 x 252 at 24,136), pinned at the server-confirmed location.
-        EsriMap(location?.takeIf { updated }?.let { it.latitude to it.longitude }, "Your last reported location",
-            "Awaiting your location", Modifier.offset(24.dp, (136 - 28).dp).size(342.dp, 252.dp))
+        val server = snapshot?.lastLocation?.takeIf { updated }
+        val shown = shownLocation(server?.latitude, server?.longitude, server?.accuracyMeters,
+            server?.recordedAt?.let { `in`.maitri.app.network.serverTimeMillis(it) }, localFix)
+        val hint = locationHint(environment.airplane, environment.locationOn, environment.allowed, environment.precise,
+            shown?.accuracyMeters?.toFloat(), shown?.shared == true, elapsedSeconds * 1000, environment.online)
+        BoardLabel(24, 98, 330, locationLine(shown, hint),
+            if (hint == LocationHint.NONE || hint == LocationHint.SEARCHING) p.secondary else p.accent)
+        // Live Esri map over the crop's map area (342 x 252 at 24,136): the phone's own fix at once, then the server's.
+        EsriMap(shown?.let { it.latitude to it.longitude },
+            if (shown?.shared == true) "Your shared location" else "Your location (sending…)",
+            locationHintText(hint) ?: "Finding your location…", Modifier.offset(24.dp, (136 - 28).dp).size(342.dp, 252.dp),
+            accuracyMeters = shown?.accuracyMeters)
+        locationAction(hint)?.let { (label, act) ->
+            Text(label, Modifier.offset(36.dp, (136 - 28 + 12).dp).clip(RoundedCornerShape(16.dp))
+                .background(p.surface).clickable(onClickLabel = label) { act() }
+                .padding(horizontal = 14.dp, vertical = 12.dp), color = p.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
         BoardAction(282, 56, 84, 48, "End SOS") { showPinDialog = true; pinValue = ""; pinError = null }
         BoardLabel(24, 405, 342, snapshot?.let { "${it.respondersSummary.acceptedCount} responders accepted" } ?: "Checking responders…", p.primary, 16)
         Column(Modifier.offset(40.dp, 412.dp).size(310.dp, 80.dp).verticalScroll(rememberScrollState())) {
@@ -272,3 +330,57 @@ fun MaitriActiveSos(
     }
 }
 
+
+/** Phone settings that decide whether a location can be found and sent. Cheap reads, polled while screen 08 is open. */
+internal data class LocationEnvironment(val airplane: Boolean, val locationOn: Boolean, val allowed: Boolean,
+                                         val precise: Boolean, val online: Boolean) {
+    companion object {
+        fun read(context: android.content.Context) = LocationEnvironment(context.airplaneModeOn(), context.locationEnabled(),
+            context.locationAllowed(), context.preciseLocationAllowed(), online(context))
+
+        private fun online(context: android.content.Context): Boolean {
+            val manager = context.getSystemService(android.net.ConnectivityManager::class.java) ?: return true
+            val caps = manager.getNetworkCapabilities(manager.activeNetwork) ?: return false
+            return caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        }
+    }
+}
+
+/** "Sending… · Approx. ±1.2 km · Last known 10:42", plus the reason on a second line when something needs fixing. */
+internal fun locationLine(shown: ShownFix?, hint: LocationHint, now: Long = System.currentTimeMillis()): String {
+    val reason = locationHintText(hint)
+    if (shown == null) return reason ?: "Finding your location…"
+    val parts = listOfNotNull(
+        if (shown.shared) "Location shared" else "Sending…",
+        accuracyLabel(shown.accuracyMeters),
+        if (FixPolicy.isLastKnown(shown.timeMillis, now))
+            "Last known " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(shown.timeMillis))
+        else null)
+    val status = parts.joinToString(" · ")
+    return if (reason == null || hint == LocationHint.SEARCHING) status else status + "\n" + reason
+}
+
+private fun openSettings(context: android.content.Context, action: String) {
+    try { context.startActivity(android.content.Intent(action)) }
+    catch (_: android.content.ActivityNotFoundException) { openAppSettings(context) }
+}
+
+internal fun openAppSettings(context: android.content.Context) {
+    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        android.net.Uri.fromParts("package", context.packageName, null)))
+}
+
+/**
+ * Whether the system will still show the location dialog. Android gives no direct answer: it is true before the
+ * first request and while a rationale is due; after a permanent denial only the settings page can grant it.
+ */
+internal fun shouldAskAgain(context: android.content.Context): Boolean {
+    var c = context
+    while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
+    val activity = c as? android.app.Activity ?: return false
+    val prefs = context.getSharedPreferences("location_permission", 0)
+    val asked = prefs.getBoolean("asked", false)
+    prefs.edit().putBoolean("asked", true).apply()
+    return !asked || androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(activity,
+        android.Manifest.permission.ACCESS_FINE_LOCATION)
+}

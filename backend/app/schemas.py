@@ -17,12 +17,22 @@ class Fix(Input):
     recorded_at: AwareDatetime
     is_mock: bool
 
-    def check(self, settings, now=None):
+    def check(self, settings, now=None, *, max_accuracy=None, max_age=None):
+        """Rejects with a 422 whose detail carries a reason code the app logs. Limits default to the precise
+        rules (responders, trip sharing); the SOS owner passes its own, looser limits."""
         age = ((now or datetime.now(timezone.utc)) - self.recorded_at).total_seconds()
-        if not -5 <= age <= settings.max_location_age_seconds or self.accuracy_meters > settings.max_accuracy_meters:
-            raise HTTPException(422, "Location is stale, future-dated or too inaccurate")
+        if age < -5:
+            raise location_rejected("LOCATION_FUTURE_DATED", "Location is future-dated")
+        if age > (max_age or settings.max_location_age_seconds):
+            raise location_rejected("LOCATION_TOO_OLD", "Location is too old")
+        if self.accuracy_meters > (max_accuracy or settings.max_accuracy_meters):
+            raise location_rejected("LOCATION_TOO_INACCURATE", "Location is too inaccurate")
         if self.is_mock and settings.environment == "production":
-            raise HTTPException(422, "Mock locations disabled")
+            raise location_rejected("MOCK_LOCATION_DISABLED", "Mock locations disabled")
+
+
+def location_rejected(code, message):
+    return HTTPException(422, {"code": code, "message": message}, headers={"X-Error-Code": code})
 
 
 class ProfileEdit(Input):

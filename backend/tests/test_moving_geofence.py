@@ -261,10 +261,11 @@ async def test_security_concurrency_and_boundaries(world):
     assert len(await inbox("boundary-outside")) == 0
 
     # 2. Input validation on location update
-    # Inaccurate > 100m
+    # Victim SOS fixes are kept up to max_sos_accuracy_meters (5000 m); beyond that they are rejected with a reason.
     bad_acc = fix(0)
-    bad_acc["accuracy_meters"] = 101.0
-    assert (await call("owner", "POST", path + "/location", json=bad_acc)).status_code == 422
+    bad_acc["accuracy_meters"] = 5001.0
+    rejected = await call("owner", "POST", path + "/location", json=bad_acc)
+    assert rejected.status_code == 422 and rejected.json()["detail"]["code"] == "LOCATION_TOO_INACCURATE"
 
     # Stale > 120s on responder returns 422, on incident with newer fix returns 409
     stale_fix = fix(0)

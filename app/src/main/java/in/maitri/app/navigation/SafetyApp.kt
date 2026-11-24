@@ -34,6 +34,8 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import `in`.maitri.app.network.*
 import `in`.maitri.app.location.LocalTrackingRepository
+import `in`.maitri.app.location.preciseLocationAllowed
+import androidx.activity.compose.rememberLauncherForActivityResult
 import kotlinx.coroutines.launch
 
 internal val tabs = listOf(
@@ -316,12 +318,19 @@ internal fun MainGraph(
                             requested = false
                         }
                     }
+                    // The SOS never waits for location permission: it starts at once, and tracking begins when granted.
+                    val sosLocationPermission = rememberLauncherForActivityResult(
+                        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) {
+                        startDemoTracking(context, uid)
+                    }
                     val onStartIncident: (Boolean) -> Unit = { share ->
                         sync.dismissProblem(uid)
                         if (state.incident?.status != IncidentStatus.ACTIVE) {
                             vm.start(share)
                             startDemoTracking(context, uid)
                         }
+                        if (!context.preciseLocationAllowed()) sosLocationPermission.launch(arrayOf(
+                            android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION))
                         val session = LocalTrackingRepository.get(context).session.value
                         if (sync.isShared(uid, session.id)) requested = true else localPractice = true
                     }

@@ -80,7 +80,7 @@ class SosLocationService : Service() {
             else startForeground(301, notification)
             repo.change(id) { it.copy(running = true) }
             if (repo.sync.isShared(owner, requested)) repo.sync.wake(owner)
-            subscription = LocationSubscription(FusedLocationSource(this), { fix ->
+            subscription = LocationSubscription(FusedLocationSource(this, FixMode.SOS), { fix ->
                 if (authorized() && locationEnabled()) repo.change(requested) { it.accept(fix) }
             }, ::status).also { it.start(locationAllowed()) }
             if (!locationEnabled()) status(TrackingState.LOCATION_UNAVAILABLE)
