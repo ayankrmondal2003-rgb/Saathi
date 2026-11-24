@@ -12,6 +12,69 @@ Server: Render Free, branch `beta-complete`, `ENVIRONMENT=beta`, Neon + R2.
 | Emulator | Pixel 10 Pro (API 37 image) | 17 | 3.0 | Design-width captures (390 dp) |
 | Emulator | Maitri_API26 (Google Play image, x86) | 8.0 (API 26) | 2.0 | The app's minimum Android version |
 
+## Responder alert tests, 2026-11-24/25 (night)
+
+Phone A = person in need (Samsung SM-E625F). Phone B = volunteer (Xiaomi 22041216I, HyperOS), the only approved
+volunteer, and also in A's circle. Server: Render, `master` after PR #4 (merge of `beta-complete`), `ENVIRONMENT=beta`.
+Every SOS was real (beta mode) and reached only these two test accounts: confirmed in /admin that B is the only
+approved volunteer, and A's only contact ("Ma") is B's account. No SMS was composed. Timings are from the SOS hold
+starting on A to Android's `notification_alert` event on B.
+
+### Pre-checks
+
+| Check | Result |
+|---|---|
+| Server `/ready`, deployed `master` with PR #4, `ENVIRONMENT=beta` | ✅ |
+| B: notifications allowed; SOS channel `urgent_sos_v2_steady` importance 4, sound + vibration | ✅ |
+| B: battery optimisation exempt (deviceidle whitelist), standby bucket 5 | ✅ after fixing (was bucket 40 "rare") |
+| B: location "Allow all the time" (new in this build) | ✅ |
+| B: full-screen alerts allowed (Android 14 `USE_FULL_SCREEN_INTENT`) | ❌ off by default; see open items |
+| A: precise location, location services on | ✅ |
+| Same build on both phones | ✅ after updating B |
+| B: old pre-Maitri app (`com.example.surakshanet`) registered for the same account | ❌ removed (it showed sample data and duplicated every alert) |
+
+### Results (after the fixes below were deployed)
+
+| Test | B's state | Circle alert | Volunteer request | Sound | Vibration | Screen | Result |
+|---|---|---|---|---|---|---|---|
+| 1 | Maitri in background, home screen | ~5 s | ~9–11 s, heads-up "Someone needs help · Under 500 m away" | ✅ | circle ✅ / request ❌ | on | ✅ |
+| 2 | Maitri swiped out of Recents (process dead, not force-stopped) | ~6 s | ~10 s | ✅ | circle ✅ / request ❌ | on | ✅ |
+| 3 | Screen off 60 s, forced deep Doze, process dead | 8.9 s | 12.3 s | ✅ | circle ✅ / request ❌ | **did not wake** | ⚠️ delivered with sound; no screen wake |
+| 4 | Accept → live location | — | screen 06: "Under 500 m", no coordinates | — | — | — | ✅ accept, live position on B, "1 responder accepted" on A, B clears when SOS ends |
+
+Pushes are sent with FCM `priority=high` (`outbox_worker.py`), which is why they arrive through Doze.
+
+![Test 1 heads-up and screen 06](docs/beta-test/responder-t1-t4-request.jpg)
+
+![Test 4 accepted](docs/beta-test/responder-t4-accepted.jpg)
+
+![Test 4 live location and end](docs/beta-test/responder-t4-live-and-end.jpg)
+
+### Failures found, root causes and fixes
+
+1. **Volunteers were only reachable with the Responder tab open** (Test 1 failed, accept refused in Test 4). The app
+   reported a volunteer's location only from that tab, and the server invited only volunteers with a fix under 2 minutes
+   old. Fixed (`6f1cd52`, `03a4012`): the server uses the last location up to 30 minutes old to choose whom to invite;
+   the app reports it when Maitri opens, every 15 minutes in the background for volunteers who allow "all the time",
+   and right before Accept.
+2. **The request said "Nearby SOS simulation"** for a real SOS. Fixed: "Someone needs help · Under 500 m away · Tap to
+   respond if you can do so safely."; "Practice SOS nearby" only for test SOS (invitations now carry `is_test`).
+3. **The old pre-Maitri app on B** received the same pushes and showed hard-coded sample data ("Kolkata, Sector V").
+   Uninstalled with the owner's permission.
+4. Close-together markers zoomed the map past street level, and "Medical notes ›" overlapped the coordinates at 150%
+   text on screen 07. Fixed (in the next build).
+
+### Open
+
+- **Screen wake:** on Android 14 the full-screen alert permission is off unless the user allows it, so a sleeping
+  phone shows the request only in the shade (with sound). The app should ask volunteers to allow it.
+- **Request vibration:** the request beeps but doesn't vibrate when it arrives during the circle alert's ~7-second
+  vibration (B is in A's circle *and* a volunteer). A volunteer outside the circle gets only the request; not yet
+  confirmed on a phone.
+- **Stale request:** the "Someone needs help" notification stays in the shade after the SOS ends.
+- **Measurement note:** `cmd notification cancel_all` does nothing on MIUI, so detection uses `notification_alert`
+  events, not the shade.
+
 ## Device matrix, 2026-11-24 (evening)
 
 | Check | Samsung A (Android 14) | API 26 emulator (Android 8.0) | API 37 emulator |
