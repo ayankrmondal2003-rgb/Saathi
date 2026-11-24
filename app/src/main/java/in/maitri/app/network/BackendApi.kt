@@ -225,6 +225,7 @@ object BackendClient {
 
     val api: BackendApi by lazy { retrofit.create(BackendApi::class.java) }
     val contacts: TrustedContactApi by lazy { retrofit.create(TrustedContactApi::class.java) }
+    val circle: CircleApi by lazy { retrofit.create(CircleApi::class.java) }
 
     private val retrofit: Retrofit by lazy {
         val base = BuildConfig.API_BASE_URL.toHttpUrl()

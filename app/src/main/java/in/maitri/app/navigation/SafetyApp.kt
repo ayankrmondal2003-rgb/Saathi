@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.liveRegion
@@ -47,6 +48,11 @@ internal val tabs = listOf(
     NavTab("Responder", "Responder", Icons.Rounded.Shield),
     NavTab("Profile", "Profile", Icons.Rounded.Person)
 )
+
+/** Set by MainActivity when a circle notification without a link is tapped; Home's graph opens the inbox. */
+object PendingNavigation {
+    val openInbox = androidx.compose.runtime.mutableStateOf(false)
+}
 
 @Composable
 fun SafetyApp(
@@ -211,6 +217,13 @@ internal fun MainGraph(
         }
     }
 
+    val inboxRequested by PendingNavigation.openInbox
+    LaunchedEffect(inboxRequested) {
+        if (inboxRequested) {
+            PendingNavigation.openInbox.value = false
+            nav.navigate("Inbox") { launchSingleTop = true }
+        }
+    }
     LaunchedEffect(pendingInvitationId) {
         if (!pendingInvitationId.isNullOrBlank()) {
             tab("Responder")
@@ -301,10 +314,24 @@ internal fun MainGraph(
                     val onContactsClick = remember { { tab("Contacts") } }
                     val active = state.incident?.status == IncidentStatus.ACTIVE
 
+                    // Unread inbox count for the bell, refreshed while Home is visible.
+                    var unread by remember { mutableIntStateOf(0) }
+                    val homeLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+                    LaunchedEffect(uid) {
+                        homeLifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+                            while (true) {
+                                try { unread = `in`.maitri.app.network.BackendClient.circle.inbox(ExpectedAccount(uid)).unreadCount }
+                                catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
+                                kotlinx.coroutines.delay(60_000)
+                            }
+                        }
+                    }
                     MaitriHome(
                         state = state,
                         start = onStartIncident,
                         contacts = onContactsClick,
+                        onInbox = { nav.navigate("Inbox") { launchSingleTop = true } },
+                        unread = unread,
                         session = {
                             SosSessionPanel(maitriPalette(), active, sessionMessage, problem,
                                 onResume = { onStartIncident(false) },
@@ -466,6 +493,11 @@ internal fun MainGraph(
                         uid = state.user?.uid,
                         onBack = { nav.popBackStack() }
                     )
+                }
+                composable("Inbox") {
+                    MaitriInbox(uid, onBack = { nav.popBackStack() }, onInvitation = { id ->
+                        nav.navigate("Incoming?invitationId=" + android.net.Uri.encode(id)) { launchSingleTop = true }
+                    })
                 }
                 composable("Language") {
                     MaitriLanguage(

@@ -36,6 +36,14 @@ object NotificationHelper {
     const val EXTRA_INCIDENT_ID = "in.maitri.app.extra.INCIDENT_ID"
     const val EXTRA_EVENT_TYPE = "in.maitri.app.extra.EVENT_TYPE"
     const val ACTION_VIEW_INVITATION = "in.maitri.app.action.VIEW_INVITATION"
+    const val EXTRA_INBOX_ID = "in.maitri.app.extra.INBOX_ID"
+    const val EXTRA_URL = "in.maitri.app.extra.URL"
+    const val EVENT_INBOX = "INBOX"
+    const val CHANNEL_ID_CIRCLE = "circle_updates_v1"
+    /** Inbox pushes that need attention now use the urgent channel; the rest are ordinary updates. */
+    val URGENT_INBOX_KINDS = setOf("CIRCLE_SOS", "CHECKIN_MISSED")
+    val INBOX_KINDS = setOf("CIRCLE_SOS", "CIRCLE_SOS_ENDED", "CHECKIN_REMINDER", "CHECKIN_MISSED",
+        "TRIP_STARTED", "CHECKIN_STARTED", "CIRCLE_REQUEST", "CIRCLE_LINKED")
 
     // Target ~5.2 seconds: 6 pulses of 700ms with 200ms pauses between them
     val EMERGENCY_VIBRATION_PATTERN = longArrayOf(
@@ -147,6 +155,45 @@ object NotificationHelper {
         } else {
             openNotificationSettings(context)
         }
+    }
+
+    /** Circle alerts, check-ins and circle requests (server inbox items). Tapping opens the item in the app. */
+    fun showInboxNotification(context: Context, inboxId: String, kind: String, title: String, body: String, url: String?): Boolean {
+        val urgent = kind in URGENT_INBOX_KINDS
+        createEmergencyNotificationChannel(context)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            context.getSystemService(android.app.NotificationManager::class.java).createNotificationChannel(
+                android.app.NotificationChannel(CHANNEL_ID_CIRCLE, "Circle updates", android.app.NotificationManager.IMPORTANCE_DEFAULT)
+                    .apply { description = "Trips, check-ins and circle requests from people you know" })
+        }
+        if (!hasNotificationPermission(context) || !areNotificationsEnabled(context)) return false
+        if (!claimAlert(context, "inbox:$inboxId", System.currentTimeMillis())) return false
+        val intent = Intent(context, MainActivity::class.java).apply {
+            data = android.net.Uri.Builder().scheme("saathi").authority("notification").appendPath(EVENT_INBOX).appendPath(inboxId).build()
+            putExtra(EXTRA_EVENT_TYPE, EVENT_INBOX)
+            putExtra(EXTRA_INBOX_ID, inboxId)
+            if (!url.isNullOrBlank()) putExtra(EXTRA_URL, url)
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pending = PendingIntent.getActivity(context, ("inbox:$inboxId").hashCode(), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val builder = NotificationCompat.Builder(context, if (urgent) CHANNEL_ID_SOS else CHANNEL_ID_CIRCLE)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle(title).setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(if (urgent) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(if (urgent) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_SOCIAL)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setContentIntent(pending).setAutoCancel(true)
+        if (urgent) builder.setVibrate(EMERGENCY_VIBRATION_PATTERN)
+            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED) return false
+        return try {
+            NotificationManagerCompat.from(context).notify(3000 + (inboxId.hashCode() and 0x7FFF), builder.build())
+            true
+        } catch (_: SecurityException) { false }
     }
 
     fun showSosNotification(

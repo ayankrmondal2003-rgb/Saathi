@@ -86,6 +86,28 @@ fun MaitriActiveSos(
     var pinError by remember { mutableStateOf<String?>(null) }
     var isVerifyingPin by remember { mutableStateOf(false) }
 
+    var smsAlert by remember(uid, incidentId) { mutableStateOf<`in`.maitri.app.network.CircleAlertDto?>(null) }
+    var showSmsOffer by rememberSaveable(uid, incidentId) { mutableStateOf(false) }
+    val smsPrompts = remember(context) { context.getSharedPreferences("sos_sms_prompts", android.content.Context.MODE_PRIVATE) }
+    // The composer returning is all Maitri can know: recorded as "SMS prepared", never as sent.
+    val smsComposer = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        val ids = smsAlert?.smsContacts.orEmpty().map { it.contactId }
+        if (ids.isNotEmpty()) scope.launch {
+            try { BackendClient.circle.smsPrepared(incidentId, `in`.maitri.app.network.SmsPreparedRequest(ids), ExpectedAccount(uid)) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
+        }
+    }
+    fun textCircle(whatsApp: Boolean) {
+        val alert = smsAlert ?: return
+        smsPrompts.edit().putBoolean("$uid:$incidentId", true).apply()
+        val text = `in`.maitri.app.network.sosSmsText(alert.liveLink)
+        try {
+            if (whatsApp) context.startActivity(`in`.maitri.app.network.shareTextIntent(text))
+            else smsComposer.launch(`in`.maitri.app.network.smsComposerIntent(alert.smsContacts.map { it.phone }, text))
+        } catch (_: android.content.ActivityNotFoundException) {
+            Toast.makeText(context, "No messaging app found", Toast.LENGTH_SHORT).show()
+        }
+    }
     var delivery by remember(uid, incident.started) { mutableStateOf<List<`in`.maitri.app.network.ContactDeliveryDto>?>(null) }
     var updated by remember { mutableStateOf(false) }
     fun openCapture(action: String) {
@@ -94,6 +116,20 @@ fun MaitriActiveSos(
         catch (_: SecurityException) { Toast.makeText(context, "Capture permission unavailable", Toast.LENGTH_SHORT).show() }
     }
 
+    if (showSmsOffer) smsAlert?.let { alert ->
+        val names = alert.smsContacts.joinToString { it.name }
+        androidx.compose.material3.AlertDialog(onDismissRequest = { showSmsOffer = false },
+            containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
+            title = { Text("Text your circle") },
+            text = { Text("$names ${if (alert.smsContacts.size == 1) "doesn't" else "don't"} use Maitri. Open your messaging app with " +
+                "your live location filled in? You tap Send.") },
+            confirmButton = { TextButton(onClick = { showSmsOffer = false; textCircle(false) }) { Text("Open messages", color = p.accent) } },
+            dismissButton = { Row {
+                TextButton(onClick = { showSmsOffer = false; textCircle(true) }) { Text("WhatsApp…", color = p.accent) }
+                TextButton(onClick = { showSmsOffer = false; smsPrompts.edit().putBoolean("$uid:$incidentId", true).apply() }) {
+                    Text("Not now", color = p.secondary) }
+            } })
+    }
     // An SOS never waits for a PIN; without one, ask for it now, because ending the SOS needs it.
     var pinMissing by remember(uid) { mutableStateOf(false) }
     var pinPromptDismissed by rememberSaveable(uid, incidentId) { mutableStateOf(false) }
@@ -130,8 +166,11 @@ fun MaitriActiveSos(
                     }
                     // Alert the server-side circle once the owner's incident is confirmed; retried until it succeeds.
                     if (!circleAlerted) {
-                        BackendClient.api.alertCircle(id, ExpectedAccount(uid))
+                        val alert = BackendClient.circle.alert(id, ExpectedAccount(uid))
                         circleAlerted = true
+                        smsAlert = alert
+                        // Offer once per incident to text the contacts who don't use Maitri.
+                        if (alert.smsContacts.isNotEmpty() && !smsPrompts.getBoolean("$uid:$id", false)) showSmsOffer = true
                     }
                     delivery = BackendClient.api.contactDelivery(id, ExpectedAccount(uid))
                     updated = true
@@ -269,7 +308,11 @@ fun MaitriActiveSos(
         Row(Modifier.offset(30.dp, 549.dp).width(330.dp).horizontalScroll(rememberScrollState())) {
             val statuses = delivery
             if (statuses.isNullOrEmpty()) Text(if (statuses == null) "Delivery unconfirmed" else "No notifications recorded", color = p.secondary)
-            else statuses.forEach { Text("${it.name} · ${`in`.maitri.app.network.contactDeliveryLabel(it.status)}", Modifier.width(166.dp), color = p.primary, fontSize = 12.sp) }
+            else statuses.forEach { Text("${it.name} · ${`in`.maitri.app.network.circleStatusLabel(it.status)}", Modifier.width(166.dp),
+                color = if (`in`.maitri.app.network.circleStatusReached(it.status)) p.primary else p.secondary, fontSize = 12.sp) }
+            if (smsAlert?.smsContacts?.isNotEmpty() == true) Text("Text circle", Modifier.clip(RoundedCornerShape(12.dp))
+                .clickable(onClickLabel = "Text your circle") { showSmsOffer = true }.padding(horizontal = 8.dp),
+                color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
         BoardAction(24, 638, 165, 64, "Voice recorder") { openCapture(android.provider.MediaStore.Audio.Media.RECORD_SOUND_ACTION) }
         BoardAction(201, 638, 165, 64, "Open camera") { openCapture(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA) }

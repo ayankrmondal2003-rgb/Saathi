@@ -11,14 +11,16 @@ data class PairingRequestDto(@SerializedName("owner_email") val ownerEmail: Stri
 data class PairingCodeDto(val code: String, @SerializedName("expires_at") val expiresAt: String)
 data class BindCircleDto(@SerializedName("contact_id") val contactId: String, val code: String)
 data class CircleShareRequest(val kind: String, @SerializedName("contact_ids") val contactIds: List<String>,
-    val consent: Boolean, val location: FixDto? = null, @SerializedName("duration_minutes") val duration: Int = 30)
+    val consent: Boolean, val location: FixDto? = null, @SerializedName("duration_minutes") val duration: Int = 30,
+    @SerializedName("due_minutes") val dueMinutes: Int = 60)
 data class CircleReceiptDto(@SerializedName("contact_id") val contactId: String,
     @SerializedName("notification_status") val status: String, @SerializedName("opened_at") val openedAt: String?,
     val revoked: Boolean)
 data class CircleSessionDto(val id: String, val kind: String, val status: String,
     @SerializedName("created_at") val createdAt: String, @SerializedName("expires_at") val expiresAt: String,
     @SerializedName("latest_fix") val fix: FixDto?, @SerializedName("fix_received_at") val syncedAt: String?,
-    @SerializedName("is_owner") val owner: Boolean, val recipients: List<CircleReceiptDto>)
+    @SerializedName("is_owner") val owner: Boolean, val recipients: List<CircleReceiptDto>,
+    @SerializedName("due_at") val dueAt: String? = null, val missed: Boolean = false)
 
 fun circleSharingError(error: Throwable): String = when (error) {
     is HttpException -> when (error.code()) {

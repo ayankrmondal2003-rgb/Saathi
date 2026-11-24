@@ -10,6 +10,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.luminance
 import androidx.core.view.WindowCompat
 import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.launch
 import `in`.maitri.app.navigation.SafetyApp
 import `in`.maitri.app.notification.NotificationHelper
 import `in`.maitri.app.ui.theme.MaitriTheme
@@ -57,5 +58,18 @@ class MainActivity : ComponentActivity() {
             intent?.getStringExtra(NotificationHelper.EXTRA_INCIDENT_ID)
         )
         intent?.removeExtra(NotificationHelper.EXTRA_INVITATION_ID)
+        val inboxId = intent?.getStringExtra(NotificationHelper.EXTRA_INBOX_ID)
+        if (intent?.getStringExtra(NotificationHelper.EXTRA_EVENT_TYPE) == NotificationHelper.EVENT_INBOX && inboxId != null) {
+            val url = intent.getStringExtra(NotificationHelper.EXTRA_URL)?.takeIf { it.startsWith("https://") }
+            intent.removeExtra(NotificationHelper.EXTRA_INBOX_ID)
+            // Opening the notification counts as "Opened" for the person who sent the SOS.
+            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    runCatching { `in`.maitri.app.network.BackendClient.circle.read(inboxId, `in`.maitri.app.network.ExpectedAccount(uid)) }
+                }
+            }
+            if (url != null) runCatching { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+            else `in`.maitri.app.navigation.PendingNavigation.openInbox.value = true
+        }
     }
 }

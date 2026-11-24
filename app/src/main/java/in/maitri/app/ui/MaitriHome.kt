@@ -56,7 +56,7 @@ internal fun maitriPalette(): MaitriPalette {
 
 @Composable
 fun MaitriHome(state: DemoState, start: (Boolean) -> Unit, contacts: () -> Unit,
-               session: @Composable ColumnScope.() -> Unit = {}) {
+               session: @Composable ColumnScope.() -> Unit = {}, onInbox: (() -> Unit)? = null, unread: Int = 0) {
     val p = maitriPalette()
     val context = LocalContext.current
     var confirm by rememberSaveable { mutableStateOf(false) }
@@ -66,10 +66,11 @@ fun MaitriHome(state: DemoState, start: (Boolean) -> Unit, contacts: () -> Unit,
         onSos = { start(true) },
         onSosTap = { if (active) start(true) else confirm = true },
         contacts = contacts,
-        notifications = {
+        notifications = onInbox ?: {
             context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
                 .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
         },
+        unread = unread,
         trip = { sharingKind = "TRIP" },
         checkIn = { sharingKind = "CHECK_IN" },
         session = session,
@@ -91,7 +92,7 @@ fun MaitriHome(state: DemoState, start: (Boolean) -> Unit, contacts: () -> Unit,
 internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Boolean,
     onSos: () -> Unit, contacts: () -> Unit, notifications: () -> Unit,
     trip: () -> Unit, checkIn: () -> Unit, session: @Composable ColumnScope.() -> Unit = {},
-    onSosTap: () -> Unit = onSos, beta: Boolean = false) {
+    onSosTap: () -> Unit = onSos, beta: Boolean = false, unread: Int = 0) {
     Column(Modifier.fillMaxSize().background(p.background).statusBarsPadding()
         .verticalScroll(rememberScrollState())
         .padding(start = 24.dp, end = 24.dp, top = 22.dp, bottom = LocalFloatingNavBarPadding.current)) {
@@ -111,8 +112,15 @@ internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Bool
                 Spacer(Modifier.height(6.dp))
                 Text("Here for you.", color = p.primary, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
             }
-            IconButton(onClick = notifications, modifier = Modifier.size(44.dp).background(p.surface, CircleShape)) {
-                Icon(painterResource(R.drawable.maitri_bell), "Notifications", tint = p.primary, modifier = Modifier.size(24.dp))
+            Box {
+                IconButton(onClick = notifications, modifier = Modifier.size(44.dp).background(p.surface, CircleShape)) {
+                    Icon(painterResource(R.drawable.maitri_bell),
+                        if (unread > 0) "Notifications, $unread unread" else "Notifications", tint = p.primary, modifier = Modifier.size(24.dp))
+                }
+                if (unread > 0) Text(if (unread > 9) "9+" else unread.toString(),
+                    Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp).background(p.accent, CircleShape)
+                        .padding(horizontal = 5.dp, vertical = 1.dp),
+                    color = if (p.dark) p.background else Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
         }
         Spacer(Modifier.height(30.dp))

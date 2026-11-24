@@ -63,6 +63,17 @@ class SosFirebaseMessagingService : FirebaseMessagingService() {
                 )
                 saveLastAlertTimestamp(applicationContext, System.currentTimeMillis())
             }
+            in NotificationHelper.INBOX_KINDS -> {
+                val inboxId = data["inbox_id"]?.takeIf { runCatching { UUID.fromString(it) }.isSuccess } ?: return
+                val url = data["url"]?.takeIf { it.startsWith("https://") }
+                val shown = NotificationHelper.showInboxNotification(applicationContext, inboxId, eventType,
+                    data["title"].orEmpty().ifBlank { "Maitri" }.take(120), data["body"].orEmpty().take(500), url)
+                // Tell the server the push reached this phone: the only basis for "Push delivered" on the sender's screen.
+                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                if (shown && uid != null) scope.launch {
+                    runCatching { `in`.maitri.app.network.BackendClient.circle.delivered(inboxId, `in`.maitri.app.network.ExpectedAccount(uid)) }
+                }
+            }
             else -> {
                 // Ignore unrecognized or untrusted event types
             }

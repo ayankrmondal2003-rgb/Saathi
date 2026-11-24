@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import `in`.maitri.app.R
 import `in`.maitri.app.data.EmergencyContact
 import `in`.maitri.app.state.SafetyViewModel
@@ -44,6 +45,17 @@ fun MaitriCircle(
 ) {
     val p = maitriPalette()
     val context = LocalContext.current
+    val uid = remember { runCatching { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid }.getOrNull() }
+    var linked by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var memberships by remember { mutableStateOf<List<String>>(emptyList()) }
+    var refresh by remember { mutableIntStateOf(0) }
+    LaunchedEffect(uid, refresh, contacts.size) {
+        val account = uid?.let { `in`.maitri.app.network.ExpectedAccount(it) } ?: return@LaunchedEffect
+        try {
+            linked = `in`.maitri.app.network.BackendClient.api.circleLinks(account).filter { it.owner }.map { it.contactId }.toSet()
+            memberships = `in`.maitri.app.network.BackendClient.circle.memberships(account).map { it.ownerName }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
+    }
     LaunchedEffect(message) {
         if (message != null) {
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
@@ -71,7 +83,11 @@ fun MaitriCircle(
         onToggleSosAlert = onToggleSosAlert ?: { id: String, enabled: Boolean ->
             vm?.toggleSosAlert(id, enabled)
             Unit
-        }
+        },
+        linkedContactIds = linked,
+        memberships = memberships,
+        uid = uid,
+        onLinked = { refresh++ }
     )
 }
 
@@ -81,9 +97,15 @@ internal fun MaitriCircleContent(
     p: MaitriPalette,
     onAddOrUpdateContact: (id: String?, name: String, phone: String, label: String, isPrimary: Boolean, notifyOnSos: Boolean) -> String?,
     onRemoveContact: (String) -> Unit,
-    onToggleSosAlert: (String, Boolean) -> Unit
+    onToggleSosAlert: (String, Boolean) -> Unit,
+    linkedContactIds: Set<String> = emptySet(),
+    memberships: List<String> = emptyList(),
+    uid: String? = null,
+    onLinked: () -> Unit = {}
 ) {
     val isDark = p.dark
+    var inviting by remember { mutableStateOf<EmergencyContact?>(null) }
+    var enteringCode by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
@@ -264,7 +286,9 @@ internal fun MaitriCircleContent(
                         palette = p,
                         onEdit = { editingContact = contact },
                         onRemove = { deletingContact = contact },
-                        onToggleSos = { enabled -> onToggleSosAlert(contact.id, enabled) }
+                        onToggleSos = { enabled -> onToggleSosAlert(contact.id, enabled) },
+                        onMaitri = if (uid == null) null else contact.id in linkedContactIds,
+                        onInvite = { inviting = contact }
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                 }
@@ -362,8 +386,27 @@ internal fun MaitriCircleContent(
                     .clickable { contactPickerLauncher.launch(null) }
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             )
+            if (uid != null) {
+                Text(
+                    text = "Enter a code from a friend",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = p.accent,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { enteringCode = true }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+                if (memberships.isNotEmpty()) Text(
+                    text = "You get SOS alerts from " + memberships.joinToString(),
+                    fontSize = 11.sp, color = p.secondary, textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                )
+            }
         }
     }
+    inviting?.let { contact -> if (uid != null) CircleInviteDialog(uid, contact, p) { inviting = null; onLinked() } }
+    if (enteringCode && uid != null) EnterCircleCodeDialog(uid, p) { enteringCode = false; onLinked() }
 
     // Add Contact Dialog
     if (showAddDialog) {
@@ -534,7 +577,9 @@ private fun ContactCardItem(
     palette: MaitriPalette,
     onEdit: () -> Unit,
     onRemove: () -> Unit,
-    onToggleSos: (Boolean) -> Unit
+    onToggleSos: (Boolean) -> Unit,
+    onMaitri: Boolean? = null,
+    onInvite: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -633,6 +678,18 @@ private fun ContactCardItem(
                         color = if (contact.notifyOnSos) palette.primary else palette.secondary
                     )
                 }
+
+                // Middle: whether SOS alerts reach this person as a push (linked Maitri account) or by your SMS.
+                if (onMaitri != null) Text(
+                    text = if (onMaitri) "On Maitri" else "Invite",
+                    fontSize = 11.sp,
+                    fontWeight = if (onMaitri) FontWeight.Medium else FontWeight.SemiBold,
+                    color = if (onMaitri) palette.secondary else palette.accent,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .then(if (onMaitri) Modifier else Modifier.clickable(onClickLabel = "Invite ${contact.displayName} to Maitri", onClick = onInvite))
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                )
 
                 // Right: Remove button
                 Text(
@@ -866,4 +923,80 @@ fun MaitriCircleDarkPreview() {
         onRemoveContact = {},
         onToggleSosAlert = { _, _ -> }
     )
+}
+
+/** Owner side: a single-use code that links this contact's Maitri account, sent any way the owner likes. */
+@Composable
+private fun CircleInviteDialog(uid: String, contact: EmergencyContact, p: MaitriPalette, dismiss: () -> Unit) {
+    val context = LocalContext.current
+    var invite by remember { mutableStateOf<`in`.maitri.app.network.CircleInviteDto?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(contact.id) {
+        try { invite = `in`.maitri.app.network.BackendClient.circle.invite(
+            `in`.maitri.app.network.CircleInviteRequest(contact.id), `in`.maitri.app.network.ExpectedAccount(uid)) }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { error = "Couldn't create a code. Check your connection and that ${contact.displayName} is saved." }
+    }
+    AlertDialog(onDismissRequest = dismiss, containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
+        title = { Text("Invite ${contact.displayName}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Send this code to ${contact.displayName}. Once they enter it in Maitri, your SOS alerts reach them as a notification with your live location.")
+                error?.let { Text(it, color = p.accent) }
+                invite?.let {
+                    Text(it.code, color = p.primary, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp,
+                        modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                    Text("Valid for 24 hours, once.", fontSize = 12.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                } ?: if (error == null) LinearProgressIndicator(Modifier.fillMaxWidth(), color = p.accent) else Unit
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = invite != null, onClick = {
+                invite?.let { context.startActivity(`in`.maitri.app.network.shareTextIntent(`in`.maitri.app.network.inviteText(it.code))) }
+            }) { Text("Send code", color = p.accent) }
+        },
+        dismissButton = { TextButton(onClick = dismiss) { Text("Done", color = p.secondary) } })
+}
+
+/** Friend side: entering a code joins that person's circle. */
+@Composable
+private fun EnterCircleCodeDialog(uid: String, p: MaitriPalette, dismiss: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var code by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    AlertDialog(onDismissRequest = dismiss, containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
+        title = { Text("Enter a code") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Enter the code a friend sent you. You'll get their SOS alerts and their live location while an SOS is active.")
+                OutlinedTextField(code, { code = it.uppercase().take(12) }, singleLine = true, label = { Text("Code") },
+                    placeholder = { Text("ABCD-2345") }, modifier = Modifier.fillMaxWidth())
+                error?.let { Text(it, color = p.accent) }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = !busy && code.count { it.isLetterOrDigit() } == 8, onClick = {
+                busy = true
+                scope.launch {
+                    try {
+                        val result = `in`.maitri.app.network.BackendClient.circle.accept(
+                            `in`.maitri.app.network.AcceptInviteRequest(code), `in`.maitri.app.network.ExpectedAccount(uid))
+                        Toast.makeText(context, "You're now in ${result.ownerName ?: "their"} circle", Toast.LENGTH_LONG).show()
+                        dismiss()
+                    } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                    catch (e: retrofit2.HttpException) {
+                        error = when (e.code()) {
+                            404 -> "That code isn't valid or has expired. Ask for a new one."
+                            422 -> "This is your own code. Send it to the person you added."
+                            429 -> "Too many codes tried. Try again in an hour."
+                            else -> "Couldn't join right now. Try again."
+                        }
+                    } catch (_: Exception) { error = "Couldn't reach Maitri. Check your connection." }
+                    finally { busy = false }
+                }
+            }) { Text("Join", color = p.accent) }
+        },
+        dismissButton = { TextButton(onClick = dismiss) { Text("Cancel", color = p.secondary) } })
 }
