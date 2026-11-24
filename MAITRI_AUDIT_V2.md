@@ -198,6 +198,29 @@ Both themes behave identically in every row unless "dark" is noted. Visual rows 
 
 Visual: 06–14 match in both themes. 01–05 need the spacing/size pass and SVG icons instead of Material icons.
 
+## Beta progress (branch `beta-complete`)
+
+Status "server-tested" means covered by the isolated backend suite and Android unit tests, and rendered on the emulator, but not yet tried end to end on phones against a deployed server (that is Step 4).
+
+| Phase | Rows changed | Now |
+|---|---|---|
+| P0 | R15 lint, R19 legacy screens | works (0 lint errors; dead screens removed) |
+| P1 | R1 beta access, R2 real incidents, R17 beta label and 3 SOS/hour; 02 SOS hold, no-PIN path; 03 Google in the phone slot, phone OTP removed; cold start no longer blocks Home | server-tested |
+| P2 | R16 maps; 07 map, distance and approx. walk; 08 map | works on the emulator (MapLibre + OpenFreeMap, both themes) |
+| P3 | R4 circle alerts without SMS; R9 missed check-in; 02 bell inbox, Share my trip, Check in; 05 pairing; 08 Circle notified | server-tested |
+
+P3 detail:
+- **05:** Invite creates a single-use code (24 h, 10 tries/hour); "Enter a code from a friend"; phone-verified numbers get an inbox request; "You get SOS alerts from …".
+- **08 Circle notified:** per contact Sending / Push sent / Push delivered (phone confirmed) / Opened / SMS prepared / Not reached. Contacts without the app: a one-time offer opens the phone's SMS app (or WhatsApp share) with the `/l/<token>` live link; recorded as "SMS prepared" only after the composer returns.
+- **/l/<token>:** read-only page, no personal data, stops when the SOS ends.
+- **02 bell:** real inbox with unread badge; circle pushes confirm delivery.
+- **Check-ins:** due time, reminder 5 minutes before, circle told once when missed, "I'm safe, check in now". Trips share location while Maitri is open.
+
+Open limits:
+- Missed check-ins reach only circle members with the app.
+- Trip updates stop when Maitri is closed.
+- WhatsApp needs one share per chat.
+
 ---
 
 # History

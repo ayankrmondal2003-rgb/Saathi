@@ -200,7 +200,7 @@ internal fun MaitriCircleContent(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Save the people you'd reach when you need help.\nSMS alerts are not connected yet.",
+                        text = "These contacts receive your SOS and\nlive location when you ask for help.",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Normal,
                         color = p.secondary,

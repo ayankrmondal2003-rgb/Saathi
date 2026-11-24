@@ -53,7 +53,8 @@ class MaitriAllScreensCaptureTest {
         "05" to { Docked("Contacts") { MaitriCircleContent(listOf(
             EmergencyContact("c1", displayName = "Test Contact A", phoneNumber = "+91 90000 00001", isPrimary = true),
             EmergencyContact("c2", displayName = "Test Contact B", phoneNumber = "+91 90000 00002")),
-            p(), { _, _, _, _, _, _ -> null }, {}, { _, _ -> }) } },
+            p(), { _, _, _, _, _, _ -> null }, {}, { _, _ -> },
+            linkedContactIds = setOf("c1"), uid = "capture-no-session") } },
         "06" to { MaitriIncomingContent(p(), "Nearby emergency", "Distance unavailable", "Arrival time unavailable",
             false, null, {}, {}) },
         // Synthetic test coordinate (New Delhi), as used by the backend suite; renders the live map with both markers.
