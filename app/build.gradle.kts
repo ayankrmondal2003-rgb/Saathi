@@ -8,6 +8,7 @@ import java.awt.image.BufferedImage
 plugins {
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
+    id("com.google.firebase.appdistribution")
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
@@ -84,6 +85,16 @@ android {
         release {
             buildConfigField("String", "API_BASE_URL", backendUrl("maitriProdApiUrl", "surakshaProdApiUrl"))
             if (canSignRelease) signingConfig = signingConfigs.getByName("upload")
+            // Firebase App Distribution (free): ./gradlew assembleRelease appDistributionUploadRelease
+            // sends this build to the "friends" tester group. Credentials and testers stay in local.properties.
+            configure<com.google.firebase.appdistribution.gradle.AppDistributionExtension> {
+                artifactType = "APK"
+                groups = localSetting("maitriTesterGroups").ifBlank { "friends" }
+                releaseNotesFile = rootProject.file("release-notes.txt").path
+                localSetting("maitriAppDistributionCredentials").takeIf { it.isNotBlank() }?.let {
+                    serviceCredentialsFile = it
+                }
+            }
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
