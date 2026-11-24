@@ -26,12 +26,29 @@ services:
       - key: R2_SECRET_ACCESS_KEY
         sync: false
       # REDIS_URL is intentionally absent: optional, only needed when running more than one worker.
-      # Synthetic fixes are supported. The API and outbox enforce the test UID allowlist.
+      # beta: open access for any verified account, real SOS (SOS_PER_HOUR, default 3). The master branch before
+      # the beta merge only accepts development/test/production, so set this back before deploying older code.
       - key: ENVIRONMENT
-        value: development
+        value: beta
       - key: FIREBASE_PROJECT_ID
         value: surakshanet-c4ec1
       - key: GOOGLE_APPLICATION_CREDENTIALS
         value: /etc/secrets/firebase-admin.json
+      # Ignored in beta (open access); used again in development/test.
       - key: TEST_ACCOUNT_UIDS
+        sync: false
+      # Signs live-location links (/l/<token>) so they survive restarts. Any long random string.
+      - key: LIVE_LINK_SECRET
+        sync: false
+      # Base URL used in live-location links, e.g. https://<service>.onrender.com (no trailing slash).
+      - key: PUBLIC_URL
+        sync: false
+      # AES-GCM key for medical notes: 32 random bytes, base64. Losing or changing it makes saved notes unreadable.
+      - key: MEDICAL_NOTES_KEY
+        sync: false
+      # Sentry DSN for server error reports (errors only, scrubbed). Unset means no reporting.
+      - key: SENTRY_DSN
+        sync: false
+      # Firebase web app apiKey for the /admin volunteer review sign-in page.
+      - key: FIREBASE_WEB_API_KEY
         sync: false
