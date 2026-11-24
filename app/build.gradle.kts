@@ -88,6 +88,8 @@ android {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
             }
+            // Keep rules for reflection inside the optimized packages (Room/WorkManager, startup); see the file.
+            proguardFiles("proguard-rules.pro")
         }
     }
     compileOptions {
