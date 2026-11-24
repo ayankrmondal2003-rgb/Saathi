@@ -1,4 +1,208 @@
-# Maitri audit v2 — Phase A (no code changed)
+# Maitri audit v3 — Step 0 re-audit (no code changed)
+
+Date: 2026-11-24, at `master` `0d06187` (PRs #1–#3 merged).
+
+Method:
+- Re-read the code. Every claim from v2 below was re-checked, not copied.
+- Captured all 28 screen/theme pairs with `MaitriAllScreensCaptureTest` on a Pixel 10 Pro emulator (API 37, 1280×2856, 426×952 dp viewport) and placed each next to `design-reference/crops/{light,dark}-NN.png`.
+  - The crops are drawn at 390×844, so absolute positions differ by the viewport. Findings below are relative proportions, sizes and content.
+  - 07 and 08 are captured without the dock, because the capture test does not dock them.
+
+Baselines:
+- Android JVM unit tests: 164/164.
+- Isolated backend tests: 143/143 (Alembic head 0012).
+- `lintDebug`: **7 errors** (one fewer than in v2), 203 warnings:
+  - `MissingPermission` in `NotificationHelper`
+  - 2 × `StateFlowValueCalledInComposition` in legacy `IncidentScreens`
+  - 4 × `MissingTranslation` (`maitri_tagline`, `maitri_supporting`, `maitri_get_started`, `maitri_footer`)
+
+**Status key:**
+- **works**: real, end to end, locally verified.
+- **partial**: real but incomplete.
+- **missing**: not implemented.
+- **fake**: shows or claims something untrue.
+- **blocked**: needs an external service or account.
+
+## Release-wide findings
+
+| # | Finding | Evidence | Status | Planned fix (phase) |
+|---|---|---|---|---|
+| R1 | Server rejects every account not in the test allowlist | `core.py` `test_account_uids`; `ENVIRONMENT=development` | blocked for beta | `ENVIRONMENT=beta` (P1) |
+| R2 | Incidents can only be test incidents | `CreateIncident.is_test: Literal[True]`; DB `CHECK (is_test)` | partial | real incidents in beta, rate limits (P1) |
+| R3 | Circle contacts saved server-first; dispatch reads the server table | `TrustedContactSync.kt`, `trusted_contacts.py` | works | — |
+| R4 | No SMS provider. Contact alerts are recorded as `NO_SMS_PROVIDER` | `trusted_contacts.py` | blocked | FCM to app users, plus the phone's own SMS composer (P3) |
+| R5 | Only approved volunteers get invitations, but nobody can approve one | `moving_geofence.py`, `volunteer.py` | partial | admin panel (P4) |
+| R6 | R2 presigned upload/download API exists (`/api/files`, migration 0012). Bucket not configured; the app never uses it | `files.py`, `storage.py` | partial | app uploads + R2 setup (P4) |
+| R7 | No volunteer admin review panel | — | missing | `/admin` (P4) |
+| R8 | No account deletion or data export | — | missing | P6 |
+| R9 | No missed-check-in job | `circle_sharing.py` | missing | P3 |
+| R10 | No crash reporting (app or server), no CI | — | missing | Crashlytics; Render logs or Sentry (P8) |
+| R11 | Package `in.maitri.app`, Maitri branding | — | works | — |
+| R12 | Release signing wired (keystore at `~/keys/maitri-upload.jks`). versionCode 1 / "1.0"; R8 release never installed and tested | `app/build.gradle.kts` | partial | P9 |
+| R13 | Font identity unknown (SVG text is outlined) | — | partial | stays documented; no exact-match claim |
+| R14 | Manifest lacks `ACCESS_BACKGROUND_LOCATION`, `USE_FULL_SCREEN_INTENT`, `RECORD_AUDIO`/`CAMERA` and microphone/camera FGS types | `AndroidManifest.xml` | missing | P3/P5 |
+| R15 | 7 lint errors | `lintDebug` | partial | P0 |
+| R16 | Maps use Esri World Street Map, keyless public endpoint. Dark theme only dims tiles; light capture showed half-loaded grey tiles | `ui/EsriMap.kt` | partial | MapLibre + OpenFreeMap (P2) |
+| R17 | No beta label, no SOS rate limit, no false-alarm report | — | missing | P1 |
+| R18 | No privacy policy, terms or account-deletion web page | — | missing | `docs/site/` (P6) |
+| R19 | Legacy screens still compiled: `IncidentScreens`, `CommunityScreens`, `ContactsScreen`, `TestResponderDashboard` (the Responder tab uses the last). Source of 2 lint errors and "practice/test alert" wording | `navigation/SafetyApp.kt:412` | partial | P0 clean-up |
+
+## Per-control audit (14 screens × light/dark)
+
+Both themes behave identically in every row unless "dark" is noted. Visual rows cover both themes.
+
+### 01 Welcome — `ui/MaitriWelcome.kt`
+| Control | Current | Status | Fix |
+|---|---|---|---|
+| Get started → 03; skipped when signed in | Works | works | — |
+| Visual | Logo tile, wordmark and button sit higher than drawn (button at ~76% vs ~84% of height); footer text smaller | partial | spacing pass (P10) |
+
+### 02 Home — `ui/MaitriHome.kt`
+| Control | Current | Status | Fix |
+|---|---|---|---|
+| Bell | Opens Android notification **settings**, not an inbox | missing | in-app inbox + unread badge (P3) |
+| SOS hold 3 s + cancel | Works. Starts a local session; shared with the server only as a **test** incident, otherwise "Local practice session" | partial | real SOS in beta (P1). No-PIN path: start, then prompt for a PIN (P1) |
+| Share my trip | Consented TRIP session, server expiry; recipients must be paired app users (by **email** pairing code) | partial | phone/pairing-code matching + push (P3) |
+| Check in | Creates a CHECK_IN session; nothing happens when it's missed | partial | missed-check-in job (P3) |
+| Manage / + | → Circle | works | — |
+| Contact count | From the server-backed circle | works | — |
+| Beta label | Absent | missing | P1 |
+| Visual | SOS card and quick-action cards shorter; title/subtitle sizes smaller than drawn | partial | P10 |
+
+### 03 Log in / Sign up — `ui/MaitriLogin.kt`
+| Control | Current | Status | Fix |
+|---|---|---|---|
+| Log in / Sign up tabs | Works | works | — |
+| Continue with phone | Firebase Phone Auth; SMS needs Blaze, so real users fail on Spark | blocked | replaced by Google in the same slot (P1) |
+| Continue with Google | Implemented as an **extra** outlined button under "Log in with email"; not yet verified on a device | partial | move to the phone button's slot and style; device test (P1) |
+| Country code "+91" | Fixed label; design shows "+ Code" | partial | goes away with the phone row (P1) |
+| Email + password, show/hide, forgot password | Works | works | — |
+| Terms / Privacy | Plain text | missing | real links (P6) |
+| Cold-start "Connecting to Maitri…" | Interceptor exists; the login screen shows no message | partial | P1 |
+| Visual | Spacing tighter; Material email/lock/eye icons instead of SVG icons | partial | P10 |
+
+### 04 Volunteer verification — `ui/MaitriVolunteer.kt`
+| Control | Current | Status | Fix |
+|---|---|---|---|
+| Yes / Not now | Works | works | — |
+| 5 document rows | Picks a file and validates type/size; sends **metadata only** | partial | R2 presigned upload, camera or file, retry and remove (P4) |
+| Download template | Absent | missing | bundled declaration PDF (P4) |
+| Consent | Works | works | — |
+| "x of 5" counter | Says "documents selected" (local) | partial | count real uploads (P4) |
+| Submit for review | Works server-side; shows the storage notice | partial | P4 |
+| Application status | Read on the Responder tab; nobody can approve | partial | status card + admin panel (P4) |
+| Visual | Material filled icons vs outline SVG; rows shorter; title smaller; no template link | partial | P10 |
+
+### 05 Your circle — `ui/MaitriCircle.kt`
+| Control | Current | Status | Fix |
+|---|---|---|---|
+| Add / edit / remove / primary / SOS toggle | Server-first; failures revert with a message | works | — |
+| Import from phone contacts | System picker | works | — |
+| "Choose who gets your SOS" | Present | works | — |
+| Pairing with friends who have the app | Email-based code in the sharing dialog only | partial | phone-number match + pairing code on this screen (P3) |
+| Banner copy | "SMS alerts are not connected yet." (truthful deviation) | partial | replace once the phone-SMS composer flow exists (P3) |
+| Visual | Title and row heights smaller; info card uses a filled shield | partial | P10 |
+
+### 06 Nearby SOS request — `ui/MaitriIncoming.kt`
+| Control | Current | Status | Fix |
+|---|---|---|---|
+| Delivery | FCM to approved, opted-in, available users within 1 km; no full-screen intent | partial | full-screen where allowed, else heads-up + chosen vibration (P5) |
+| Locality / distance before accepting | "Nearby emergency" / "Distance unavailable" (the server sends none) | partial | approximate locality + distance band from the server (P5) |
+| Accept / Decline | Works | works | — |
+| Expiry | Server expires the invitation; the screen doesn't count it down | partial | P5 |
+| "Available for nearby requests" | Toggle lives on the Responder tab; the label under the card is missing | partial | P5/P10 |
+| Visual | Otherwise matches both themes | works | — |
+
+### 07 On your way — `ui/MaitriResponderJourney.kt`
+| Control | Current | Status | Fix |
+|---|---|---|---|
+| Map | Esri tiles with the victim pin only; dark = dimmed tiles | partial | MapLibre, both positions, dark style (P2) |
+| Distance / ETA | "≈ N m straight-line"; no ETA | partial | "approx." walking estimate (P2) |
+| Bring in help | Works | works | — |
+| Call | Labelled as a call to the person but **dials 112** | fake | dial the victim when they've consented, otherwise hide (P5) |
+| Contact emergency services | Dials 112 | works | — |
+| Open in Maps | Works | works | — |
+| Wipe on end/revoke | Works | works | — |
+| Visual | Matches; "RESPONDER · ON THE WAY" vs "LIVE" | works | — |
+
+### 08 SOS is active — `ui/MaitriActiveSos.kt`
+| Control | Current | Status | Fix |
+|---|---|---|---|
+| Live map | Esri, own fix + accuracy circle; no responder pins | partial | MapLibre + responder positions (P2) |
+| Timer | Works | works | — |
+| Responders + ETA | Count/status only; empty card "Checking responders…" | partial | names + approx. ETA (P5) |
+| Circle notified | "Delivery unconfirmed" | blocked | push status + "SMS prepared" (P3) |
+| Voice / Camera | Opens the phone's recorder/camera apps; nothing uploaded | partial | in-app capture to R2 (P5) |
+| End SOS with PIN | Works | works | — |
+| Call 112 always visible | Works (added in PR #3) | works | — |
+| Offline queue / cold-start retry | Works | works | — |
+| Visual | Layout matches; subtitle and footer are truthful states | works | — |
+
+### 09 Profile & settings — `ui/MaitriSettings.kt`
+| Control | Current | Status | Fix |
+|---|---|---|---|
+| Edit, Permissions, Test vibrations, Safety PINs, Language | Navigate correctly | works | — |
+| Themes | System / Light / Dark persisted; the drawn label is "Blush" | partial | "Blush" naming (P10) |
+| Notifications | Android notification settings | works | — |
+| Privacy & data | Info dialog only | missing | export + delete (P6) |
+| Help & support | Bundled text, no email, no beta info | partial | FAQ + support email + Beta info (P6/P11) |
+| Sign out | Works | works | — |
+| Visual | Matches; eyebrow letter-spacing tighter | partial | P10 |
+
+### 10 Language — `ui/MaitriLanguage.kt`
+| Control | Current | Status | Fix |
+|---|---|---|---|
+| Search, six languages, Save | Works; translations cover screens 09–14 only | partial | full-app strings, marked for review (P7) |
+| Visual | Matches | works | — |
+
+### 11 Test vibration — `ui/MaitriVibration.kt`
+| Control | Current | Status | Fix |
+|---|---|---|---|
+| Patterns + Test | Works; never sends an SOS | works | — |
+| Persist + use for real alerts | `rememberSaveable` only | missing | persist + apply in `NotificationHelper` (P5) |
+| Visual | Matches | works | — |
+
+### 12 Permissions — `ui/MaitriPermissions.kt`
+| Control | Current | Status | Fix |
+|---|---|---|---|
+| Location / Notifications | Real state; request or settings | works | — |
+| Background location | Not declared or shown | missing | prominent disclosure (P5) |
+| Contacts / Microphone / Camera | "Not needed" | partial | real states once in-app capture exists (P5) |
+| Battery optimisation + OEM tips | Absent | missing | P5 |
+| Visual | Matches | works | — |
+
+### 13 Safety PIN — `ui/MaitriPin.kt`
+| Control | Current | Status |
+|---|---|---|
+| Set, confirm, show, weak-PIN rejection, change, reset | Server-backed | works |
+| Visual | Matches | works |
+
+### 14 Edit profile — `ui/MaitriEditProfile.kt`
+| Control | Current | Status | Fix |
+|---|---|---|---|
+| Photo | Gallery only, downscaled, device-only | partial | camera/gallery, crop, R2 (P4) |
+| Name / phone / city | Saved via `PATCH /api/users/me` (deployed) | works | — |
+| Email | Read-only | partial | verify-before-update (P6) |
+| Medical notes | Encrypted on the device only | partial | server-side encryption, responder-visible during an active SOS, consent note (P6) |
+| Visual | Matches | works | — |
+
+## Summary (v3)
+
+| Status | Rows |
+|---|---|
+| works | 34 |
+| partial | 34 |
+| missing | 8 |
+| fake | 1 (07 "Call" dials 112) |
+| blocked | 2 (phone OTP on Spark; circle delivery without SMS) |
+
+Visual: 06–14 match in both themes. 01–05 need the spacing/size pass and SVG icons instead of Material icons.
+
+---
+
+# History
+
+## Audit v2 (2026-11-23, superseded by v3 above)
 
 Date: 2026-11-23. Method: code read and grep of the current working tree; device captures of all 28 screen/theme combinations on a Samsung SM-E625F (Android 13), edge-to-edge, compared side by side with `design-reference/crops/{light,dark}-NN.png`; earlier report claims were re-verified rather than trusted. No automated pixel diff exists yet (Phase C adds it).
 
@@ -9,7 +213,7 @@ Date: 2026-11-23. Method: code read and grep of the current working tree; device
 - **fake**: shows or claims something untrue.
 - **blocked**: needs an external service or account.
 
-## Release-wide findings
+### Release-wide findings
 
 | # | Finding | Evidence | Status |
 |---|---|---|---|
@@ -29,15 +233,15 @@ Date: 2026-11-23. Method: code read and grep of the current working tree; device
 | R14 | Manifest lacks `ACCESS_BACKGROUND_LOCATION`, `USE_FULL_SCREEN_INTENT`, microphone/camera FGS types | `AndroidManifest.xml` | missing (needed for Phase D/F scope) |
 | R15 | Lint: 8 pre-existing errors (`NotificationHelper` permission check, 2 `StateFlow.value` in legacy `IncidentScreens`, 5 untranslated strings) | `lintDebug` | partial |
 
-## Per-control audit
+### Per-control audit
 
-### 01 Welcome — `ui/MaitriWelcome.kt`, route `Intro`
+#### 01 Welcome — `ui/MaitriWelcome.kt`, route `Intro`
 | Control | Expected | Current | Endpoint | Status | Fix |
 |---|---|---|---|---|---|
 | Get started | → 03; skipped for signed-in users | → Login; shown only on first launch; signed-in users go straight to Home | — | works | — |
 | Visual | Crop 01 | Logo tile and wordmark ~10 units higher; button 52 vs ~55 tall; footer text smaller | — | partial | spacing pass |
 
-### 02 Home / SOS — `ui/MaitriHome.kt`, route `Home`
+#### 02 Home / SOS — `ui/MaitriHome.kt`, route `Home`
 | Control | Expected | Current | Endpoint | Status | Fix |
 |---|---|---|---|---|---|
 | Notification bell | Real inbox | Opens Android notification **settings** | — | missing | build inbox (invitations, circle requests, alert status) |
@@ -49,7 +253,7 @@ Date: 2026-11-23. Method: code read and grep of the current working tree; device
 | Dock Home·Circle·Responder·Profile | As drawn | Order and active pill correct | — | works | — |
 | Visual | Crop 02 | Header ~10 units higher; card heights −8; otherwise matches both themes | — | partial | spacing pass |
 
-### 03 Log in / Sign up — `ui/MaitriLogin.kt`
+#### 03 Log in / Sign up — `ui/MaitriLogin.kt`
 | Control | Expected | Current | Endpoint | Status | Fix |
 |---|---|---|---|---|---|
 | Log in / Sign up toggle | Switch modes | Works | Firebase | works | — |
@@ -60,7 +264,7 @@ Date: 2026-11-23. Method: code read and grep of the current working tree; device
 | Terms / Privacy | Open real pages | Plain text, not links | — | missing | pages + links (Phase F) |
 | Visual | Crop 03 | Copy restored in D; vertical rhythm ~30 units tighter; "+ Code" shown as "+91"; Material email/lock/eye icons instead of SVG icons | — | partial | spacing and icon extraction |
 
-### 04 Volunteer verification — `ui/MaitriVolunteer.kt`, route `VolunteerVerification`
+#### 04 Volunteer verification — `ui/MaitriVolunteer.kt`, route `VolunteerVerification`
 | Control | Expected | Current | Endpoint | Status | Fix |
 |---|---|---|---|---|---|
 | Yes / Not now | Record intent | Works | `POST /api/volunteer/intent` | works | — |
@@ -72,7 +276,7 @@ Date: 2026-11-23. Method: code read and grep of the current working tree; device
 | Application status / admin review | Visible status; admin approve/reject | Status read on Responder tab; no admin panel | `/api/volunteer/status` | missing | R7 |
 | Visual | Crop 04 | Copy restored in D; rows 58 vs ~63; title smaller; Material icons; no template link | — | partial | spacing and icons |
 
-### 05 Your circle — `ui/MaitriCircle.kt`, route `Contacts`
+#### 05 Your circle — `ui/MaitriCircle.kt`, route `Contacts`
 | Control | Expected | Current | Endpoint | Status | Fix |
 |---|---|---|---|---|---|
 | List / Add / Edit / Remove | Persisted to server | **Device-only** (SharedPreferences) | (server API exists but unused) | fake | sync to `/api/trusted-contacts` (R3) |
@@ -81,7 +285,7 @@ Date: 2026-11-23. Method: code read and grep of the current working tree; device
 | "Choose who gets your SOS" | Informational | Present | — | works | — |
 | Visual | Crop 05 | Copy restored (banner body is an intentional, truthful deviation); title 25 vs ~28; info card layout (icon column vs inline title) differs | — | partial | layout pass |
 
-### 06 Nearby SOS request — `ui/MaitriIncoming.kt`, route `Incoming?invitationId=`
+#### 06 Nearby SOS request — `ui/MaitriIncoming.kt`, route `Incoming?invitationId=`
 | Control | Expected | Current | Endpoint | Status | Fix |
 |---|---|---|---|---|---|
 | Delivery to volunteers | Approved, in radius, high-priority full-screen FCM | FCM to opted-in available users in 1 km; no approval check; no full-screen intent | outbox worker | partial | R5; full-screen intent + disclosure |
@@ -90,7 +294,7 @@ Date: 2026-11-23. Method: code read and grep of the current working tree; device
 | "Available for nearby requests" | Toggle | Switch on Responder tab (artwork shows label) | `PUT /api/users/me` | works | — |
 | Visual | Crop 06 | Matches both themes | — | works | — |
 
-### 07 On your way — `ui/MaitriResponderJourney.kt`, route `ResponderJourney?incidentId=`
+#### 07 On your way — `ui/MaitriResponderJourney.kt`, route `ResponderJourney?incidentId=`
 | Control | Expected | Current | Endpoint | Status | Fix |
 |---|---|---|---|---|---|
 | Map / route / ETA / distance | Real map, live route | Illustrative artwork; coordinates + "Open in Maps"; "Distance and ETA unavailable" | snapshot + WebSocket | partial | map SDK (Section 0) |
@@ -101,7 +305,7 @@ Date: 2026-11-23. Method: code read and grep of the current working tree; device
 | Wipe on end/revoke | Exit and clear | Exits on CLOSED/REVOKED/403/404/410; tracking stopped | — | works | — |
 | Visual | Crop 07 | Matches; header reads "RESPONDER · AUTHORIZED/status" vs "LIVE" | — | works | — |
 
-### 08 SOS is active — `ui/MaitriActiveSos.kt`, route `Active`
+#### 08 SOS is active — `ui/MaitriActiveSos.kt`, route `Active`
 | Control | Expected | Current | Endpoint | Status | Fix |
 |---|---|---|---|---|---|
 | Live map | Victim + responders | Illustrative artwork; last location as text | snapshot | partial | map SDK |
@@ -112,7 +316,7 @@ Date: 2026-11-23. Method: code read and grep of the current working tree; device
 | End SOS (PIN) | Safety PIN | Works; missing-PIN path → 13 | `POST /api/incidents/{id}/resolve` | works | — |
 | Visual | Crop 08 | Matches both themes | — | works | — |
 
-### 09 Profile & settings — `ui/MaitriSettings.kt`, route `Profile`
+#### 09 Profile & settings — `ui/MaitriSettings.kt`, route `Profile`
 | Control | Expected | Current | Endpoint | Status | Fix |
 |---|---|---|---|---|---|
 | Edit / Permissions / Test vibrations / Safety PINs / Language | → 14/12/11/13/10 | Works (device-tested) | — | works | — |
@@ -123,20 +327,20 @@ Date: 2026-11-23. Method: code read and grep of the current working tree; device
 | Sign out | Sign out | Works | — | works | — |
 | Visual | Crop 09 | Matches; eyebrow letter-spacing tighter | — | partial | — |
 
-### 10 Language — `ui/MaitriLanguage.kt`
+#### 10 Language — `ui/MaitriLanguage.kt`
 | Control | Expected | Current | Status | Fix |
 |---|---|---|---|---|
 | Search, six languages, Save | Applies immediately | Works via `LocaleManager` (API 33+) / prefs; translations cover screens 09–14 only, not the whole app | partial | full-app translations; human review |
 | Visual | Crop 10 | Matches | works | — |
 
-### 11 Test vibration — `ui/MaitriVibration.kt`
+#### 11 Test vibration — `ui/MaitriVibration.kt`
 | Control | Expected | Current | Status | Fix |
 |---|---|---|---|---|
 | Patterns + Test | Plays waveform | Works (device-tested) | works | — |
 | Persist + use for real SOS alerts | Persisted | **Not persisted** (`rememberSaveable` only); not used by alerts | missing | persist + apply in `NotificationHelper` |
 | Visual | Crop 11 | Matches | works | — |
 
-### 12 Permissions — `ui/MaitriPermissions.kt`
+#### 12 Permissions — `ui/MaitriPermissions.kt`
 | Control | Expected | Current | Status | Fix |
 |---|---|---|---|---|
 | Location / Notifications rows | Real state, request or settings | Works | works | — |
@@ -145,13 +349,13 @@ Date: 2026-11-23. Method: code read and grep of the current working tree; device
 | Battery optimisation guidance | Present | Missing | missing | add |
 | Visual | Crop 12 | Matches | works | — |
 
-### 13 Safety PIN — `ui/MaitriPin.kt`
+#### 13 Safety PIN — `ui/MaitriPin.kt`
 | Control | Expected | Current | Status |
 |---|---|---|---|
 | Enter/confirm, Show PIN, weak-PIN rejection, save, change, reset | Server-backed | Works (server- and device-tested) | works |
 | Visual | Crop 13 | Matches | works |
 
-### 14 Edit profile — `ui/MaitriEditProfile.kt`
+#### 14 Edit profile — `ui/MaitriEditProfile.kt`
 | Control | Expected | Current | Endpoint | Status | Fix |
 |---|---|---|---|---|---|
 | Photo change | Camera/gallery, cropped, private storage | Gallery, downscaled, **device-only**; no camera or crop | — | partial | storage (R6) + camera/crop |
@@ -160,7 +364,7 @@ Date: 2026-11-23. Method: code read and grep of the current working tree; device
 | Medical notes | Saved to server | Encrypted **on device only** (deliberate privacy choice) | — | partial | decision needed |
 | Visual | Crop 14 | Matches | — | works | — |
 
-## Summary
+### Summary
 
 | Status | Controls |
 |---|---|
@@ -175,7 +379,7 @@ Visual fidelity:
 - 01–05 need a spacing/typography pass and extracted SVG icons instead of Material icons.
 - Font identity is unresolved.
 
-## Release phase 1 progress (branch `maitri-release`)
+### Release phase 1 progress (branch `maitri-release`)
 
 | Item | Commit | Now |
 |---|---|---|
@@ -190,7 +394,7 @@ Tests at `efdc70d`:
 
 Found during phase 1: `SafetyViewModel` built local `contactAlertStatuses` marked `PROVIDER_ACCEPTED`. Removed (see "SOS path fixes" below).
 
-### Maps (Esri World Street Map), commit after `e4cc31c`
+#### Maps (Esri World Street Map), commit after `e4cc31c`
 
 Status:
 - **07:** live map pinned at the server-reported location, with the exact design marker. Shows "≈ N m/km straight-line" only when the responder's own fix is under 5 minutes old. No ETA, because no routing service is configured; "Open in Maps" hands routing to the device's maps app.
@@ -204,7 +408,7 @@ Open items:
 - **Dark theme:** World Street Map has no dark variant, so tiles are dimmed instead.
 - **Privacy:** tile requests send the viewed area (tile coordinates) and the device IP to Esri. Disclose this in the privacy policy and the Data Safety form (Phase F).
 
-### Package move and Google Sign-In (`0a29e33`, `cdbd1af`)
+#### Package move and Google Sign-In (`0a29e33`, `cdbd1af`)
 
 | Item | Now |
 |---|---|
@@ -218,7 +422,7 @@ Tests at `cdbd1af` plus the contract-test path fix:
 - Isolated backend 116/116 (Alembic head 0011). `test_android_api_contract_consistency` still pointed at the old `com/example/surakshanet` path; it now reads `in/maitri/app`.
 - Device suite not re-run: it uninstalls the app.
 
-### SOS path fixes
+#### SOS path fixes
 
 | Item | Now |
 |---|---|
@@ -228,7 +432,7 @@ Tests at `cdbd1af` plus the contract-test path fix:
 
 Tests at `7f98d68`: Android JVM 141/141; device 26/26 on SM-E625F (Android 13).
 
-### SOS "Server refused synchronization (409)" fix
+#### SOS "Server refused synchronization (409)" fix
 
 Cause: the server already had an open incident for the user (unique index `uq_open_incident_owner`), while the phone had lost its local link to it (reinstall, cleared data, sign-out/sign-in, or an SOS never ended with the PIN). `create()` answered 409, and the app treated every 4xx as fatal: it stopped the location service but left the local session running, so Home said "Your SOS session is open." The app always sends `{"is_test": true}` with no location, so `IDEMPOTENCY_MISMATCH` and `LOCATION_CONFLICT` could not occur from it.
 
