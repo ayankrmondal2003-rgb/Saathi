@@ -12,11 +12,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.config import load_settings
+from app.database.engine import make_engine
+from app.activity import DbActivity
 from app.routes import router, ws_router
 from app.circle_sharing import router as circle_router, cleanup as cleanup_circle
 from app.volunteer import router as volunteer_router
+from app.files import router as files_router
 from app.services.realtime import hub
 
 
@@ -32,12 +35,14 @@ def create_app(settings=None, *, initialize_firebase=True):
         logging.getLogger("surakshanet").setLevel(settings.log_level)
         engine = None
         if not hasattr(app.state, "sessions") or app.state.sessions is None:
-            engine = create_async_engine(settings.database_url.get_secret_value(), hide_parameters=True, pool_pre_ping=True)
+            engine = make_engine(settings.database_url.get_secret_value(), pool_pre_ping=True)
             app.state.sessions = async_sessionmaker(engine, expire_on_commit=False)
 
         async def periodic_geofence():
             while True:
                 await asyncio.sleep(settings.reevaluation_seconds)
+                if not app.state.activity.should_poll("geofence"):
+                    continue
                 try:
                     async with app.state.sessions.begin() as db:
                         await tick(db, settings)
@@ -56,6 +61,8 @@ def create_app(settings=None, *, initialize_firebase=True):
         async def periodic_outbox():
             while True:
                 await asyncio.sleep(2)
+                if not app.state.activity.should_poll("outbox"):
+                    continue
                 try:
                     firebase_app = getattr(app.state, "firebase", None)
                     fcm_sender = getattr(app.state, "fcm_sender", None)
@@ -100,11 +107,14 @@ def create_app(settings=None, *, initialize_firebase=True):
 
     app = FastAPI(title="Maitri API", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.settings = settings
+    app.state.activity = DbActivity(settings.db_idle_seconds, settings.idle_sweep_seconds)
     if settings.allowed_origins:
         app.add_middleware(CORSMiddleware, allow_origins=settings.allowed_origins,
                            allow_methods=["GET","PUT","POST","DELETE"], allow_headers=["Authorization","Content-Type","Idempotency-Key"])
     @app.middleware("http")
     async def private_responses(request, call_next):
+        if request.url.path.startswith("/api/"):
+            app.state.activity.touch()  # keep background database work running while the app is in use
         response = await call_next(request)
         route = getattr(request.scope.get("route"), "path", "")
         if response.status_code >= 400 and route in {
@@ -120,6 +130,7 @@ def create_app(settings=None, *, initialize_firebase=True):
     app.include_router(router)
     app.include_router(circle_router)
     app.include_router(volunteer_router)
+    app.include_router(files_router)
     app.include_router(ws_router)
 
     @app.get("/health")
@@ -128,13 +139,21 @@ def create_app(settings=None, *, initialize_firebase=True):
 
     @app.get("/ready")
     async def ready():
+        """Cheap: answers from this process only and never opens a database connection, so Render's health
+        check and the cron-job.org keep-alive keep the API warm without waking a suspended Neon compute.
+        Database problems surface on the first API call and on /health/db."""
+        if settings.redis_url and not await getattr(app.state, "hub", hub).redis_available():
+            raise HTTPException(503, "Realtime service unavailable")
+        return {"status": "ready", "database_busy": app.state.activity.busy()}
+
+    @app.get("/health/db")
+    async def database_health():
+        """Deep check for manual diagnosis. It wakes the database; never point a monitor or keep-alive at it."""
         try:
             async with app.state.sessions() as session:
                 await session.execute(text("SELECT PostGIS_Version(), id FROM incidents LIMIT 0"))
         except (SQLAlchemyError, OSError):
             raise HTTPException(503, "Database unavailable") from None
-        if settings.redis_url and not await getattr(app.state, "hub", hub).redis_available():
-            raise HTTPException(503, "Realtime service unavailable")
-        return {"status": "ready"}
+        return {"status": "ok"}
 
     return app

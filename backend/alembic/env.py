@@ -1,6 +1,6 @@
 import asyncio
 from alembic import context
-from sqlalchemy.ext.asyncio import create_async_engine
+from app.database.engine import make_engine
 from app.config import ConfigurationError, load_settings
 from app.database.v1 import metadata
 
@@ -21,7 +21,7 @@ def migrate(connection):
 
 async def run():
     print('[startup] Validating migration settings and connecting to PostgreSQL', flush=True)
-    engine = create_async_engine(load_settings().database_url.get_secret_value(), hide_parameters=True)
+    engine = make_engine(load_settings().database_url.get_secret_value())
     try:
         async with engine.connect() as connection:
             await connection.run_sync(migrate)

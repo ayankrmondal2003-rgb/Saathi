@@ -338,7 +338,11 @@ internal fun MainGraph(
                     val problem = if (ownStatus) syncState.problem else null
                     // A session the sync layer ended can no longer be confirmed; stop waiting for it.
                     LaunchedEffect(problem) { if (problem == SyncProblem.ENDED) { requested = false; endRequested = false } }
+                    val connecting by BackendLatency.connecting.collectAsStateWithLifecycle()
                     val sessionMessage = when {
+                        problem == SyncProblem.ENDED -> syncState.message
+                        connecting && (requested || state.incident?.status == IncidentStatus.ACTIVE) ->
+                            "Connecting to Maitri… Your SOS keeps retrying in the background."
                         problem != null -> syncState.message
                         requested && id == null -> "Connecting your SOS to Maitri…"
                         else -> null
@@ -517,6 +521,12 @@ internal fun MainGraph(
                         onBack = { nav.popBackStack() }
                     )
                 }
+            }
+
+            // During an SOS, 112 is one tap away on every screen, whatever the server is doing.
+            if (state.incident?.status == IncidentStatus.ACTIVE) {
+                Call112Button(Modifier.align(Alignment.BottomEnd)
+                    .padding(end = 20.dp, bottom = floatingNavBottomPadding))
             }
 
             // SVG navigation: Home, Circle, Responder, Profile.

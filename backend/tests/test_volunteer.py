@@ -69,7 +69,7 @@ def test_volunteer_upload_blocked_pending_secure_storage(client_env):
         }
     )
     assert res.status_code == 503
-    assert "BLOCKED" in res.json()["detail"]
+    assert res.json()["detail"]["code"] == "STORAGE_NOT_CONFIGURED"
 
 
 def test_volunteer_submit_validation(client_env):

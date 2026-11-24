@@ -91,7 +91,7 @@ def main():
             print("      Safety Guard: PASSED (isolated local database verified, production hosts blocked)", flush=True)
 
             # 3. Alembic Migrations
-            print("[4/6] Applying Alembic migration chain through 0011...", flush=True)
+            print("[4/6] Applying Alembic migration chain through 0012...", flush=True)
             run(sys.executable, "-m", "alembic", "upgrade", "head")
             alembic_rev = sql("SELECT version_num FROM alembic_version")
             print(f"      Alembic Migration: PASSED (Head Revision: {alembic_rev})", flush=True)
