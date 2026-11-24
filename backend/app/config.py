@@ -44,7 +44,12 @@ class Settings(BaseSettings):
     movement_threshold_meters: float = Field(30, gt=0, le=1000)
     reevaluation_seconds: int = Field(30, ge=1, le=600)
     invitation_ttl_seconds: int = Field(300, ge=1, le=3600)
-    closed_location_hours: int = Field(24, ge=1)
+    # SOS locations are erased this long after the SOS closes (7 days).
+    closed_location_hours: int = Field(168, ge=1)
+    # SOS photos and voice notes are deleted this many days after upload.
+    sos_media_days: int = Field(30, ge=1)
+    # 32 bytes, base64: encrypts medical notes at rest. Losing it makes stored notes unreadable.
+    medical_notes_key: SecretStr | None = None
     expired_invitation_days: int = Field(7, ge=1)
     expired_grant_days: int = Field(7, ge=1)
     audit_days: int = Field(30, ge=1)

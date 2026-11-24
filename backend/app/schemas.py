@@ -176,6 +176,8 @@ class IncidentSnapshot(BaseModel):
     active_responders: list[ActiveResponderPublic]
     # For accepted responders only, and only when the person in need agreed to share it.
     victim_phone: str | None = None
+    # For accepted responders only, while the SOS is active.
+    medical_notes: str | None = None
 
 
 class SafetyPinSetup(Input):

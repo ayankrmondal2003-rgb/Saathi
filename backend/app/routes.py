@@ -27,6 +27,7 @@ from app.services.geofence import point, responder_changed
 from app.services.outbox_worker import default_firebase_sender
 from app.circle import request_phone_matches
 from app.live_link import public_link
+from app.privacy import notes_for_responder
 from app.services.realtime import hub as default_hub, PROTOCOL_VERSION, RealtimeEvent
 
 logger = logging.getLogger("surakshanet.routes")
@@ -135,11 +136,14 @@ async def location(incident_id: UUID, user=Depends(account), db=Depends(database
 
 
 @router.get("/incidents/{incident_id}/snapshot", response_model=IncidentSnapshot)
-async def snapshot(incident_id: UUID, user=Depends(account), db=Depends(database)):
+async def snapshot(incident_id: UUID, request: Request, user=Depends(account), db=Depends(database)):
     incident = await service.incident_row(db, incident_id)
     await service.may_read(db, incident, user)
     role = "OWNER" if incident.victim_user_id == user.id else "RESPONDER"
-    return await service.build_snapshot(db, incident_id, user.id, role)
+    result = await service.build_snapshot(db, incident_id, user.id, role)
+    if role == "RESPONDER" and result.requester_membership.authorization_status == "AUTHORIZED":
+        result.medical_notes = await notes_for_responder(db, request.app.state.settings, incident)
+    return result
 
 
 @router.post("/incidents/{incident_id}/ws-ticket", response_model=WsTicketResponse)

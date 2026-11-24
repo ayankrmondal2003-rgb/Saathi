@@ -25,6 +25,8 @@ from app.circle import router as circle_members_router
 from app.live_link import router as live_router
 from app.checkins import CheckInScheduler
 from app.admin import router as admin_router
+from app.privacy import router as privacy_router, purge_sos_media
+from app.maintenance import cleanup as retention_cleanup
 from app.services.outbox_worker import default_firebase_sender
 from app.services.realtime import hub
 
@@ -54,8 +56,14 @@ def create_app(settings=None, *, initialize_firebase=True):
                         await tick(db, settings)
                         await cleanup_circle(db)
                         await cleanup_inbox(db)
+                        # Retention: SOS locations 7 days after closing, expired grants and old audit rows.
+                        await retention_cleanup(db, settings)
                 except (SQLAlchemyError, OSError):
                     logging.getLogger("surakshanet").warning("Geofence batch unavailable")
+                try:
+                    await purge_sos_media(app.state.sessions, settings)
+                except (SQLAlchemyError, OSError):
+                    logging.getLogger("surakshanet").warning("SOS media retention unavailable")
                 try:
                     async with app.state.sessions.begin() as db:
                         expired = await expire_orphaned(db, settings)
@@ -146,6 +154,7 @@ def create_app(settings=None, *, initialize_firebase=True):
     app.include_router(circle_members_router)
     app.include_router(live_router)
     app.include_router(admin_router)
+    app.include_router(privacy_router)
     app.include_router(ws_router)
 
     @app.get("/health")
