@@ -69,7 +69,7 @@ async def test_moving_discovery_and_authorization(api):
     from app.database.v1 import locations
     await db.execute(update(users).where(users.c.display_name == "suspended").values(account_status="SUSPENDED"))
     await db.execute(update(locations).where(locations.c.user_id.in_(select(users.c.id).where(users.c.display_name=="stale")))
-                     .values(recorded_at=now-timedelta(minutes=10)))
+                     .values(recorded_at=now-timedelta(minutes=40)))  # beyond responder_location_max_age (30 min)
     key = {"Idempotency-Key":str(uuid4())}
     body = {"is_test":True,"location":position(0)}
     result = await call("owner","POST","/incidents",headers=key,json=body)

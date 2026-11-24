@@ -11,7 +11,8 @@ def point(latitude, longitude):
 
 
 def parameters(settings):
-    return dict(allowed=settings.allowed_uids(), age=settings.max_location_age_seconds, accuracy=settings.max_accuracy_meters,
+    return dict(allowed=settings.allowed_uids(), age=settings.max_location_age_seconds,
+                responder_age=settings.responder_location_max_age_seconds, accuracy=settings.max_accuracy_meters,
                 interval=settings.reevaluation_seconds, floor=settings.min_search_interval_seconds,
                 movement=settings.movement_threshold_meters, ttl=settings.invitation_ttl_seconds,
                 production=settings.environment == "production")
@@ -37,7 +38,7 @@ async def invite(db, params, *, recipient=None):
               AND EXISTS (SELECT 1 FROM users owner WHERE owner.id=i.victim_user_id AND (CAST(:allowed AS text[]) IS NULL OR owner.firebase_uid = ANY(CAST(:allowed AS text[]))))
               AND (u.email_verified OR u.phone_verified) AND u.responder_opt_in AND u.responder_available
               AND EXISTS (SELECT 1 FROM volunteer_applications va WHERE va.user_id=u.id AND va.status='APPROVED')
-              AND l.recorded_at >= clock_timestamp()-make_interval(secs => :age)
+              AND l.recorded_at >= clock_timestamp()-make_interval(secs => :responder_age)
               AND l.accuracy_meters <= :accuracy AND l.is_mock=i.location_is_mock {restrict}
               AND NOT EXISTS (SELECT 1 FROM incident_invitations old
                               WHERE old.incident_id=i.id AND old.recipient_user_id=u.id)

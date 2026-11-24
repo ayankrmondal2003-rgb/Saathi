@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     worker_id: str | None = None
     max_accuracy_meters: float = Field(100, gt=0, le=1000)
     max_location_age_seconds: int = Field(120, gt=0, le=600)
+    # How old a volunteer's last reported location may be when choosing whom to invite. Phones report it when
+    # Maitri opens and every ~15 min in the background (if allowed); accepting still needs a fix under
+    # max_location_age_seconds, which the app sends right before accepting.
+    responder_location_max_age_seconds: int = Field(1800, ge=60, le=7200)
     # Victim SOS fixes: kept even when coarse ("Approximate" is 1-3 km); geofence matching still needs
     # max_accuracy_meters. The first SOS fix may be a last-known fix up to max_last_known_age_seconds old.
     max_sos_accuracy_meters: float = Field(5000, gt=0, le=10000)

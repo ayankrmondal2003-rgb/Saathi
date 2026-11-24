@@ -230,7 +230,8 @@ async def inbox(user=Depends(account), db=Depends(database)):
     status = case(((invitations.c.status == "PENDING") & (invitations.c.expires_at <= func.now()),
                    "EXPIRED"), else_=invitations.c.status)
     rows = await db.execute(select(invitations.c.id, invitations.c.incident_id, status.label("status"),
-        invitations.c.expires_at).where(invitations.c.recipient_user_id == user.id)
+        invitations.c.expires_at, incidents.c.is_test).select_from(invitations.join(incidents,
+        incidents.c.id == invitations.c.incident_id)).where(invitations.c.recipient_user_id == user.id)
         .order_by(invitations.c.invited_at.desc()).limit(100))
     result = [dict(row) for row in rows.mappings()]
     # Before accepting, a responder learns only a distance band, never coordinates.
