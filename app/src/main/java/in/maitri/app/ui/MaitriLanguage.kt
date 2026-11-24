@@ -72,7 +72,7 @@ fun MaitriLanguage(
         SettingsText(resources.getString(S.settings_lang_hint), 40, 188, 310, 29, 12, p.secondary)
         Box(settingsSlot(70, 252, 278, 48), contentAlignment = Alignment.CenterStart) {
             BasicTextField(search, { search = it }, Modifier.fillMaxWidth(), singleLine = true,
-                textStyle = TextStyle(color = p.primary, fontSize = 13.sp),
+                textStyle = TextStyle(fontFamily = `in`.maitri.app.ui.theme.MaitriFont, color = p.primary, fontSize = 13.sp),
                 decorationBox = { inner ->
                     Box {
                         if (search.isEmpty()) Text(resources.getString(S.settings_search), color = p.secondary, fontSize = 13.sp)

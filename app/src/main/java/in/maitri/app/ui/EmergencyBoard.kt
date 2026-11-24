@@ -69,8 +69,8 @@ internal fun designBreaks(text: String): String =
 internal fun ArtText(text: String, x: Float, baseline: Float, width: Float, size: Float, color: Color,
                      weight: androidx.compose.ui.text.font.FontWeight = androidx.compose.ui.text.font.FontWeight.Normal,
                      center: Boolean = false, letterSpacing: TextUnit = TextUnit.Unspecified) {
-    // Line top = baseline - ascent (Roboto's ascent is 0.928 em); boards keep a 28-unit status inset.
-    FitText(text, Modifier.offset(x.dp, (baseline - 0.928f * size - 28f).dp).width(width.dp), color, size,
+    // Line top = baseline - ascent (Inter's ascent is 0.969 em); boards keep a 28-unit status inset.
+    FitText(text, Modifier.offset(x.dp, (baseline - 0.969f * size - 28f).dp).width(width.dp), color, size,
         weight = weight, align = if (center) androidx.compose.ui.text.style.TextAlign.Center else null,
         letterSpacing = letterSpacing)
 }

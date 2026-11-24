@@ -384,7 +384,7 @@ internal fun MaitriLoginContent(
                         onValueChange = onEmailChange,
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        textStyle = TextStyle(color = p.primary, fontSize = 14.sp),
+                        textStyle = TextStyle(fontFamily = `in`.maitri.app.ui.theme.MaitriFont, color = p.primary, fontSize = 14.sp),
                         cursorBrush = SolidColor(p.accent),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -436,7 +436,7 @@ internal fun MaitriLoginContent(
                             focusManager.clearFocus()
                             onSubmitEmail()
                         }),
-                        textStyle = TextStyle(color = p.primary, fontSize = 14.sp),
+                        textStyle = TextStyle(fontFamily = `in`.maitri.app.ui.theme.MaitriFont, color = p.primary, fontSize = 14.sp),
                         cursorBrush = SolidColor(p.accent),
                         modifier = Modifier.fillMaxWidth()
                     )

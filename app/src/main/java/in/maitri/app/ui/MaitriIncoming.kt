@@ -148,7 +148,7 @@ internal fun MaitriIncomingContent(
         ArtText(tr("Accept"), 40f, 577f, 148f, 14f, if (p.dark) p.background else Color.White, FontWeight.SemiBold, center = true)
         ArtText(tr("Decline"), 202f, 577.1f, 148f, 14f, p.accent, FontWeight.SemiBold, center = true)
         // The card's rows are 24 units apart: each label keeps to its row at any text size.
-        BoardLabel(86, 410, 252, approxLocality, p.primary, 15, height = 24, maxLines = 1)
+        BoardLabel(86, 410, 252, approxLocality, p.primary, 15, height = 26, maxLines = 1)
         BoardLabel(86, 434, 252, tr("Location private until accepted"), p.secondary, height = 18, maxLines = 1)
         BoardLabel(54, 466, 154, estimatedEta, p.accent, height = 18, maxLines = 1)
         BoardLabel(215, 466, 132, approxDistance, p.primary, height = 18, maxLines = 1)

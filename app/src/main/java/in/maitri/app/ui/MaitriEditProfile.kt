@@ -275,7 +275,7 @@ private fun ProfileField(value: String, onValue: (String) -> Unit, y: Int, heigh
             if (readOnly) stateDescription = readOnlyNote
         },
         enabled = onClick == null, readOnly = readOnly, singleLine = single, maxLines = if (single) 1 else 3, keyboardOptions = keyboard,
-        textStyle = TextStyle(color = if (readOnly) p.secondary else p.primary, fontSize = 13.sp, lineHeight = 17.sp),
+        textStyle = TextStyle(fontFamily = `in`.maitri.app.ui.theme.MaitriFont, color = if (readOnly) p.secondary else p.primary, fontSize = 13.sp, lineHeight = 17.sp),
         cursorBrush = SolidColor(p.accent),
         decorationBox = { inner ->
             Box(Modifier.fillMaxSize().padding(start = 14.dp, end = 14.dp, top = if (single) 0.dp else 13.dp),

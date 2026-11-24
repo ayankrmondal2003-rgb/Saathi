@@ -587,8 +587,8 @@ private fun ContactCardItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(palette.surface)
-            .border(1.dp, palette.divider, RoundedCornerShape(20.dp))
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            // 342 x 96 in the design: no outline, edit button 12 from the top, toggle row 19 below it.
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp)
     ) {
         Column {
             // Top Row: Name + Primary badge + Edit Button
@@ -626,7 +626,7 @@ private fun ContactCardItem(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(17.dp))
 
             // Bottom Row: SOS Switch (32x18dp) + SOS alert: ON/OFF label | Remove action
             Row(

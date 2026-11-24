@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -115,7 +116,7 @@ internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Bool
                     }
                 }
                 Spacer(Modifier.height(6.dp))
-                Text(tr("Here for you."), color = p.primary, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
+                Text(tr("Here for you."), color = p.primary, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
             }
             Box {
                 IconButton(onClick = notifications, modifier = Modifier.size(44.dp).background(p.surface, CircleShape)) {
@@ -131,14 +132,14 @@ internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Bool
         Spacer(Modifier.height(30.dp))
         Column(Modifier.fillMaxWidth().background(p.card, RoundedCornerShape(28.dp)).padding(vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(if (active) tr("Your SOS session is open.") else tr("You’re not on your own."), color = p.primary, fontSize = 21.sp,
+            Text(if (active) tr("Your SOS session is open.") else tr("You’re not on your own."), color = p.primary, fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
             Spacer(Modifier.height(6.dp))
             Text(if (active) tr("Open your session for its confirmed status.") else tr("Reach your circle when you need them."),
-                color = p.secondary, fontSize = 12.sp, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(14.dp))
+                color = p.secondary, fontSize = 11.5.sp, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(13.dp))
             MaitriHoldButton(p, onSos, onSosTap)
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(8.dp))
             Text(if (active) tr("Hold for 3 seconds to open your SOS") else tr("Hold for 3 seconds to alert your circle"),
                 color = p.accent, fontSize = 11.sp, textAlign = TextAlign.Center)
             session()
@@ -148,12 +149,14 @@ internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Bool
             MaitriQuickAction(tr("Share my trip"), tr("Let someone follow along"), R.drawable.maitri_pin, p, Modifier.weight(1f).fillMaxHeight(), trip)
             MaitriQuickAction(tr("Check in"), tr("Set a time to check in"), R.drawable.maitri_clock, p, Modifier.weight(1f).fillMaxHeight(), checkIn)
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(27.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(tr("Your trusted circle"), Modifier.weight(1f), color = p.primary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            TextButton(onClick = contacts) { Text(tr("Manage"), color = p.accent, fontSize = 12.sp) }
+            // A text link as in the design; the padding keeps a 48dp-wide touch target without a taller row.
+            Text(tr("Manage"), Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = contacts)
+                .padding(horizontal = 8.dp, vertical = 4.dp), color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.Medium)
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth().background(p.card, RoundedCornerShape(20.dp))
             .clickable(onClick = contacts).padding(14.dp).heightIn(min = 57.dp),
             verticalAlignment = Alignment.CenterVertically) {
@@ -232,7 +235,7 @@ internal fun MaitriHoldButton(p: MaitriPalette, onComplete: () -> Unit, onTap: (
             Icon(painterResource(R.drawable.maitri_shield), null, tint = Color.White, modifier = Modifier.size(24.dp))
             Spacer(Modifier.height(8.dp))
             Text("SOS", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-            Text(tr("Get help"), color = Color.White, fontSize = 12.sp)
+            Text(tr("Get help"), color = Color.White, fontSize = 11.sp)
         }
         if (progress > 0f) CircularProgressIndicator(progress = { progress }, modifier = Modifier.size(168.dp),
             color = p.accent, strokeWidth = 3.dp)
