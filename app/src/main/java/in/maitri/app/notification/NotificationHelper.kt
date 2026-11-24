@@ -43,7 +43,7 @@ object NotificationHelper {
     /** Inbox pushes that need attention now use the urgent channel; the rest are ordinary updates. */
     val URGENT_INBOX_KINDS = setOf("CIRCLE_SOS", "CHECKIN_MISSED")
     val INBOX_KINDS = setOf("CIRCLE_SOS", "CIRCLE_SOS_ENDED", "CHECKIN_REMINDER", "CHECKIN_MISSED",
-        "TRIP_STARTED", "CHECKIN_STARTED", "CIRCLE_REQUEST", "CIRCLE_LINKED")
+        "TRIP_STARTED", "CHECKIN_STARTED", "CIRCLE_REQUEST", "CIRCLE_LINKED", "VOLUNTEER_DECISION")
 
     // Target ~5.2 seconds: 6 pulses of 700ms with 200ms pauses between them
     val EMERGENCY_VIBRATION_PATTERN = longArrayOf(

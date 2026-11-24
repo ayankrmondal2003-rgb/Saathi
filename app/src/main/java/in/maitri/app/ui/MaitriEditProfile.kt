@@ -61,7 +61,7 @@ internal fun profileFormError(name: String, phone: String, city: String, notes: 
     else -> null
 }
 
-/** Screen 14. Contact details are saved to the authenticated profile; medical notes and photo stay on this device. */
+/** Screen 14. Contact details and the photo are saved to the account; medical notes stay on this device (P6 moves them). */
 @Composable
 fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier = Modifier,
                       onProfileUpdated: (UserProfile) -> Unit = {}) {
@@ -90,6 +90,15 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
         photo = withContext(Dispatchers.IO) {
             store.photo(uid)?.let { file -> runCatching { BitmapFactory.decodeFile(file.path)?.asImageBitmap() }.getOrNull() }
         }
+        // No copy on this phone yet: fetch the account's photo, if one was set (e.g. on another phone).
+        if (photo == null) try {
+            BackendClient.files.profilePhoto(ExpectedAccount(uid)).downloadUrl?.let { url ->
+                val bytes = `in`.maitri.app.network.Uploads.download(url)
+                photo = withContext(Dispatchers.IO) {
+                    BitmapFactory.decodeFile(store.savePhotoBytes(uid, bytes).path)?.asImageBitmap()
+                }
+            }
+        } catch (e: CancellationException) { throw e } catch (_: Exception) { }
         try {
             val server = BackendClient.api.profile(ExpectedAccount(uid))
             if (!dirty) {
@@ -102,15 +111,49 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
         } finally { loading = false }
     }
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri == null || uid.isBlank()) return@rememberLauncherForActivityResult
+    var choosePhoto by remember { mutableStateOf(false) }
+    var photoNote by remember { mutableStateOf<String?>(null) }
+    fun usePhoto(uri: android.net.Uri) {
+        if (uid.isBlank()) return
         scope.launch {
-            val image = withContext(Dispatchers.IO) {
-                runCatching { BitmapFactory.decodeFile(store.savePhoto(context, uid, uri).path)?.asImageBitmap() }.getOrNull()
-            }
-            if (image != null) photo = image else message = S.edit_photo_failed
+            val file = withContext(Dispatchers.IO) { runCatching { store.savePhoto(context, uid, uri) }.getOrNull() }
+            val image = file?.let { withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(it.path)?.asImageBitmap() }.getOrNull() } }
+            if (image == null || file == null) { message = S.edit_photo_failed; return@launch }
+            photo = image
+            photoNote = "Uploading photo…"
+            try {
+                val account = ExpectedAccount(uid)
+                val id = `in`.maitri.app.network.Uploads.upload(withContext(Dispatchers.IO) { file.readBytes() },
+                    "image/jpeg", "PROFILE_PHOTO", account)
+                BackendClient.files.setProfilePhoto(`in`.maitri.app.network.PhotoRequestDto(id), account)
+                photoNote = null
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { photoNote = "Photo saved on this phone only. " + `in`.maitri.app.network.uploadErrorMessage(e) }
         }
     }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) usePhoto(uri)
+    }
+    var captureUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        captureUri?.takeIf { saved }?.let(::usePhoto)
+    }
+    if (choosePhoto) androidx.compose.material3.AlertDialog(onDismissRequest = { choosePhoto = false },
+        containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
+        title = { Text(strings.getString(S.edit_photo)) },
+        text = { Text("Cropped to a square. Only you and responders helping you during an SOS can see it.") },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = {
+            choosePhoto = false
+            val dir = java.io.File(context.cacheDir, "captures").apply { mkdirs() }
+            val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files",
+                java.io.File(dir, "profile-${System.currentTimeMillis()}.jpg"))
+            captureUri = uri
+            camera.launch(uri)
+        }) { Text("Take photo", color = p.accent) } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = {
+            choosePhoto = false
+            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        }) { Text("Choose from gallery", color = p.accent) } })
 
     fun edit(update: () -> Unit) { update(); dirty = true; message = null }
 
@@ -145,9 +188,10 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
             Image(it, null, settingsSlot(34, 160, 40, 40).clip(CircleShape).background(p.surface), contentScale = ContentScale.Crop)
         }
         SettingsText(strings.getString(S.edit_photo), 82, 157, 210, 24, 15, p.primary, true)
-        SettingsText(strings.getString(S.edit_photo_sub), 82, 184, 210, 18, 10, p.secondary, maxLines = 1)
+        SettingsText(photoNote ?: strings.getString(S.edit_photo_sub), 82, 184, 210, 18, 10,
+            if (photoNote != null) p.accent else p.secondary, maxLines = 1)
         SettingsText(strings.getString(S.edit_change), 286, 160, 78, 40, 12, p.accent, bold = true, center = true, action = {
-            if (!preview) picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            if (!preview) choosePhoto = true
         })
 
         SettingsText(strings.getString(S.edit_name), 24, 238, 300, 20, 11, p.primary)

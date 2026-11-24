@@ -28,6 +28,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import `in`.maitri.app.R
+import kotlinx.coroutines.launch
 
 enum class VolunteerDocType(val title: String, val subtitle: String, val icon: ImageVector) {
     GOVT_ID("Government issued identity proof", "Upload document", Icons.Rounded.Badge),
@@ -37,15 +38,24 @@ enum class VolunteerDocType(val title: String, val subtitle: String, val icon: I
     DECLARATION("Signed volunteer declaration", "Upload document", Icons.Rounded.Description)
 }
 
-data class SelectedDocument(
-    val uri: Uri,
-    val name: String,
-    val sizeBytes: Long
-)
+enum class DocState { EMPTY, UPLOADING, UPLOADED, FAILED }
+data class DocUi(val state: DocState = DocState.EMPTY, val fileId: String? = null)
+
+/** What the screen says about the application once it has left the draft stage (null while drafting). */
+internal fun applicationBanner(status: String?, note: String?): Pair<String, String>? = when (status) {
+    "SUBMITTED", "UNDER_REVIEW" -> "Application under review" to "A Maitri reviewer is checking your documents. You'll be told in your notifications."
+    "APPROVED" -> "You're an approved volunteer" to "Turn on \"Available for nearby requests\" on the Responder tab when you can help."
+    "REQUIRES_CORRECTION" -> "Changes needed" to (note ?: "Update your documents and submit again.")
+    "REJECTED" -> "Application not approved" to (note ?: "You can update your documents and apply again.")
+    else -> null
+}
+
+internal fun applicationLocked(status: String?) = status in setOf("SUBMITTED", "UNDER_REVIEW", "APPROVED")
 
 /**
  * Screen 04 — Volunteer Verification.
- * Strict SVG fidelity matching design-reference/crops/light-04.svg and dark-04.svg.
+ * Strict SVG fidelity matching design-reference/crops/light-04.svg and dark-04.svg. Documents go to private R2
+ * storage through presigned URLs; the counter shows only uploads the server confirmed.
  */
 @Composable
 fun MaitriVolunteer(
@@ -54,109 +64,173 @@ fun MaitriVolunteer(
 ) {
     val p = maitriPalette()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val uid = remember { runCatching { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid }.getOrNull() }
+    val account = remember(uid) { uid?.let { `in`.maitri.app.network.ExpectedAccount(it) } }
 
-    var selectedIntent by rememberSaveable { mutableStateOf("HELP") } // "HELP" or "NOT_NOW"
+    var selectedIntent by rememberSaveable { mutableStateOf("HELP") }
     var consentChecked by rememberSaveable { mutableStateOf(false) }
-
-    // Map of doc type to selected document info (local selection only)
-    var selectedDocs by remember { mutableStateOf(mapOf<VolunteerDocType, SelectedDocument>()) }
-    var activePickingDocType by remember { mutableStateOf<VolunteerDocType?>(null) }
-
+    var docs by remember { mutableStateOf(VolunteerDocType.entries.associateWith { DocUi() }) }
+    var status by remember { mutableStateOf<`in`.maitri.app.network.VolunteerStatusDto?>(null) }
     var statusMessage by rememberSaveable { mutableStateOf<String?>(null) }
-    var showBlockedStorageDialog by rememberSaveable { mutableStateOf(false) }
+    var choosingSource by remember { mutableStateOf<VolunteerDocType?>(null) }
+    var managing by remember { mutableStateOf<VolunteerDocType?>(null) }
+    var target by rememberSaveable { mutableStateOf<String?>(null) }
+    var captureUri by rememberSaveable { mutableStateOf<String?>(null) }
+    var submitting by remember { mutableStateOf(false) }
 
-    val docPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        val docType = activePickingDocType
-        if (uri != null && docType != null) {
-            val cursor = runCatching { context.contentResolver.query(uri, null, null, null, null) }.getOrNull()
-            var displayName = "document_${docType.name.lowercase()}"
-            var sizeBytes = 0L
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val nameIdx = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                    val sizeIdx = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
-                    if (nameIdx >= 0) displayName = it.getString(nameIdx) ?: displayName
-                    if (sizeIdx >= 0) sizeBytes = it.getLong(sizeIdx)
-                }
+    suspend fun refresh() {
+        val a = account ?: return
+        try {
+            val s = `in`.maitri.app.network.BackendClient.api.volunteerStatus(a)
+            status = s
+            consentChecked = s.consentDeclared
+            val uploaded = s.documents.orEmpty().associate { it.docType to it.fileId }
+            docs = VolunteerDocType.entries.associateWith { type ->
+                uploaded[type.name]?.let { DocUi(DocState.UPLOADED, it) }
+                    ?: docs[type]?.takeIf { it.state == DocState.UPLOADING || it.state == DocState.FAILED } ?: DocUi()
             }
-            if (sizeBytes > 10 * 1024 * 1024) {
-                statusMessage = "File exceeds maximum size of 10 MB."
-            } else {
-                selectedDocs = selectedDocs + (docType to SelectedDocument(uri, displayName, sizeBytes))
-                statusMessage = null
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { statusMessage = "Couldn't load your application. Check your connection." }
+    }
+    LaunchedEffect(uid) { refresh() }
+
+    fun upload(type: VolunteerDocType, uri: Uri) {
+        val a = account ?: return
+        docs = docs + (type to DocUi(DocState.UPLOADING))
+        statusMessage = null
+        scope.launch {
+            try {
+                val (bytes, mime) = `in`.maitri.app.network.Uploads.read(context, uri)
+                val previous = status?.documents?.firstOrNull { it.docType == type.name }?.fileId
+                val id = `in`.maitri.app.network.Uploads.upload(bytes, mime, "VOLUNTEER_DOC", a, docType = type.name)
+                // A replaced document is deleted, so only one copy of each is ever kept.
+                if (previous != null && previous != id) runCatching { `in`.maitri.app.network.BackendClient.files.delete(previous, a) }
+                docs = docs + (type to DocUi(DocState.UPLOADED, id))
+                refresh()
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) {
+                docs = docs + (type to DocUi(DocState.FAILED))
+                statusMessage = `in`.maitri.app.network.uploadErrorMessage(e)
             }
         }
-        activePickingDocType = null
     }
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        val type = target?.let { VolunteerDocType.valueOf(it) }
+        if (uri != null && type != null) upload(type, uri)
+    }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        val type = target?.let { VolunteerDocType.valueOf(it) }
+        val uri = captureUri?.let(Uri::parse)
+        if (saved && type != null && uri != null) upload(type, uri)
+    }
+    fun takePhoto(type: VolunteerDocType) {
+        val dir = java.io.File(context.cacheDir, "captures").apply { mkdirs() }
+        val file = java.io.File(dir, "doc-${System.currentTimeMillis()}.jpg")
+        val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", file)
+        target = type.name
+        captureUri = uri.toString()
+        camera.launch(uri)
+    }
+    fun openTemplate() {
+        val dir = java.io.File(context.cacheDir, "shared").apply { mkdirs() }
+        val file = java.io.File(dir, "Maitri volunteer declaration.pdf")
+        context.assets.open("volunteer-declaration.pdf").use { input -> file.outputStream().use { input.copyTo(it) } }
+        val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", file)
+        val view = android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri, "application/pdf")
+            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("application/pdf")
+            .putExtra(android.content.Intent.EXTRA_STREAM, uri).addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try { context.startActivity(view) }
+        catch (_: android.content.ActivityNotFoundException) {
+            context.startActivity(android.content.Intent.createChooser(send, "Save or print the declaration"))
+        }
+    }
+    val locked = applicationLocked(status?.status)
 
     MaitriVolunteerContent(
         p = p,
         selectedIntent = selectedIntent,
         onIntentSelect = { intent ->
             selectedIntent = intent
-            if (intent == "NOT_NOW") {
-                onSkip()
+            account?.let { a -> scope.launch { runCatching { `in`.maitri.app.network.BackendClient.api.setVolunteerIntent(
+                `in`.maitri.app.network.VolunteerIntentRequestDto(intent), a) } } }
+            if (intent == "NOT_NOW") onSkip()
+        },
+        docs = docs,
+        onPickDoc = { type ->
+            when {
+                locked -> statusMessage = "Your application is submitted, so documents can't change now."
+                docs[type]?.state == DocState.UPLOADING -> Unit
+                docs[type]?.state == DocState.UPLOADED -> managing = type
+                else -> choosingSource = type
             }
         },
-        selectedDocs = selectedDocs,
-        onPickDoc = { docType ->
-            activePickingDocType = docType
-            val mime = if (docType == VolunteerDocType.PHOTO) "image/*" else "*/*"
-            docPickerLauncher.launch(mime)
-        },
-        onRemoveDoc = { docType ->
-            selectedDocs = selectedDocs - docType
-        },
+        onRemoveDoc = { },
         consentChecked = consentChecked,
-        onConsentToggle = { consentChecked = !consentChecked },
-        onSubmit = {
-            if (!consentChecked) {
-                statusMessage = "Please accept the volunteer declaration to continue."
-                return@MaitriVolunteerContent
+        onConsentToggle = {
+            if (!locked) {
+                consentChecked = !consentChecked
+                val value = consentChecked
+                account?.let { a -> scope.launch { runCatching { `in`.maitri.app.network.BackendClient.api.setVolunteerConsent(
+                    `in`.maitri.app.network.VolunteerConsentRequestDto(value), a) } } }
             }
-            val missing = VolunteerDocType.entries.filter { it !in selectedDocs }
-            if (missing.isNotEmpty()) {
-                statusMessage = "Please attach all 5 required verification documents."
-                return@MaitriVolunteerContent
-            }
-            // Per Security Policy 2.3: Live identity documents must not be collected
-            // until private, encrypted, short-lived signed-url object storage is configured.
-            showBlockedStorageDialog = true
         },
-        statusMessage = statusMessage
+        onSubmit = {
+            val a = account
+            when {
+                locked -> Unit
+                a == null -> statusMessage = "Sign in to apply."
+                !consentChecked -> statusMessage = "Please accept the volunteer declaration to continue."
+                docs.values.any { it.state != DocState.UPLOADED } -> statusMessage = "Upload all 5 documents first."
+                !submitting -> {
+                    submitting = true
+                    scope.launch {
+                        try {
+                            `in`.maitri.app.network.BackendClient.api.submitVolunteerApplication(a)
+                            refresh()
+                            onSubmitSuccess()
+                        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                        catch (_: Exception) { statusMessage = "Couldn't submit right now. Try again." }
+                        finally { submitting = false }
+                    }
+                }
+            }
+        },
+        statusMessage = statusMessage,
+        onTemplate = ::openTemplate,
+        banner = applicationBanner(status?.status, status?.reviewerNotes),
+        locked = locked
     )
 
-    if (showBlockedStorageDialog) {
-        AlertDialog(
-            onDismissRequest = { showBlockedStorageDialog = false },
-            containerColor = p.surface,
-            titleContentColor = p.primary,
-            textContentColor = p.secondary,
-            title = { Text("Secure Storage Notice", fontWeight = FontWeight.SemiBold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "Live volunteer document upload is BLOCKED pending verified private object storage infrastructure."
-                    )
-                    Text(
-                        "Your 5 verification documents are validated locally. Real identity documents are protected and will only be collected once encrypted server-side reviewer storage is provisioned.",
-                        fontSize = 12.sp,
-                        color = p.secondary
-                    )
+    choosingSource?.let { type ->
+        AlertDialog(onDismissRequest = { choosingSource = null }, containerColor = p.surface,
+            titleContentColor = p.primary, textContentColor = p.secondary,
+            title = { Text(type.title) },
+            text = { Text("PDF, JPG or PNG, up to 10 MB. Only Maitri reviewers can open it.") },
+            confirmButton = { TextButton(onClick = { choosingSource = null; takePhoto(type) }) { Text("Take photo", color = p.accent) } },
+            dismissButton = { TextButton(onClick = {
+                choosingSource = null
+                target = type.name
+                filePicker.launch(arrayOf("application/pdf", "image/jpeg", "image/png"))
+            }) { Text("Choose file", color = p.accent) } })
+    }
+    managing?.let { type ->
+        AlertDialog(onDismissRequest = { managing = null }, containerColor = p.surface,
+            titleContentColor = p.primary, textContentColor = p.secondary,
+            title = { Text(type.title) },
+            text = { Text("Uploaded. Replace it with a new file, or remove it.") },
+            confirmButton = { TextButton(onClick = { managing = null; choosingSource = type }) { Text("Replace", color = p.accent) } },
+            dismissButton = { TextButton(onClick = {
+                managing = null
+                val id = docs[type]?.fileId
+                val a = account
+                if (id != null && a != null) scope.launch {
+                    try { `in`.maitri.app.network.BackendClient.files.delete(id, a); refresh() }
+                    catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                    catch (e: Exception) { statusMessage = `in`.maitri.app.network.uploadErrorMessage(e) }
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showBlockedStorageDialog = false
-                        onSubmitSuccess()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = Color.White)
-                ) { Text("Understood") }
-            }
-        )
+            }) { Text("Remove", color = p.secondary) } })
     }
 }
 
@@ -165,14 +239,18 @@ internal fun MaitriVolunteerContent(
     p: MaitriPalette,
     selectedIntent: String,
     onIntentSelect: (String) -> Unit,
-    selectedDocs: Map<VolunteerDocType, SelectedDocument>,
+    docs: Map<VolunteerDocType, DocUi>,
     onPickDoc: (VolunteerDocType) -> Unit,
     onRemoveDoc: (VolunteerDocType) -> Unit,
     consentChecked: Boolean,
     onConsentToggle: () -> Unit,
     onSubmit: () -> Unit,
-    statusMessage: String?
+    statusMessage: String?,
+    onTemplate: () -> Unit = {},
+    banner: Pair<String, String>? = null,
+    locked: Boolean = false
 ) {
+    val uploadedCount = docs.values.count { it.state == DocState.UPLOADED }
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -316,6 +394,15 @@ internal fun MaitriVolunteerContent(
 
             Spacer(Modifier.height(14.dp))
 
+            banner?.let { (title, body) ->
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(p.card).padding(16.dp)) {
+                    Text(title, color = p.primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(body, color = p.secondary, fontSize = 12.sp, lineHeight = 16.sp)
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+
             // 5 Documents Container Card (342 x 296, rx 20)
             Column(
                 modifier = Modifier
@@ -324,13 +411,13 @@ internal fun MaitriVolunteerContent(
                     .background(p.surface)
             ) {
                 VolunteerDocType.entries.forEachIndexed { index, docType ->
-                    val doc = selectedDocs[docType]
-                    val isUploaded = doc != null
+                    val doc = docs[docType] ?: DocUi()
+                    val isUploaded = doc.state == DocState.UPLOADED
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(58.dp)
+                            .heightIn(min = 58.dp)
                             .clickable { onPickDoc(docType) }
                             .padding(horizontal = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -353,11 +440,23 @@ internal fun MaitriVolunteerContent(
                             )
                             Spacer(Modifier.height(2.dp))
                             Text(
-                                text = if (isUploaded) doc.name else docType.subtitle,
-                                color = if (isUploaded) p.accent else p.secondary,
+                                text = when (doc.state) {
+                                    DocState.UPLOADED -> if (locked) "Uploaded" else "Uploaded · tap to replace or remove"
+                                    DocState.UPLOADING -> "Uploading…"
+                                    DocState.FAILED -> "Upload failed · tap to retry"
+                                    DocState.EMPTY -> docType.subtitle
+                                },
+                                color = if (doc.state == DocState.EMPTY) p.secondary else p.accent,
                                 fontSize = 10.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
+                            )
+                            if (docType == VolunteerDocType.DECLARATION) Text(
+                                text = "Download template",
+                                color = p.accent,
+                                fontSize = 10.sp,
+                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                                modifier = Modifier.clickable(onClickLabel = "Download the declaration template", onClick = onTemplate)
                             )
                         }
                         Spacer(Modifier.width(8.dp))
@@ -368,9 +467,18 @@ internal fun MaitriVolunteerContent(
                                 .background(p.card),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = if (isUploaded) Icons.Rounded.Check else Icons.Rounded.FileUpload,
-                                contentDescription = "Upload",
+                            if (doc.state == DocState.UPLOADING) CircularProgressIndicator(Modifier.size(16.dp), color = p.accent, strokeWidth = 2.dp)
+                            else Icon(
+                                imageVector = when (doc.state) {
+                                    DocState.UPLOADED -> Icons.Rounded.Check
+                                    DocState.FAILED -> Icons.Rounded.Refresh
+                                    else -> Icons.Rounded.FileUpload
+                                },
+                                contentDescription = when (doc.state) {
+                                    DocState.UPLOADED -> "Uploaded"
+                                    DocState.FAILED -> "Retry upload"
+                                    else -> "Upload"
+                                },
                                 tint = p.accent,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -433,9 +541,9 @@ internal fun MaitriVolunteerContent(
             }
 
             Spacer(Modifier.height(14.dp))
-            // Counts documents actually selected on this device; nothing is uploaded until secure storage exists.
+            // Counts only uploads the server confirmed.
             Text(
-                text = "${selectedDocs.size} of ${VolunteerDocType.entries.size} documents selected",
+                text = "$uploadedCount of ${VolunteerDocType.entries.size} documents uploaded",
                 color = p.secondary,
                 fontSize = 11.sp,
                 textAlign = TextAlign.Center,
@@ -456,8 +564,8 @@ internal fun MaitriVolunteerContent(
             Spacer(Modifier.height(20.dp))
 
             // Action Button: "Submit for review" (342 x 48, rx 24)
-            val allDocsAttached = selectedDocs.size == VolunteerDocType.entries.size
-            val readyToSubmit = allDocsAttached && consentChecked
+            val allDocsAttached = uploadedCount == VolunteerDocType.entries.size
+            val readyToSubmit = allDocsAttached && consentChecked && !locked
 
             Button(
                 onClick = onSubmit,
@@ -472,7 +580,7 @@ internal fun MaitriVolunteerContent(
                 elevation = null
             ) {
                 Text(
-                    text = "Submit for review",
+                    text = if (locked) "Submitted" else "Submit for review",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -493,7 +601,7 @@ private fun MaitriVolunteerLightPreview() {
         p = MaitriPalette(dark = false),
         selectedIntent = "HELP",
         onIntentSelect = {},
-        selectedDocs = emptyMap(),
+        docs = emptyMap(),
         onPickDoc = {},
         onRemoveDoc = {},
         consentChecked = false,
@@ -510,7 +618,7 @@ private fun MaitriVolunteerDarkPreview() {
         p = MaitriPalette(dark = true),
         selectedIntent = "HELP",
         onIntentSelect = {},
-        selectedDocs = emptyMap(),
+        docs = emptyMap(),
         onPickDoc = {},
         onRemoveDoc = {},
         consentChecked = false,
