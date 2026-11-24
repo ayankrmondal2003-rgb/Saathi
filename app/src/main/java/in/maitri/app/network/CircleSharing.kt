@@ -1,5 +1,7 @@
 package `in`.maitri.app.network
 
+import `in`.maitri.app.tr
+
 import com.google.gson.annotations.SerializedName
 import retrofit2.HttpException
 import java.io.IOException
@@ -24,20 +26,20 @@ data class CircleSessionDto(val id: String, val kind: String, val status: String
 
 fun circleSharingError(error: Throwable): String = when (error) {
     is HttpException -> when (error.code()) {
-        400, 422 -> "Check your selection, consent and location. The server rejected this request."
-        401 -> "Sign in again to continue."
-        403 -> "Sharing is not authorized. Check contact pairing and location-sharing permission."
-        404 -> "Sharing is unavailable, expired or revoked. The test server may need the sharing update."
-        409 -> "Sharing state changed. Refresh before retrying. No new success is confirmed."
-        429 -> "Sharing limit reached. Try again later."
-        else -> "Safety server unavailable. The result is unconfirmed; refresh before retrying."
+        400, 422 -> tr("Check your selection, consent and location. The server rejected this request.")
+        401 -> tr("Sign in again to continue.")
+        403 -> tr("Sharing is not authorized. Check contact pairing and location-sharing permission.")
+        404 -> tr("Sharing is unavailable, expired or revoked. The test server may need the sharing update.")
+        409 -> tr("Sharing state changed. Refresh before retrying. No new success is confirmed.")
+        429 -> tr("Sharing limit reached. Try again later.")
+        else -> tr("Safety server unavailable. The result is unconfirmed; refresh before retrying.")
     }
-    is IOException -> "Connection interrupted. The result is unconfirmed; refresh before retrying."
-    else -> "Unable to confirm sharing. Check your session and try again."
+    is IOException -> tr("Connection interrupted. The result is unconfirmed; refresh before retrying.")
+    else -> tr("Unable to confirm sharing. Check your session and try again.")
 }
 
 fun circleReceiptLabel(status: String): String = when (status) {
-    "AVAILABLE_IN_APP" -> "Available in recipient’s app — not confirmed opened"
-    "OPENED" -> "Opened in recipient’s app"
-    else -> "Notification status unknown"
+    "AVAILABLE_IN_APP" -> tr("Available in recipient’s app — not confirmed opened")
+    "OPENED" -> tr("Opened in recipient’s app")
+    else -> tr("Notification status unknown")
 }

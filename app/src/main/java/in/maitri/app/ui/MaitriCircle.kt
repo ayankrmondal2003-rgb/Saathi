@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -123,14 +125,14 @@ internal fun MaitriCircleContent(
         if (uri != null) {
             val resolved = ContactPickerHelper.resolvePickedContact(context, uri)
             if (resolved == null || resolved.phoneNumbers.isEmpty()) {
-                Toast.makeText(context, "No phone number found for selected contact", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("No phone number found for selected contact"), Toast.LENGTH_SHORT).show()
             } else if (resolved.phoneNumbers.size == 1) {
                 val single = resolved.phoneNumbers.first()
-                val err = onAddOrUpdateContact(null, resolved.name, single.number, single.typeLabel.ifBlank { "Mobile" }, false, true)
+                val err = onAddOrUpdateContact(null, resolved.name, single.number, single.typeLabel.ifBlank { tr("Mobile") }, false, true)
                 if (err != null) {
                     Toast.makeText(context, err, Toast.LENGTH_LONG).show()
                 } else {
-                    Toast.makeText(context, "Added ${resolved.name} to Trusted Circle", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, tr("Added {0} to Trusted Circle", resolved.name), Toast.LENGTH_SHORT).show()
                 }
             } else {
                 multiNumberOptions = Pair(resolved.name, resolved.phoneNumbers)
@@ -168,14 +170,14 @@ internal fun MaitriCircleContent(
                 Spacer(modifier = Modifier.width(14.dp))
                 Column {
                     Text(
-                        text = "YOUR PEOPLE, CLOSE BY",
+                        text = tr("YOUR PEOPLE, CLOSE BY"),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 1.6.sp,
                         color = p.accent
                     )
                     Text(
-                        text = "Your circle",
+                        text = tr("Your circle"),
                         fontSize = 25.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = p.primary
@@ -193,14 +195,14 @@ internal fun MaitriCircleContent(
             ) {
                 Column {
                     Text(
-                        text = "Keep your people close",
+                        text = tr("Keep your people close"),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = p.primary
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "These contacts receive your SOS and\nlive location when you ask for help.",
+                        text = tr("These contacts receive your SOS and\nlive location when you ask for help."),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Normal,
                         color = p.secondary,
@@ -220,13 +222,13 @@ internal fun MaitriCircleContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Saved contacts",
+                    text = tr("Saved contacts"),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = p.primary
                 )
                 Text(
-                    text = if (contacts.size == 1) "1 person" else "${contacts.size} people",
+                    text = if (contacts.size == 1) tr("1 person") else tr("{0} people", contacts.size),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
                     color = p.secondary
@@ -265,13 +267,13 @@ internal fun MaitriCircleContent(
                             )
                         }
                         Text(
-                            text = "No trusted contacts yet",
+                            text = tr("No trusted contacts yet"),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = p.primary
                         )
                         Text(
-                            text = "Add at least one person who will be automatically alerted when SOS is triggered.",
+                            text = tr("Add at least one person who will be automatically alerted when SOS is triggered."),
                             fontSize = 11.sp,
                             color = p.secondary,
                             textAlign = TextAlign.Center,
@@ -325,14 +327,14 @@ internal fun MaitriCircleContent(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Choose who gets your SOS",
+                            text = tr("Choose who gets your SOS"),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = p.primary
                         )
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            text = "Turn alerts on for the people you want\nto notify in an emergency.",
+                            text = tr("Turn alerts on for the people you want\nto notify in an emergency."),
                             fontSize = 11.sp,
                             color = p.secondary,
                             lineHeight = 15.sp
@@ -365,7 +367,7 @@ internal fun MaitriCircleContent(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Add contact",
+                        text = tr("Add contact"),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = if (isDark) Color(0xFF40303A) else Color.White
@@ -377,7 +379,7 @@ internal fun MaitriCircleContent(
 
             // Import from phone contacts link
             Text(
-                text = "Import from phone contacts",
+                text = tr("Import from phone contacts"),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = p.accent,
@@ -388,7 +390,7 @@ internal fun MaitriCircleContent(
             )
             if (uid != null) {
                 Text(
-                    text = "Enter a code from a friend",
+                    text = tr("Enter a code from a friend"),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = p.accent,
@@ -398,7 +400,7 @@ internal fun MaitriCircleContent(
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 )
                 if (memberships.isNotEmpty()) Text(
-                    text = "You get SOS alerts from " + memberships.joinToString(),
+                    text = tr("You get SOS alerts from ") + memberships.joinToString(),
                     fontSize = 11.sp, color = p.secondary, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
                 )
@@ -411,7 +413,7 @@ internal fun MaitriCircleContent(
     // Add Contact Dialog
     if (showAddDialog) {
         ContactFormDialog(
-            title = "Add trusted contact",
+            title = tr("Add trusted contact"),
             existing = null,
             palette = p,
             onDismiss = { showAddDialog = false },
@@ -430,7 +432,7 @@ internal fun MaitriCircleContent(
     // Edit Contact Dialog
     editingContact?.let { contact ->
         ContactFormDialog(
-            title = "Edit contact",
+            title = tr("Edit contact"),
             existing = contact,
             palette = p,
             onDismiss = { editingContact = null },
@@ -452,7 +454,7 @@ internal fun MaitriCircleContent(
             onDismissRequest = { deletingContact = null },
             title = {
                 Text(
-                    text = "Remove trusted contact?",
+                    text = tr("Remove trusted contact?"),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = p.primary
@@ -460,7 +462,7 @@ internal fun MaitriCircleContent(
             },
             text = {
                 Text(
-                    text = "Are you sure you want to remove ${contact.displayName}? They will no longer receive emergency alerts or trip updates.",
+                    text = tr("Are you sure you want to remove {0}? They will no longer receive emergency alerts or trip updates.", contact.displayName),
                     fontSize = 13.sp,
                     color = p.secondary,
                     lineHeight = 18.sp
@@ -471,15 +473,15 @@ internal fun MaitriCircleContent(
                     onClick = {
                         onRemoveContact(contact.id)
                         deletingContact = null
-                        Toast.makeText(context, "Removed ${contact.displayName}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, tr("Removed {0}", contact.displayName), Toast.LENGTH_SHORT).show()
                     }
                 ) {
-                    Text("Remove", color = p.accent, fontWeight = FontWeight.Bold)
+                    Text(tr("Remove"), color = p.accent, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { deletingContact = null }) {
-                    Text("Cancel", color = p.secondary)
+                    Text(tr("Cancel"), color = p.secondary)
                 }
             },
             containerColor = p.surface,
@@ -493,7 +495,7 @@ internal fun MaitriCircleContent(
             onDismissRequest = { multiNumberOptions = null },
             title = {
                 Text(
-                    text = "Select phone number",
+                    text = tr("Select phone number"),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = p.primary
@@ -502,7 +504,7 @@ internal fun MaitriCircleContent(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "$contactName has multiple phone numbers. Choose which one to add:",
+                        text = tr("{0} has multiple phone numbers. Choose which one to add:", contactName),
                         fontSize = 12.sp,
                         color = p.secondary
                     )
@@ -518,14 +520,14 @@ internal fun MaitriCircleContent(
                                         null,
                                         contactName,
                                         entry.number,
-                                        entry.typeLabel.ifBlank { "Mobile" },
+                                        entry.typeLabel.ifBlank { tr("Mobile") },
                                         false,
                                         true
                                     )
                                     if (err != null) {
                                         Toast.makeText(context, err, Toast.LENGTH_LONG).show()
                                     } else {
-                                        Toast.makeText(context, "Added $contactName", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, tr("Added {0}", contactName), Toast.LENGTH_SHORT).show()
                                     }
                                     multiNumberOptions = null
                                 }
@@ -541,7 +543,7 @@ internal fun MaitriCircleContent(
                                     color = p.primary
                                 )
                                 Text(
-                                    text = entry.typeLabel.ifBlank { "Phone" },
+                                    text = entry.typeLabel.ifBlank { tr("Phone") },
                                     fontSize = 11.sp,
                                     color = p.secondary
                                 )
@@ -559,7 +561,7 @@ internal fun MaitriCircleContent(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { multiNumberOptions = null }) {
-                    Text("Cancel", color = p.secondary)
+                    Text(tr("Cancel"), color = p.secondary)
                 }
             },
             containerColor = p.surface,
@@ -611,7 +613,7 @@ private fun ContactCardItem(
                     }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = if (contact.isPrimary) "${contact.label} · Primary contact" else contact.label,
+                        text = if (contact.isPrimary) tr("{0} · Primary contact", contact.label) else contact.label,
                         fontSize = 11.sp,
                         color = palette.secondary,
                         maxLines = 1,
@@ -630,7 +632,7 @@ private fun ContactCardItem(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Edit,
-                        contentDescription = "Edit contact",
+                        contentDescription = tr("Edit contact"),
                         tint = palette.accent,
                         modifier = Modifier.size(17.dp)
                     )
@@ -672,7 +674,7 @@ private fun ContactCardItem(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     Text(
-                        text = if (contact.notifyOnSos) "SOS alerts on" else "SOS alerts off",
+                        text = if (contact.notifyOnSos) tr("SOS alerts on") else tr("SOS alerts off"),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
                         color = if (contact.notifyOnSos) palette.primary else palette.secondary
@@ -681,19 +683,19 @@ private fun ContactCardItem(
 
                 // Middle: whether SOS alerts reach this person as a push (linked Maitri account) or by your SMS.
                 if (onMaitri != null) Text(
-                    text = if (onMaitri) "On Maitri" else "Invite",
+                    text = if (onMaitri) tr("On Maitri") else tr("Invite"),
                     fontSize = 11.sp,
                     fontWeight = if (onMaitri) FontWeight.Medium else FontWeight.SemiBold,
                     color = if (onMaitri) palette.secondary else palette.accent,
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .then(if (onMaitri) Modifier else Modifier.clickable(onClickLabel = "Invite ${contact.displayName} to Maitri", onClick = onInvite))
+                        .then(if (onMaitri) Modifier else Modifier.clickable(onClickLabel = tr("Invite {0} to Maitri", contact.displayName), onClick = onInvite))
                         .padding(horizontal = 6.dp, vertical = 4.dp)
                 )
 
                 // Right: Remove button
                 Text(
-                    text = "Remove",
+                    text = tr("Remove"),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = palette.accent,
@@ -720,12 +722,12 @@ private fun ContactFormDialog(
 ) {
     var name by rememberSaveable { mutableStateOf(existing?.displayName.orEmpty()) }
     var phone by rememberSaveable { mutableStateOf(existing?.phoneNumber.orEmpty()) }
-    var label by rememberSaveable { mutableStateOf(existing?.label ?: "Sister") }
+    var label by rememberSaveable { mutableStateOf(existing?.label ?: tr("Sister")) }
     var isPrimary by rememberSaveable { mutableStateOf(existing?.isPrimary ?: false) }
     var notifySos by rememberSaveable { mutableStateOf(existing?.notifyOnSos ?: true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    val relationships = listOf("Sister", "Mother", "Father", "Brother", "Spouse", "Friend", "Neighbor", "Other")
+    val relationships = listOf(tr("Sister"), tr("Mother"), tr("Father"), tr("Brother"), tr("Spouse"), tr("Friend"), tr("Neighbor"), tr("Other"))
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -764,7 +766,7 @@ private fun ContactFormDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it; errorMessage = null },
-                    label = { Text("Contact name") },
+                    label = { Text(tr("Contact name")) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
@@ -773,14 +775,14 @@ private fun ContactFormDialog(
                 OutlinedTextField(
                     value = phone,
                     onValueChange = { phone = it; errorMessage = null },
-                    label = { Text("Phone number") },
+                    label = { Text(tr("Phone number")) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
 
                 Text(
-                    text = "Relationship label",
+                    text = tr("Relationship label"),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = palette.secondary
@@ -827,7 +829,7 @@ private fun ContactFormDialog(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Alert during SOS emergencies",
+                        text = tr("Alert during SOS emergencies"),
                         fontSize = 12.sp,
                         color = palette.primary
                     )
@@ -847,7 +849,7 @@ private fun ContactFormDialog(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Set as primary contact",
+                        text = tr("Set as primary contact"),
                         fontSize = 12.sp,
                         color = palette.primary
                     )
@@ -865,12 +867,12 @@ private fun ContactFormDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Text("Save", color = Color.White, fontWeight = FontWeight.Bold)
+                Text(tr("Save"), color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = palette.secondary)
+                Text(tr("Cancel"), color = palette.secondary)
             }
         },
         containerColor = palette.surface,
@@ -935,27 +937,27 @@ private fun CircleInviteDialog(uid: String, contact: EmergencyContact, p: Maitri
         try { invite = `in`.maitri.app.network.BackendClient.circle.invite(
             `in`.maitri.app.network.CircleInviteRequest(contact.id), `in`.maitri.app.network.ExpectedAccount(uid)) }
         catch (e: kotlinx.coroutines.CancellationException) { throw e }
-        catch (_: Exception) { error = "Couldn't create a code. Check your connection and that ${contact.displayName} is saved." }
+        catch (_: Exception) { error = tr("Couldn't create a code. Check your connection and that {0} is saved.", contact.displayName) }
     }
     AlertDialog(onDismissRequest = dismiss, containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
-        title = { Text("Invite ${contact.displayName}") },
+        title = { Text(tr("Invite {0}", contact.displayName)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Send this code to ${contact.displayName}. Once they enter it in Maitri, your SOS alerts reach them as a notification with your live location.")
+                Text(tr("Send this code to {0}. Once they enter it in Maitri, your SOS alerts reach them as a notification with your live location.", contact.displayName))
                 error?.let { Text(it, color = p.accent) }
                 invite?.let {
                     Text(it.code, color = p.primary, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 3.sp,
                         modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-                    Text("Valid for 24 hours, once.", fontSize = 12.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                    Text(tr("Valid for 24 hours, once."), fontSize = 12.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                 } ?: if (error == null) LinearProgressIndicator(Modifier.fillMaxWidth(), color = p.accent) else Unit
             }
         },
         confirmButton = {
             TextButton(enabled = invite != null, onClick = {
                 invite?.let { context.startActivity(`in`.maitri.app.network.shareTextIntent(`in`.maitri.app.network.inviteText(it.code))) }
-            }) { Text("Send code", color = p.accent) }
+            }) { Text(tr("Send code"), color = p.accent) }
         },
-        dismissButton = { TextButton(onClick = dismiss) { Text("Done", color = p.secondary) } })
+        dismissButton = { TextButton(onClick = dismiss) { Text(tr("Done"), color = p.secondary) } })
 }
 
 /** Friend side: entering a code joins that person's circle. */
@@ -967,12 +969,12 @@ private fun EnterCircleCodeDialog(uid: String, p: MaitriPalette, dismiss: () -> 
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(onDismissRequest = dismiss, containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
-        title = { Text("Enter a code") },
+        title = { Text(tr("Enter a code")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Enter the code a friend sent you. You'll get their SOS alerts and their live location while an SOS is active.")
-                OutlinedTextField(code, { code = it.uppercase().take(12) }, singleLine = true, label = { Text("Code") },
-                    placeholder = { Text("ABCD-2345") }, modifier = Modifier.fillMaxWidth())
+                Text(tr("Enter the code a friend sent you. You'll get their SOS alerts and their live location while an SOS is active."))
+                OutlinedTextField(code, { code = it.uppercase().take(12) }, singleLine = true, label = { Text(tr("Code")) },
+                    placeholder = { Text(tr("ABCD-2345")) }, modifier = Modifier.fillMaxWidth())
                 error?.let { Text(it, color = p.accent) }
             }
         },
@@ -983,20 +985,20 @@ private fun EnterCircleCodeDialog(uid: String, p: MaitriPalette, dismiss: () -> 
                     try {
                         val result = `in`.maitri.app.network.BackendClient.circle.accept(
                             `in`.maitri.app.network.AcceptInviteRequest(code), `in`.maitri.app.network.ExpectedAccount(uid))
-                        Toast.makeText(context, "You're now in ${result.ownerName ?: "their"} circle", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, result.ownerName?.let { tr("You're now in {0}'s circle", it) } ?: tr("You're now in their circle"), Toast.LENGTH_LONG).show()
                         dismiss()
                     } catch (e: kotlinx.coroutines.CancellationException) { throw e }
                     catch (e: retrofit2.HttpException) {
                         error = when (e.code()) {
-                            404 -> "That code isn't valid or has expired. Ask for a new one."
-                            422 -> "This is your own code. Send it to the person you added."
-                            429 -> "Too many codes tried. Try again in an hour."
-                            else -> "Couldn't join right now. Try again."
+                            404 -> tr("That code isn't valid or has expired. Ask for a new one.")
+                            422 -> tr("This is your own code. Send it to the person you added.")
+                            429 -> tr("Too many codes tried. Try again in an hour.")
+                            else -> tr("Couldn't join right now. Try again.")
                         }
-                    } catch (_: Exception) { error = "Couldn't reach Maitri. Check your connection." }
+                    } catch (_: Exception) { error = tr("Couldn't reach Maitri. Check your connection.") }
                     finally { busy = false }
                 }
-            }) { Text("Join", color = p.accent) }
+            }) { Text(tr("Join"), color = p.accent) }
         },
-        dismissButton = { TextButton(onClick = dismiss) { Text("Cancel", color = p.secondary) } })
+        dismissButton = { TextButton(onClick = dismiss) { Text(tr("Cancel"), color = p.secondary) } })
 }

@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.content.Intent
 import android.os.SystemClock
 import android.provider.Settings
@@ -79,11 +81,11 @@ fun MaitriHome(state: DemoState, start: (Boolean) -> Unit, contacts: () -> Unit,
         // Reached by a quick tap or a screen reader, where a 3-second hold isn't practical.
         AlertDialog(onDismissRequest = { confirm = false },
             containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
-            title = { Text("Send SOS now?") },
-            text = { Text("Your circle and approved volunteers nearby get your live location. Maitri doesn't call 112 for you.") },
+            title = { Text(tr("Send SOS now?")) },
+            text = { Text(tr("Your circle and approved volunteers nearby get your live location. Maitri doesn't call 112 for you.")) },
             confirmButton = { TextButton(onClick = { if (confirm) { confirm = false; start(true) } }) {
-                Text("Send SOS", color = p.accent, fontWeight = FontWeight.SemiBold) } },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel", color = p.accent) } })
+                Text(tr("Send SOS"), color = p.accent, fontWeight = FontWeight.SemiBold) } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text(tr("Cancel"), color = p.accent) } })
     }
     sharingKind?.let { kind -> MaitriSharingDialog(kind) { sharingKind = null } }
 }
@@ -101,21 +103,21 @@ internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Bool
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("A LITTLE PEACE OF MIND", color = p.accent, fontSize = 10.sp, letterSpacing = 1.3.sp, fontWeight = FontWeight.SemiBold)
+                    Text(tr("A LITTLE PEACE OF MIND"), color = p.accent, fontSize = 10.sp, letterSpacing = 1.3.sp, fontWeight = FontWeight.SemiBold)
                     if (beta) {
                         Spacer(Modifier.width(8.dp))
                         Text("BETA", Modifier.background(p.card, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp)
-                            .semantics { contentDescription = "Beta version" },
+                            .semantics { contentDescription = tr("Beta version") },
                             color = p.accent, fontSize = 9.sp, letterSpacing = 0.8.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
                 Spacer(Modifier.height(6.dp))
-                Text("Here for you.", color = p.primary, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
+                Text(tr("Here for you."), color = p.primary, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
             }
             Box {
                 IconButton(onClick = notifications, modifier = Modifier.size(44.dp).background(p.surface, CircleShape)) {
                     Icon(painterResource(R.drawable.maitri_bell),
-                        if (unread > 0) "Notifications, $unread unread" else "Notifications", tint = p.primary, modifier = Modifier.size(24.dp))
+                        if (unread > 0) tr("Notifications, {0} unread", unread) else tr("Notifications"), tint = p.primary, modifier = Modifier.size(24.dp))
                 }
                 if (unread > 0) Text(if (unread > 9) "9+" else unread.toString(),
                     Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp).background(p.accent, CircleShape)
@@ -126,27 +128,27 @@ internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Bool
         Spacer(Modifier.height(30.dp))
         Column(Modifier.fillMaxWidth().background(p.card, RoundedCornerShape(28.dp)).padding(vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(if (active) "Your SOS session is open." else "You’re not on your own.", color = p.primary, fontSize = 21.sp,
+            Text(if (active) tr("Your SOS session is open.") else tr("You’re not on your own."), color = p.primary, fontSize = 21.sp,
                 fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
             Spacer(Modifier.height(6.dp))
-            Text(if (active) "Open your session for its confirmed status." else "Reach your circle when you need them.",
+            Text(if (active) tr("Open your session for its confirmed status.") else tr("Reach your circle when you need them."),
                 color = p.secondary, fontSize = 12.sp, textAlign = TextAlign.Center)
             Spacer(Modifier.height(14.dp))
             MaitriHoldButton(p, onSos, onSosTap)
             Spacer(Modifier.height(14.dp))
-            Text(if (active) "Hold for 3 seconds to open your SOS" else "Hold for 3 seconds to alert your circle",
+            Text(if (active) tr("Hold for 3 seconds to open your SOS") else tr("Hold for 3 seconds to alert your circle"),
                 color = p.accent, fontSize = 11.sp, textAlign = TextAlign.Center)
             session()
         }
         Spacer(Modifier.height(20.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            MaitriQuickAction("Share my trip", "Let someone follow along", R.drawable.maitri_pin, p, Modifier.weight(1f), trip)
-            MaitriQuickAction("Check in", "Set a time to check in", R.drawable.maitri_clock, p, Modifier.weight(1f), checkIn)
+            MaitriQuickAction(tr("Share my trip"), tr("Let someone follow along"), R.drawable.maitri_pin, p, Modifier.weight(1f), trip)
+            MaitriQuickAction(tr("Check in"), tr("Set a time to check in"), R.drawable.maitri_clock, p, Modifier.weight(1f), checkIn)
         }
         Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Your trusted circle", Modifier.weight(1f), color = p.primary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            TextButton(onClick = contacts) { Text("Manage", color = p.accent, fontSize = 12.sp) }
+            Text(tr("Your trusted circle"), Modifier.weight(1f), color = p.primary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            TextButton(onClick = contacts) { Text(tr("Manage"), color = p.accent, fontSize = 12.sp) }
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth().background(p.card, RoundedCornerShape(20.dp))
@@ -158,12 +160,12 @@ internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Bool
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text("Keep your people close", color = p.primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(tr("Keep your people close"), color = p.primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(6.dp))
-                Text(if(contactCount == 0) "Add your first trusted contact" else "$contactCount saved contacts",
+                Text(if(contactCount == 0) tr("Add your first trusted contact") else tr("{0} saved contacts", contactCount),
                     color = p.secondary, fontSize = 11.sp)
             }
-            Icon(painterResource(R.drawable.maitri_plus), "Add trusted contact", tint = p.accent,
+            Icon(painterResource(R.drawable.maitri_plus), tr("Add trusted contact"), tint = p.accent,
                 modifier = Modifier.size(32.dp).background(p.surface, CircleShape).padding(4.dp))
         }
         Spacer(Modifier.height(12.dp))
@@ -194,9 +196,9 @@ internal fun MaitriHoldButton(p: MaitriPalette, onComplete: () -> Unit, onTap: (
     var completed by remember { mutableStateOf(false) }
     Box(Modifier.size(172.dp).semantics {
         role = Role.Button
-        contentDescription = "Hold SOS for three seconds"
-        stateDescription = if(progress > 0) "Hold progress ${(progress * 100).toInt()} percent" else "Ready"
-        onClick("Send SOS") { tapCallback(); true }
+        contentDescription = tr("Hold SOS for three seconds")
+        stateDescription = if(progress > 0) tr("Hold progress {0} percent", (progress * 100).toInt()) else tr("Ready")
+        onClick(tr("Send SOS")) { tapCallback(); true }
     }.pointerInput(Unit) {
         detectTapGestures(onPress = {
             coroutineScope {
@@ -226,7 +228,7 @@ internal fun MaitriHoldButton(p: MaitriPalette, onComplete: () -> Unit, onTap: (
             Icon(painterResource(R.drawable.maitri_shield), null, tint = Color.White, modifier = Modifier.size(24.dp))
             Spacer(Modifier.height(8.dp))
             Text("SOS", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-            Text("Get help", color = Color.White, fontSize = 12.sp)
+            Text(tr("Get help"), color = Color.White, fontSize = 12.sp)
         }
         if (progress > 0f) CircularProgressIndicator(progress = { progress }, modifier = Modifier.size(168.dp),
             color = p.accent, strokeWidth = 3.dp)
@@ -236,10 +238,10 @@ internal fun MaitriHoldButton(p: MaitriPalette, onComplete: () -> Unit, onTap: (
 @Composable
 fun MaitriBottomBar(currentRoute: String?, onTabSelected: (String) -> Unit, modifier: Modifier = Modifier) {
     val p = maitriPalette()
-    val items = listOf(Triple("Home", "Home", R.drawable.maitri_home),
-        Triple("Contacts", "Circle", R.drawable.maitri_circle),
-        Triple("Responder", "Responder", R.drawable.maitri_responder),
-        Triple("Profile", "Profile", R.drawable.maitri_profile))
+    val items = listOf(Triple("Home", tr("Home"), R.drawable.maitri_home),
+        Triple("Contacts", tr("Circle"), R.drawable.maitri_circle),
+        Triple("Responder", tr("Responder"), R.drawable.maitri_responder),
+        Triple("Profile", tr("Profile"), R.drawable.maitri_profile))
     Column(modifier.fillMaxWidth().background(p.background).padding(horizontal = 24.dp)) {
         HorizontalDivider(color = p.divider, thickness = 1.dp)
         Row(Modifier.fillMaxWidth().height(62.dp)) {
@@ -287,9 +289,9 @@ internal fun SosSessionPanel(p: MaitriPalette, active: Boolean, message: String?
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (active) {
-            if (problem == SyncProblem.RETRYING) SessionAction("Try again", p, onRetry)
-            SessionAction("Resume SOS", p, onResume)
-            SessionAction("End SOS", p, onEnd)
+            if (problem == SyncProblem.RETRYING) SessionAction(tr("Try again"), p, onRetry)
+            SessionAction(tr("Resume SOS"), p, onResume)
+            SessionAction(tr("End SOS"), p, onEnd)
         } else if (problem == SyncProblem.ENDED) {
             SessionAction("OK", p, onDismiss)
         }

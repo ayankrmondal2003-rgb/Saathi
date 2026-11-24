@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.app.Activity
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -80,7 +82,7 @@ fun MaitriLogin(
                 auth.submit(null, email, password)
             } else {
                 val name = email.substringBefore("@").replace(".", " ").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-                auth.submit(name.ifBlank { "User" }, email, password, password)
+                auth.submit(name.ifBlank { tr("User") }, email, password, password)
             }
         },
         onForgotPassword = {
@@ -89,7 +91,7 @@ fun MaitriLogin(
         },
         onContinueWithGoogle = {
             if (activity == null) auth.signInWithGoogle {
-                throw `in`.maitri.app.data.GoogleSignInUnavailable("Google sign-in needs the app window. Reopen Maitri and retry.")
+                throw `in`.maitri.app.data.GoogleSignInUnavailable(tr("Google sign-in needs the app window. Reopen Maitri and retry."))
             } else auth.signInWithGoogle { `in`.maitri.app.data.requestGoogleIdToken(activity) }
         },
         isBusy = state.busy,
@@ -103,14 +105,14 @@ fun MaitriLogin(
             containerColor = p.surface,
             titleContentColor = p.primary,
             textContentColor = p.secondary,
-            title = { Text("Reset password", fontWeight = FontWeight.SemiBold) },
+            title = { Text(tr("Reset password"), fontWeight = FontWeight.SemiBold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Enter your email address to receive a secure password reset link.")
+                    Text(tr("Enter your email address to receive a secure password reset link."))
                     OutlinedTextField(
                         value = resetEmail,
                         onValueChange = { resetEmail = it },
-                        label = { Text("Email address") },
+                        label = { Text(tr("Email address")) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -130,11 +132,11 @@ fun MaitriLogin(
                         auth.reset(resetEmail)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = Color.White)
-                ) { Text("Send reset link") }
+                ) { Text(tr("Send reset link")) }
             },
             dismissButton = {
                 TextButton(onClick = { showForgotDialog = false }) {
-                    Text("Cancel", color = p.secondary)
+                    Text(tr("Cancel"), color = p.secondary)
                 }
             }
         )
@@ -202,7 +204,7 @@ internal fun MaitriLoginContent(
 
             // Title & Subtitle
             Text(
-                text = "Welcome to maitri",
+                text = tr("Welcome to maitri"),
                 color = p.primary,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -210,7 +212,7 @@ internal fun MaitriLoginContent(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "A little peace of mind starts here.",
+                text = tr("A little peace of mind starts here."),
                 color = p.secondary,
                 fontSize = 12.sp,
                 modifier = Modifier.fillMaxWidth()
@@ -258,7 +260,7 @@ internal fun MaitriLoginContent(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Log in",
+                                text = tr("Log in"),
                                 color = if (selectedTab == 0) p.accent else p.secondary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -275,7 +277,7 @@ internal fun MaitriLoginContent(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Sign up",
+                                text = tr("Sign up"),
                                 color = if (selectedTab == 1) p.accent else p.secondary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -309,7 +311,7 @@ internal fun MaitriLoginContent(
                 }
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "Continue with Google",
+                    text = tr("Continue with Google"),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -329,7 +331,7 @@ internal fun MaitriLoginContent(
                         .background(p.divider)
                 )
                 Text(
-                    text = "or use email & password",
+                    text = tr("or use email & password"),
                     color = p.secondary,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(horizontal = 10.dp)
@@ -346,7 +348,7 @@ internal fun MaitriLoginContent(
 
             // Email Address Field
             Text(
-                text = "Email address",
+                text = tr("Email address"),
                 color = p.primary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -393,7 +395,7 @@ internal fun MaitriLoginContent(
 
             // Password Field
             Text(
-                text = "Password",
+                text = tr("Password"),
                 color = p.primary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -419,7 +421,7 @@ internal fun MaitriLoginContent(
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (password.isEmpty()) {
                         Text(
-                            text = "Enter your password",
+                            text = tr("Enter your password"),
                             color = p.secondary,
                             fontSize = 14.sp
                         )
@@ -445,7 +447,7 @@ internal fun MaitriLoginContent(
                 ) {
                     Icon(
                         imageVector = if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                        contentDescription = "Toggle password visibility",
+                        contentDescription = tr("Toggle password visibility"),
                         tint = p.secondary,
                         modifier = Modifier.size(18.dp)
                     )
@@ -460,7 +462,7 @@ internal fun MaitriLoginContent(
                 horizontalArrangement = Arrangement.End
             ) {
                 Text(
-                    text = "Forgot password?",
+                    text = tr("Forgot password?"),
                     color = p.accent,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -496,7 +498,7 @@ internal fun MaitriLoginContent(
                     )
                 } else {
                     Text(
-                        text = if (selectedTab == 0) "Log in with email" else "Sign up with email",
+                        text = if (selectedTab == 0) tr("Log in with email") else tr("Sign up with email"),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -517,7 +519,7 @@ internal fun MaitriLoginContent(
             if (isDemoMode) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Demo Mode: Leave fields empty and tap above to enter with local demo account.",
+                    text = tr("Demo Mode: Leave fields empty and tap above to enter with local demo account."),
                     color = p.secondary,
                     fontSize = 11.sp,
                     textAlign = TextAlign.Center,
@@ -531,10 +533,10 @@ internal fun MaitriLoginContent(
             Text(
                 text = androidx.compose.ui.text.buildAnnotatedString {
                     val link = androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = p.accent))
-                    append("By continuing, you agree to the ")
-                    withLink(androidx.compose.ui.text.LinkAnnotation.Url(`in`.maitri.app.network.MaitriLinks.TERMS, link)) { append("Terms of Service") }
-                    append("\nand ")
-                    withLink(androidx.compose.ui.text.LinkAnnotation.Url(`in`.maitri.app.network.MaitriLinks.PRIVACY, link)) { append("Privacy Policy") }
+                    append(tr("By continuing, you agree to the "))
+                    withLink(androidx.compose.ui.text.LinkAnnotation.Url(`in`.maitri.app.network.MaitriLinks.TERMS, link)) { append(tr("Terms of Service")) }
+                    append(tr("\nand "))
+                    withLink(androidx.compose.ui.text.LinkAnnotation.Url(`in`.maitri.app.network.MaitriLinks.PRIVACY, link)) { append(tr("Privacy Policy")) }
                     append(".")
                 },
                 color = p.secondary,

@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.Manifest
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -171,7 +173,7 @@ fun MaitriPermissions(onBack: () -> Unit, modifier: Modifier = Modifier) {
             }
         }
         // In the hint's place: alerts only arrive on time if the phone doesn't put Maitri to sleep.
-        SettingsText("Keep Maitri alerts on time ›", 24, 682, 342, 22, 12, p.accent, bold = true, center = true,
+        SettingsText(tr("Keep Maitri alerts on time ›"), 24, 682, 342, 22, 12, p.accent, bold = true, center = true,
             action = { battery = true })
         SettingsText(strings.getString(S.perm_open), 24, 724, 342, 52, 15,
             if (p.dark) p.background else Color.White, bold = true, center = true, action = ::appSettings)
@@ -180,18 +182,18 @@ fun MaitriPermissions(onBack: () -> Unit, modifier: Modifier = Modifier) {
     if (battery) {
         val restricted = !preview && batteryRestricted(context)
         AlertDialog(onDismissRequest = { battery = false },
-            title = { Text("Keep Maitri alerts on time") },
+            title = { Text(tr("Keep Maitri alerts on time")) },
             text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(if (restricted) "Battery optimisation is on for Maitri, so your phone may delay SOS requests and circle alerts."
-                    else "Battery optimisation is off for Maitri. Good.", fontWeight = FontWeight.SemiBold)
-                Text("On your ${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} phone:")
+                Text(if (restricted) tr("Battery optimisation is on for Maitri, so your phone may delay SOS requests and circle alerts.")
+                    else tr("Battery optimisation is off for Maitri. Good."), fontWeight = FontWeight.SemiBold)
+                Text(tr("On your {0} phone:", Build.MANUFACTURER.replaceFirstChar { it.uppercase() }))
                 batteryTips(Build.MANUFACTURER).forEach { Text("• $it") }
                 Text(strings.getString(S.perm_hint), color = p.secondary)
             } },
             confirmButton = { TextButton(onClick = {
                 battery = false
                 open(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            }) { Text("Open battery settings") } },
+            }) { Text(tr("Open battery settings")) } },
             dismissButton = { TextButton(onClick = { battery = false }) { Text(strings.getString(S.settings_close)) } })
     }
     info?.let { id ->
@@ -231,13 +233,13 @@ internal fun batteryRestricted(context: Context): Boolean =
 
 /** Where each phone maker hides "let this app run in the background". */
 internal fun batteryTips(manufacturer: String): List<String> = when (manufacturer.lowercase()) {
-    "samsung" -> listOf("Settings › Apps › Maitri › Battery › Unrestricted.",
-        "Settings › Battery › Background usage limits › Never sleeping apps › add Maitri.")
-    "xiaomi", "redmi", "poco" -> listOf("Settings › Apps › Manage apps › Maitri › Autostart: on.",
-        "Same screen › Battery saver › No restrictions.")
-    "oppo", "realme", "oneplus" -> listOf("Settings › Battery › More settings (or App battery management) › Maitri › Allow background activity.",
-        "Settings › Apps › Maitri › Auto launch: on.")
-    "vivo", "iqoo" -> listOf("Settings › Battery › Background power consumption management › Maitri › Allow.",
-        "i Manager › App manager › Autostart › Maitri: on.")
-    else -> listOf("Settings › Apps › Maitri › Battery › Unrestricted (or \"Don't optimise\").")
+    "samsung" -> listOf(tr("Settings › Apps › Maitri › Battery › Unrestricted."),
+        tr("Settings › Battery › Background usage limits › Never sleeping apps › add Maitri."))
+    "xiaomi", "redmi", "poco" -> listOf(tr("Settings › Apps › Manage apps › Maitri › Autostart: on."),
+        tr("Same screen › Battery saver › No restrictions."))
+    "oppo", "realme", "oneplus" -> listOf(tr("Settings › Battery › More settings (or App battery management) › Maitri › Allow background activity."),
+        tr("Settings › Apps › Maitri › Auto launch: on."))
+    "vivo", "iqoo" -> listOf(tr("Settings › Battery › Background power consumption management › Maitri › Allow."),
+        tr("i Manager › App manager › Autostart › Maitri: on."))
+    else -> listOf(tr("Settings › Apps › Maitri › Battery › Unrestricted (or \"Don't optimise\")."))
 }

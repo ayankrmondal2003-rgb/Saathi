@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -39,7 +41,7 @@ import java.util.UUID
 internal val TRIP_MINUTES = listOf(15, 30, 60, 120)
 internal val CHECK_IN_MINUTES = listOf(15, 30, 60, 120, 240)
 
-internal fun minutesLabel(minutes: Int) = if (minutes < 60) "$minutes min" else "${minutes / 60} h"
+internal fun minutesLabel(minutes: Int) = if (minutes < 60) tr("{0} min", minutes) else "${minutes / 60} h"
 
 /** The owner's own open session of this kind, if any (a check-in stays "open" after it's missed until checked in). */
 internal fun ownOpenSession(sessions: List<CircleSessionDto>, kind: String) =
@@ -73,7 +75,7 @@ fun MaitriSharingDialog(kind: String, dismiss: () -> Unit) {
     var sharingGps by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf<Pair<String, CircleShareRequest>?>(null) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        error = if (context.locationAllowed()) null else "Allow location to share your trip."
+        error = if (context.locationAllowed()) null else tr("Allow location to share your trip.")
     }
     DisposableEffect(uid) {
         val auth = FirebaseAuth.getInstance()
@@ -147,45 +149,45 @@ fun MaitriSharingDialog(kind: String, dismiss: () -> Unit) {
 
     AlertDialog(onDismissRequest = dismiss, containerColor = p.surface,
         titleContentColor = p.primary, textContentColor = p.primary,
-        title = { Text(if (trip) "Share my trip" else "Check in") },
+        title = { Text(if (trip) tr("Share my trip") else tr("Check in")) },
         text = {
             Column(Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(if (trip) "People in your circle who use Maitri can follow your location until the trip ends."
-                    else "Pick when you'll check in. If you don't, Maitri tells your circle. No location is shared.",
+                Text(if (trip) tr("People in your circle who use Maitri can follow your location until the trip ends.")
+                    else tr("Pick when you'll check in. If you don't, Maitri tells your circle. No location is shared."),
                     color = p.secondary, fontSize = 13.sp)
                 if (busy || !loaded) LinearProgressIndicator(Modifier.fillMaxWidth(), color = p.accent)
                 error?.let { Text(it, color = p.accent, fontSize = 13.sp) }
                 when {
                     !loaded -> Unit
                     current != null && trip -> {
-                        Text("Sharing your trip until ${localTime(current.expiresAt)}", fontWeight = FontWeight.SemiBold)
-                        Text(current.syncedAt?.let { "Last update " + relativeTime(it).lowercase() } ?: "No location sent yet",
+                        Text(tr("Sharing your trip until {0}", localTime(current.expiresAt)), fontWeight = FontWeight.SemiBold)
+                        Text(current.syncedAt?.let { tr("Last update ") + relativeTime(it).lowercase() } ?: tr("No location sent yet"),
                             color = p.secondary, fontSize = 13.sp)
-                        Text("Updates are sent while Maitri is open.", color = p.secondary, fontSize = 12.sp)
+                        Text(tr("Updates are sent while Maitri is open."), color = p.secondary, fontSize = 12.sp)
                         OutlinedButton(enabled = !busy, onClick = {
                             if (!context.locationAllowed()) permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                             else sharingGps = !sharingGps
-                        }) { Text(if (sharingGps) "Pause updates" else "Send updates", color = p.accent) }
+                        }) { Text(if (sharingGps) tr("Pause updates") else tr("Send updates"), color = p.accent) }
                         Button(enabled = !busy, colors = ButtonDefaults.buttonColors(containerColor = p.accent), onClick = { run {
                             BackendClient.api.stopCircleSession(current.id, account())
                             sharingGps = false
                             refresh()
-                        } }) { Text("Stop sharing") }
+                        } }) { Text(tr("Stop sharing")) }
                     }
                     current != null -> {
-                        Text(if (current.missed) "You missed this check-in. Your circle was told."
-                            else "Check in by ${current.dueAt?.let { localTime(it) } ?: "your chosen time"}",
+                        Text(if (current.missed) tr("You missed this check-in. Your circle was told.")
+                            else current.dueAt?.let { tr("Check in by {0}", localTime(it)) } ?: tr("Check in by your chosen time"),
                             fontWeight = FontWeight.SemiBold, color = if (current.missed) p.accent else p.primary)
                         Button(enabled = !busy, colors = ButtonDefaults.buttonColors(containerColor = p.accent), onClick = { run {
                             BackendClient.api.stopCircleSession(current.id, account())
                             refresh()
-                        } }, modifier = Modifier.fillMaxWidth()) { Text("I'm safe, check in now") }
+                        } }, modifier = Modifier.fillMaxWidth()) { Text(tr("I'm safe, check in now")) }
                     }
-                    links.isEmpty() -> Text("None of your circle uses Maitri yet. On the Circle screen, tap Invite next to " +
-                        "a contact and send them the code.", color = p.secondary, fontSize = 13.sp)
+                    links.isEmpty() -> Text(tr("None of your circle uses Maitri yet. On the Circle screen, tap Invite next to ") +
+                        tr("a contact and send them the code."), color = p.secondary, fontSize = 13.sp)
                     else -> {
-                        Text("Share with", fontWeight = FontWeight.SemiBold)
+                        Text(tr("Share with"), fontWeight = FontWeight.SemiBold)
                         links.forEach { link ->
                             val checked = link.contactId in selected.orEmpty()
                             Row(Modifier.fillMaxWidth().clickable(enabled = !busy && pending == null) {
@@ -195,7 +197,7 @@ fun MaitriSharingDialog(kind: String, dismiss: () -> Unit) {
                                 Text(link.name)
                             }
                         }
-                        Text(if (trip) "For" else "Check in within", fontWeight = FontWeight.SemiBold)
+                        Text(if (trip) tr("For") else tr("Check in within"), fontWeight = FontWeight.SemiBold)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             (if (trip) TRIP_MINUTES else CHECK_IN_MINUTES).forEach { option ->
                                 FilterChip(selected = minutes == option, onClick = { if (pending == null) minutes = option },
@@ -204,8 +206,8 @@ fun MaitriSharingDialog(kind: String, dismiss: () -> Unit) {
                         }
                         Row(Modifier.clickable(enabled = pending == null) { consent = !consent }, verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(checked = consent, onCheckedChange = null)
-                            Text(if (trip) "Share my precise location with them for ${minutesLabel(minutes)}."
-                                else "Tell them if I haven't checked in within ${minutesLabel(minutes)}.", fontSize = 13.sp)
+                            Text(if (trip) tr("Share my precise location with them for {0}.", minutesLabel(minutes))
+                                else tr("Tell them if I haven't checked in within {0}.", minutesLabel(minutes)), fontSize = 13.sp)
                         }
                         Button(enabled = !busy && consent && selected.orEmpty().isNotEmpty(),
                             colors = ButtonDefaults.buttonColors(containerColor = p.accent), modifier = Modifier.fillMaxWidth(), onClick = {
@@ -224,10 +226,10 @@ fun MaitriSharingDialog(kind: String, dismiss: () -> Unit) {
                                 refresh()
                                 if (result.kind == "TRIP") sharingGps = true
                             }
-                        }) { Text(if (pending != null) "Try again" else if (trip) "Start sharing" else "Set check-in") }
+                        }) { Text(if (pending != null) tr("Try again") else if (trip) tr("Start sharing") else tr("Set check-in")) }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = dismiss) { Text("Close", color = p.accent) } })
+        confirmButton = { TextButton(onClick = dismiss) { Text(tr("Close"), color = p.accent) } })
 }

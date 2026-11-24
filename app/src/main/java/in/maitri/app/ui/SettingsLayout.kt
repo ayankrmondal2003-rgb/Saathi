@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.app.LocaleManager
 import android.content.Context
 import android.content.res.Configuration
@@ -39,10 +41,12 @@ internal object MaitriLocale {
 
     fun save(context: Context, code: String) {
         require(MAITRI_LANGUAGES.any { it.code == code })
-        context.getSharedPreferences(FILE, 0).edit().putString(KEY, code).apply()
+        context.getSharedPreferences(FILE, 0).edit().putString(KEY, code).commit()
         if (Build.VERSION.SDK_INT >= 33) {
             context.getSystemService(LocaleManager::class.java).applicationLocales = LocaleList.forLanguageTags(code)
         }
+        // After the platform locale changes, so tr() reads the new language.
+        `in`.maitri.app.I18n.init(context)
     }
 }
 

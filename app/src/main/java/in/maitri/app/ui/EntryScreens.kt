@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -67,8 +69,8 @@ fun Verification(state: AuthState, vm: AuthViewModel) {
     val colors = MaterialTheme.maitriColors
 
     Page(
-        title = "Verify Email",
-        subtitle = "Account Security"
+        title = tr("Verify Email"),
+        subtitle = tr("Account Security")
     ) {
         MaitriCard {
             Column(
@@ -94,14 +96,14 @@ fun Verification(state: AuthState, vm: AuthViewModel) {
                 }
 
                 Text(
-                    text = "Verification Email Sent",
+                    text = tr("Verification Email Sent"),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = colors.textPrimary
                 )
 
                 Text(
-                    text = "A secure verification link has been sent to ${state.identity?.email}. Click the link in your email and tap Refresh below.",
+                    text = tr("A secure verification link has been sent to {0}. Click the link in your email and tap Refresh below.", state.identity?.email),
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
                     color = colors.textSecondary
@@ -113,13 +115,13 @@ fun Verification(state: AuthState, vm: AuthViewModel) {
 
         if (!state.busy) {
             Action(
-                label = "Refresh Status",
+                label = tr("Refresh Status"),
                 icon = Icons.Rounded.Refresh,
                 click = vm::refresh
             )
 
             MaitriOutlinedButton(
-                label = if (state.cooldown == 0) "Resend Verification Email" else "Resend in ${state.cooldown}s",
+                label = if (state.cooldown == 0) tr("Resend Verification Email") else tr("Resend in {0}s", state.cooldown),
                 icon = Icons.Rounded.Send,
                 enabled = state.cooldown == 0,
                 click = vm::resend
@@ -129,7 +131,7 @@ fun Verification(state: AuthState, vm: AuthViewModel) {
                 onClick = vm::logout,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Sign Out", color = colors.emergency)
+                Text(tr("Sign Out"), color = colors.emergency)
             }
         }
     }
@@ -159,7 +161,7 @@ fun Field(
                 IconButton(onClick = { passwordVisible = !passwordVisible }) {
                     Icon(
                         imageVector = if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                        contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                        contentDescription = if (passwordVisible) tr("Hide password") else tr("Show password"),
                         tint = MaterialTheme.maitriColors.textSecondary
                     )
                 }

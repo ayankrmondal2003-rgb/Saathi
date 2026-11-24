@@ -1,5 +1,7 @@
 package `in`.maitri.app.data
 
+import `in`.maitri.app.tr
+
 import android.app.Activity
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
@@ -30,13 +32,13 @@ suspend fun requestGoogleIdToken(activity: Activity): String {
     } catch (e: GetCredentialCancellationException) {
         throw GoogleSignInCancelled()
     } catch (e: NoCredentialException) {
-        throw GoogleSignInUnavailable("Add a Google account to this phone, or use phone or email sign-in.", e)
+        throw GoogleSignInUnavailable(tr("Add a Google account to this phone, or use phone or email sign-in."), e)
     } catch (e: GetCredentialException) {
-        throw GoogleSignInUnavailable("Google sign-in is unavailable right now. Use phone or email sign-in.", e)
+        throw GoogleSignInUnavailable(tr("Google sign-in is unavailable right now. Use phone or email sign-in."), e)
     }
     val credential = response.credential
     if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
         return GoogleIdTokenCredential.createFrom(credential.data).idToken
     }
-    throw GoogleSignInUnavailable("Google returned an unexpected credential. Use phone or email sign-in.")
+    throw GoogleSignInUnavailable(tr("Google returned an unexpected credential. Use phone or email sign-in."))
 }

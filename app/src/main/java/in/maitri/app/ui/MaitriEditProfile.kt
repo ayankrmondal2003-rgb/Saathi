@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -136,7 +138,7 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
             val image = file?.let { withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(it.path)?.asImageBitmap() }.getOrNull() } }
             if (image == null || file == null) { message = S.edit_photo_failed; return@launch }
             photo = image
-            photoNote = "Uploading photo…"
+            photoNote = tr("Uploading photo…")
             try {
                 val account = ExpectedAccount(uid)
                 val id = `in`.maitri.app.network.Uploads.upload(withContext(Dispatchers.IO) { file.readBytes() },
@@ -144,7 +146,7 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
                 BackendClient.files.setProfilePhoto(`in`.maitri.app.network.PhotoRequestDto(id), account)
                 photoNote = null
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { photoNote = "Photo saved on this phone only. " + `in`.maitri.app.network.uploadErrorMessage(e) }
+            catch (e: Exception) { photoNote = tr("Photo saved on this phone only. ") + `in`.maitri.app.network.uploadErrorMessage(e) }
         }
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -157,7 +159,7 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
     if (choosePhoto) androidx.compose.material3.AlertDialog(onDismissRequest = { choosePhoto = false },
         containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
         title = { Text(strings.getString(S.edit_photo)) },
-        text = { Text("Cropped to a square. Only you and responders helping you during an SOS can see it.") },
+        text = { Text(tr("Cropped to a square. Only you and responders helping you during an SOS can see it.")) },
         confirmButton = { androidx.compose.material3.TextButton(onClick = {
             choosePhoto = false
             val dir = java.io.File(context.cacheDir, "captures").apply { mkdirs() }
@@ -165,11 +167,11 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
                 java.io.File(dir, "profile-${System.currentTimeMillis()}.jpg"))
             captureUri = uri
             camera.launch(uri)
-        }) { Text("Take photo", color = p.accent) } },
+        }) { Text(tr("Take photo"), color = p.accent) } },
         dismissButton = { androidx.compose.material3.TextButton(onClick = {
             choosePhoto = false
             picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-        }) { Text("Choose from gallery", color = p.accent) } })
+        }) { Text(tr("Choose from gallery"), color = p.accent) } })
 
     fun edit(update: () -> Unit) { update(); dirty = true; message = null }
 
@@ -188,7 +190,7 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
                     withContext(Dispatchers.IO) { runCatching { store.writeMedicalNotes(uid, notes) } }
                     false
                 }
-                if (!notesSaved) { notesNote = "Medical notes saved on this phone only for now."; return@launch }
+                if (!notesSaved) { notesNote = tr("Medical notes saved on this phone only for now."); return@launch }
                 android.widget.Toast.makeText(context, strings.getString(S.edit_saved), android.widget.Toast.LENGTH_LONG).show()
                 onBack()
             } catch (e: CancellationException) { throw e } catch (e: HttpException) {
@@ -227,20 +229,20 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
         ProfileField(user?.email.orEmpty(), {}, 397, 42, S.edit_email_hint, S.edit_email, "profile_email",
             KeyboardOptions(keyboardType = KeyboardType.Email), readOnly = true)
         // The email is the sign-in identity: it changes only after the new address is verified (Firebase).
-        if (!preview) BoardAction(24, 397, 342, 42, "Change email") { changeEmail = true }
+        if (!preview) BoardAction(24, 397, 342, 42, tr("Change email")) { changeEmail = true }
         SettingsText(strings.getString(S.edit_city), 24, 442, 300, 20, 11, p.primary)
         ProfileField(city, { edit { city = it } }, 465, 42, S.edit_city_hint, S.edit_city, "profile_city",
             KeyboardOptions(KeyboardCapitalization.Words, imeAction = ImeAction.Next))
         SettingsText(strings.getString(S.edit_notes), 24, 535, 170, 20, 12, p.primary)
         // One-line consent note: who can read them.
-        SettingsText(notesNote ?: "Seen only by a responder helping you", 190, 537, 176, 20, 10,
+        SettingsText(notesNote ?: tr("Seen only by a responder helping you"), 190, 537, 176, 20, 10,
             if (notesNote != null) p.accent else p.secondary, maxLines = 1)
         ProfileField(notes, { if (it.length <= ProfileLocalStore.MEDICAL_NOTES_LIMIT) edit { notes = it } }, 564, 72,
             S.edit_notes_hint, S.edit_notes, "profile_notes",
             KeyboardOptions(KeyboardCapitalization.Sentences, imeAction = ImeAction.Default), single = false)
 
         // Consent for screen 07's "Call": accepted responders may call this number during an active SOS.
-        SettingsText((if (sharePhone) "☑ " else "☐ ") + "Let responders who accept my SOS call this number",
+        SettingsText((if (sharePhone) "☑ " else "☐ ") + tr("Let responders who accept my SOS call this number"),
             24, 648, 342, 40, 11, if (sharePhone) p.primary else p.secondary, line = 15,
             action = { edit { sharePhone = !sharePhone } })
         val helper = message ?: if (loading) S.edit_loading else S.edit_helper
@@ -303,18 +305,18 @@ private fun ChangeEmailDialog(p: MaitriPalette, dismiss: () -> Unit) {
     var result by remember { mutableStateOf<String?>(null) }
     androidx.compose.material3.AlertDialog(onDismissRequest = dismiss,
         containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
-        title = { Text("Change email") },
+        title = { Text(tr("Change email")) },
         text = {
             androidx.compose.foundation.layout.Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
-                if (google) Text("You sign in with Google, so your email comes from your Google account. To use another " +
-                    "address, sign out and sign in with that Google account.")
+                if (google) Text(tr("You sign in with Google, so your email comes from your Google account. To use another ") +
+                    tr("address, sign out and sign in with that Google account."))
                 else {
-                    Text("We'll send a link to the new address. Your email changes when you open it.")
+                    Text(tr("We'll send a link to the new address. Your email changes when you open it."))
                     androidx.compose.material3.OutlinedTextField(email, { email = it.trim() }, singleLine = true,
-                        label = { Text("New email") },
+                        label = { Text(tr("New email")) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
                     androidx.compose.material3.OutlinedTextField(password, { password = it }, singleLine = true,
-                        label = { Text("Current password") },
+                        label = { Text(tr("Current password")) },
                         visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
                 }
                 result?.let { Text(it, color = p.accent) }
@@ -330,15 +332,15 @@ private fun ChangeEmailDialog(p: MaitriPalette, dismiss: () -> Unit) {
                         result = try {
                             u.reauthenticate(com.google.firebase.auth.EmailAuthProvider.getCredential(u.email.orEmpty(), password)).await()
                             u.verifyBeforeUpdateEmail(email).await()
-                            "Check $email for the link. Until you open it, you still sign in with your current email."
+                            tr("Check {0} for the link. Until you open it, you still sign in with your current email.", email)
                         } catch (e: CancellationException) { throw e }
-                        catch (_: com.google.firebase.auth.FirebaseAuthInvalidCredentialsException) { "That password isn't right, or the email isn't valid." }
-                        catch (_: com.google.firebase.auth.FirebaseAuthUserCollisionException) { "That email already has a Maitri account." }
-                        catch (_: Exception) { "Couldn't send the link. Check your connection and try again." }
+                        catch (_: com.google.firebase.auth.FirebaseAuthInvalidCredentialsException) { tr("That password isn't right, or the email isn't valid.") }
+                        catch (_: com.google.firebase.auth.FirebaseAuthUserCollisionException) { tr("That email already has a Maitri account.") }
+                        catch (_: Exception) { tr("Couldn't send the link. Check your connection and try again.") }
                         busy = false
                         password = ""
                     }
-                }) { Text("Send link", color = p.accent) }
+                }) { Text(tr("Send link"), color = p.accent) }
         },
-        dismissButton = { androidx.compose.material3.TextButton(onClick = dismiss) { Text("Close", color = p.secondary) } })
+        dismissButton = { androidx.compose.material3.TextButton(onClick = dismiss) { Text(tr("Close"), color = p.secondary) } })
 }

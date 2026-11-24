@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -88,7 +90,7 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
     }
     val confirmed = authorized
     if (confirmed == null) {
-        Page("Responder") { Text("Checking incident access…") }
+        Page(tr("Responder")) { Text(tr("Checking incident access…")) }
         return
     }
     val fix = listOfNotNull(confirmed.lastLocation, live.latestLocation).maxByOrNull {
@@ -113,7 +115,7 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
         straightLineMeters(own!!.first, own!!.second, fix.latitude, fix.longitude) else null
     fun dial(number: String = "112") {
         try { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number)))) }
-        catch (_: android.content.ActivityNotFoundException) { message = "Dialer unavailable" }
+        catch (_: android.content.ActivityNotFoundException) { message = tr("Dialer unavailable") }
     }
     // Only when the person in need agreed to share their number with responders (screen 14).
     val victimPhone = confirmed.victimPhone?.takeIf { it.isNotBlank() }
@@ -124,23 +126,23 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
         scope.launch {
             try {
                 val queued = BackendClient.api.requestHelp(incidentId, account).queued
-                message = if (queued == 0) "No new eligible responders nearby." else "Invitations queued: $queued"
+                message = if (queued == 0) tr("No new eligible responders nearby.") else tr("Invitations queued: {0}", queued)
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { message = "Additional invitations could not be confirmed." }
+            catch (_: Exception) { message = tr("Additional invitations could not be confirmed.") }
             finally { busy = false }
         }
     }
     fun openMaps() {
         fix?.let {
             try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:${it.latitude},${it.longitude}?q=${it.latitude},${it.longitude}"))) }
-            catch (_: android.content.ActivityNotFoundException) { message = "Maps unavailable" }
+            catch (_: android.content.ActivityNotFoundException) { message = tr("Maps unavailable") }
         }
     }
     MaitriResponderJourneyBoard(p, confirmed.requesterMembership?.assistanceStatus, fix?.let { it.latitude to it.longitude },
         busy, onStatus = { chooseStatus = true }, onMaps = ::openMaps, onHelp = ::requestHelp, onDial = { dial() },
         distanceMeters = distance, self = own, onCallPerson = victimPhone?.let { number -> { dial(number) } },
-        onMedicalNotes = confirmed.medicalNotes?.takeIf { it.isNotBlank() }?.let { notes -> { message = "Medical notes\n\n$notes" } })
-    if (chooseStatus) AlertDialog(onDismissRequest = { chooseStatus = false }, title = { Text("Responder status") },
+        onMedicalNotes = confirmed.medicalNotes?.takeIf { it.isNotBlank() }?.let { notes -> { message = tr("Medical notes\n\n{0}", notes) } })
+    if (chooseStatus) AlertDialog(onDismissRequest = { chooseStatus = false }, title = { Text(tr("Responder status")) },
         text = { Column {
             for (status in listOf("ON_THE_WAY", "HELPING", "UNABLE_TO_HELP", "LEFT_INCIDENT")) {
                 TextButton(enabled = !busy, onClick = {
@@ -150,25 +152,25 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
                             if (repo.updateAssistanceStatus(status)) {
                                 chooseStatus = false
                                 if (status == "LEFT_INCIDENT") onIncidentClosed()
-                            } else message = "Status change could not be confirmed."
+                            } else message = tr("Status change could not be confirmed.")
                         } finally { busy = false }
                     }
-                }) { Text(responderStatusLabel(status).let { if (status == "LEFT_INCIDENT") "Leave this SOS" else it }) }
+                }) { Text(responderStatusLabel(status).let { if (status == "LEFT_INCIDENT") tr("Leave this SOS") else it }) }
             }
             TextButton(enabled = !busy, onClick = { chooseStatus = false; reporting = true }) {
-                Text("Report a false alarm or a problem", color = MaterialTheme.colorScheme.error)
+                Text(tr("Report a false alarm or a problem"), color = MaterialTheme.colorScheme.error)
             }
         } }, confirmButton = {})
     if (reporting) {
         var reason by remember { mutableStateOf("FALSE_ALARM") }
         var note by remember { mutableStateOf("") }
-        AlertDialog(onDismissRequest = { reporting = false }, title = { Text("Report this SOS") },
+        AlertDialog(onDismissRequest = { reporting = false }, title = { Text(tr("Report this SOS")) },
             text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Maitri reviews reports. The person in need isn't told.")
-                listOf("FALSE_ALARM" to "False alarm", "UNSAFE" to "I felt unsafe", "OTHER" to "Something else").forEach { (value, label) ->
+                Text(tr("Maitri reviews reports. The person in need isn't told."))
+                listOf("FALSE_ALARM" to tr("False alarm"), "UNSAFE" to tr("I felt unsafe"), "OTHER" to tr("Something else")).forEach { (value, label) ->
                     Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(reason == value, { reason = value }); Text(label) }
                 }
-                OutlinedTextField(note, { note = it.take(500) }, label = { Text("What happened (optional)") })
+                OutlinedTextField(note, { note = it.take(500) }, label = { Text(tr("What happened (optional)")) })
             } },
             confirmButton = { TextButton(enabled = !busy, onClick = {
                 busy = true
@@ -176,16 +178,16 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
                     try {
                         BackendClient.api.reportIncident(incidentId, ReportDto(reason, note), account)
                         reporting = false
-                        message = "Thanks. Your report was sent."
+                        message = tr("Thanks. Your report was sent.")
                     } catch (e: CancellationException) { throw e }
-                    catch (_: Exception) { message = "The report couldn't be sent. Try again." }
+                    catch (_: Exception) { message = tr("The report couldn't be sent. Try again.") }
                     finally { busy = false }
                 }
-            }) { Text("Send report") } },
-            dismissButton = { TextButton(onClick = { reporting = false }) { Text("Cancel") } })
+            }) { Text(tr("Send report")) } },
+            dismissButton = { TextButton(onClick = { reporting = false }) { Text(tr("Cancel")) } })
     }
     message?.let { AlertDialog(onDismissRequest = { message = null }, text = { Text(it) },
-        confirmButton = { TextButton(onClick = { message = null }) { Text("Close") } }) }
+        confirmButton = { TextButton(onClick = { message = null }) { Text(tr("Close")) } }) }
 }
 
 /** Screen 07 board. Stateless: shows only server-confirmed status and the last reported coordinates, if any. */
@@ -196,31 +198,31 @@ internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: Str
                                          self: Pair<Double, Double>? = null, onCallPerson: (() -> Unit)? = null,
                                          onMedicalNotes: (() -> Unit)? = null) {
     EmergencyBoard(if (p.dark) R.drawable.maitri_dark_07 else R.drawable.maitri_light_07,
-        "On your way. Keep both of you safe. Request more responders before you approach.") {
-        BoardLabel(84, 59, 270, "RESPONDER · " + (assistanceStatus ?: "AUTHORIZED").replace('_', ' '), p.accent, 11)
-        BoardAction(24, 51, 342, 65, "Update responder status", !busy, onStatus)
+        tr("On your way. Keep both of you safe. Request more responders before you approach.")) {
+        BoardLabel(84, 59, 270, tr("RESPONDER · ") + (assistanceStatus ?: "AUTHORIZED").replace('_', ' '), p.accent, 11)
+        BoardAction(24, 51, 342, 65, tr("Update responder status"), !busy, onStatus)
         // Live map over the crop's map area (342 x 320 at 24,140): the person in need and, when known, you.
         MaitriMap(listOfNotNull(coordinates?.let { MapMarker(it.first, it.second, MarkerKind.PERSON_IN_NEED) },
             self?.let { MapMarker(it.first, it.second, MarkerKind.YOU) }),
-            "Awaiting location", Modifier.offset(24.dp, (140 - 28).dp).size(342.dp, 320.dp))
-        BoardLabel(40, 489, 308, "Person in need", p.primary, 16)
+            tr("Awaiting location"), Modifier.offset(24.dp, (140 - 28).dp).size(342.dp, 320.dp))
+        BoardLabel(40, 489, 308, tr("Person in need"), p.primary, 16)
         // Shared by the person in need for this SOS only; gone when it ends.
         if (onMedicalNotes != null) {
-            BoardLabel(236, 491, 120, "Medical notes ›", p.accent, 12)
-            BoardAction(228, 480, 130, 32, "Read their medical notes", onClick = onMedicalNotes)
+            BoardLabel(236, 491, 120, tr("Medical notes ›"), p.accent, 12)
+            BoardAction(228, 480, 130, 32, tr("Read their medical notes"), onClick = onMedicalNotes)
         }
-        BoardLabel(40, 515, 308, coordinates?.let { "${it.first}, ${it.second}" } ?: "Awaiting location", p.secondary)
+        BoardLabel(40, 515, 308, coordinates?.let { "${it.first}, ${it.second}" } ?: tr("Awaiting location"), p.secondary)
         BoardLabel(40, 546, 306, when {
-            coordinates == null -> "Distance and ETA unavailable"
-            distanceMeters != null -> approxDistanceAndWalk(distanceMeters) + " · Open in Maps"
-            else -> "Open last reported location in Maps"
+            coordinates == null -> tr("Distance and ETA unavailable")
+            distanceMeters != null -> approxDistanceAndWalk(distanceMeters) + tr(" · Open in Maps")
+            else -> tr("Open last reported location in Maps")
         }, p.accent)
-        BoardAction(24, 476, 342, 104, "Open last reported location in Maps", coordinates != null, onMaps)
-        BoardAction(24, 654, 226, 48, "Bring in help", !busy, onHelp)
+        BoardAction(24, 476, 342, 104, tr("Open last reported location in Maps"), coordinates != null, onMaps)
+        BoardAction(24, 654, 226, 48, tr("Bring in help"), !busy, onHelp)
         // The artwork's "Call" pill calls the person in need, only with their consent; otherwise it's covered.
-        if (onCallPerson != null) BoardAction(262, 654, 104, 48, "Call the person in need", onClick = onCallPerson)
+        if (onCallPerson != null) BoardAction(262, 654, 104, 48, tr("Call the person in need"), onClick = onCallPerson)
         else Box(Modifier.offset(258.dp, (650 - 28).dp).size(112.dp, 56.dp).background(p.background))
-        BoardAction(24, 704, 220, 44, "Contact emergency services", onClick = onDial)
+        BoardAction(24, 704, 220, 44, tr("Contact emergency services"), onClick = onDial)
     }
 }
 

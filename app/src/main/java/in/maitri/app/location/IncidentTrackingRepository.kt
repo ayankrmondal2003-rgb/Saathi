@@ -1,5 +1,7 @@
 package `in`.maitri.app.location
 
+import `in`.maitri.app.tr
+
 import `in`.maitri.app.network.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -121,7 +123,7 @@ class IncidentTrackingRepository(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (e: Exception) {
-            _state.update { it.copy(errorMessage = "Assistance status could not be confirmed. Check your connection and retry.") }
+            _state.update { it.copy(errorMessage = tr("Assistance status could not be confirmed. Check your connection and retry.")) }
             false
         }
     }

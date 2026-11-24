@@ -1,5 +1,8 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+import `in`.maitri.app.trKey
+
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -31,11 +34,11 @@ import `in`.maitri.app.R
 import kotlinx.coroutines.launch
 
 enum class VolunteerDocType(val title: String, val subtitle: String, val icon: ImageVector) {
-    GOVT_ID("Government issued identity proof", "Upload document", Icons.Rounded.Badge),
-    ADDRESS_PROOF("Address proof", "Upload document", Icons.Rounded.Home),
-    POLICE_CERT("Police character certificate", "Upload document", Icons.Rounded.Security),
-    PHOTO("Recent photograph", "Upload photo", Icons.Rounded.Image),
-    DECLARATION("Signed volunteer declaration", "Upload document", Icons.Rounded.Description)
+    GOVT_ID(trKey("Government issued identity proof"), trKey("Upload document"), Icons.Rounded.Badge),
+    ADDRESS_PROOF(trKey("Address proof"), trKey("Upload document"), Icons.Rounded.Home),
+    POLICE_CERT(trKey("Police character certificate"), trKey("Upload document"), Icons.Rounded.Security),
+    PHOTO(trKey("Recent photograph"), trKey("Upload photo"), Icons.Rounded.Image),
+    DECLARATION(trKey("Signed volunteer declaration"), trKey("Upload document"), Icons.Rounded.Description)
 }
 
 enum class DocState { EMPTY, UPLOADING, UPLOADED, FAILED }
@@ -43,10 +46,10 @@ data class DocUi(val state: DocState = DocState.EMPTY, val fileId: String? = nul
 
 /** What the screen says about the application once it has left the draft stage (null while drafting). */
 internal fun applicationBanner(status: String?, note: String?): Pair<String, String>? = when (status) {
-    "SUBMITTED", "UNDER_REVIEW" -> "Application under review" to "A Maitri reviewer is checking your documents. You'll be told in your notifications."
-    "APPROVED" -> "You're an approved volunteer" to "Turn on \"Available for nearby requests\" on the Responder tab when you can help."
-    "REQUIRES_CORRECTION" -> "Changes needed" to (note ?: "Update your documents and submit again.")
-    "REJECTED" -> "Application not approved" to (note ?: "You can update your documents and apply again.")
+    "SUBMITTED", "UNDER_REVIEW" -> tr("Application under review") to tr("A Maitri reviewer is checking your documents. You'll be told in your notifications.")
+    "APPROVED" -> tr("You're an approved volunteer") to tr("Turn on \"Available for nearby requests\" on the Responder tab when you can help.")
+    "REQUIRES_CORRECTION" -> tr("Changes needed") to (note ?: tr("Update your documents and submit again."))
+    "REJECTED" -> tr("Application not approved") to (note ?: tr("You can update your documents and apply again."))
     else -> null
 }
 
@@ -91,7 +94,7 @@ fun MaitriVolunteer(
                     ?: docs[type]?.takeIf { it.state == DocState.UPLOADING || it.state == DocState.FAILED } ?: DocUi()
             }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-        catch (_: Exception) { statusMessage = "Couldn't load your application. Check your connection." }
+        catch (_: Exception) { statusMessage = tr("Couldn't load your application. Check your connection.") }
     }
     LaunchedEffect(uid) { refresh() }
 
@@ -134,7 +137,7 @@ fun MaitriVolunteer(
     }
     fun openTemplate() {
         val dir = java.io.File(context.cacheDir, "shared").apply { mkdirs() }
-        val file = java.io.File(dir, "Maitri volunteer declaration.pdf")
+        val file = java.io.File(dir, tr("Maitri volunteer declaration.pdf"))
         context.assets.open("volunteer-declaration.pdf").use { input -> file.outputStream().use { input.copyTo(it) } }
         val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", file)
         val view = android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri, "application/pdf")
@@ -143,7 +146,7 @@ fun MaitriVolunteer(
             .putExtra(android.content.Intent.EXTRA_STREAM, uri).addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         try { context.startActivity(view) }
         catch (_: android.content.ActivityNotFoundException) {
-            context.startActivity(android.content.Intent.createChooser(send, "Save or print the declaration"))
+            context.startActivity(android.content.Intent.createChooser(send, tr("Save or print the declaration")))
         }
     }
     val locked = applicationLocked(status?.status)
@@ -160,7 +163,7 @@ fun MaitriVolunteer(
         docs = docs,
         onPickDoc = { type ->
             when {
-                locked -> statusMessage = "Your application is submitted, so documents can't change now."
+                locked -> statusMessage = tr("Your application is submitted, so documents can't change now.")
                 docs[type]?.state == DocState.UPLOADING -> Unit
                 docs[type]?.state == DocState.UPLOADED -> managing = type
                 else -> choosingSource = type
@@ -180,9 +183,9 @@ fun MaitriVolunteer(
             val a = account
             when {
                 locked -> Unit
-                a == null -> statusMessage = "Sign in to apply."
-                !consentChecked -> statusMessage = "Please accept the volunteer declaration to continue."
-                docs.values.any { it.state != DocState.UPLOADED } -> statusMessage = "Upload all 5 documents first."
+                a == null -> statusMessage = tr("Sign in to apply.")
+                !consentChecked -> statusMessage = tr("Please accept the volunteer declaration to continue.")
+                docs.values.any { it.state != DocState.UPLOADED } -> statusMessage = tr("Upload all 5 documents first.")
                 !submitting -> {
                     submitting = true
                     scope.launch {
@@ -191,7 +194,7 @@ fun MaitriVolunteer(
                             refresh()
                             onSubmitSuccess()
                         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-                        catch (_: Exception) { statusMessage = "Couldn't submit right now. Try again." }
+                        catch (_: Exception) { statusMessage = tr("Couldn't submit right now. Try again.") }
                         finally { submitting = false }
                     }
                 }
@@ -207,20 +210,20 @@ fun MaitriVolunteer(
         AlertDialog(onDismissRequest = { choosingSource = null }, containerColor = p.surface,
             titleContentColor = p.primary, textContentColor = p.secondary,
             title = { Text(type.title) },
-            text = { Text("PDF, JPG or PNG, up to 10 MB. Only Maitri reviewers can open it.") },
-            confirmButton = { TextButton(onClick = { choosingSource = null; takePhoto(type) }) { Text("Take photo", color = p.accent) } },
+            text = { Text(tr("PDF, JPG or PNG, up to 10 MB. Only Maitri reviewers can open it.")) },
+            confirmButton = { TextButton(onClick = { choosingSource = null; takePhoto(type) }) { Text(tr("Take photo"), color = p.accent) } },
             dismissButton = { TextButton(onClick = {
                 choosingSource = null
                 target = type.name
                 filePicker.launch(arrayOf("application/pdf", "image/jpeg", "image/png"))
-            }) { Text("Choose file", color = p.accent) } })
+            }) { Text(tr("Choose file"), color = p.accent) } })
     }
     managing?.let { type ->
         AlertDialog(onDismissRequest = { managing = null }, containerColor = p.surface,
             titleContentColor = p.primary, textContentColor = p.secondary,
             title = { Text(type.title) },
-            text = { Text("Uploaded. Replace it with a new file, or remove it.") },
-            confirmButton = { TextButton(onClick = { managing = null; choosingSource = type }) { Text("Replace", color = p.accent) } },
+            text = { Text(tr("Uploaded. Replace it with a new file, or remove it.")) },
+            confirmButton = { TextButton(onClick = { managing = null; choosingSource = type }) { Text(tr("Replace"), color = p.accent) } },
             dismissButton = { TextButton(onClick = {
                 managing = null
                 val id = docs[type]?.fileId
@@ -230,7 +233,7 @@ fun MaitriVolunteer(
                     catch (e: kotlinx.coroutines.CancellationException) { throw e }
                     catch (e: Exception) { statusMessage = `in`.maitri.app.network.uploadErrorMessage(e) }
                 }
-            }) { Text("Remove", color = p.secondary) } })
+            }) { Text(tr("Remove"), color = p.secondary) } })
     }
 }
 
@@ -291,7 +294,7 @@ internal fun MaitriVolunteerContent(
 
             // Title & Subtitle
             Text(
-                text = "Be there for someone.",
+                text = tr("Be there for someone."),
                 color = p.primary,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -299,7 +302,7 @@ internal fun MaitriVolunteerContent(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "Join maitri as a volunteer and help your\ncommunity feel safer.",
+                text = tr("Join maitri as a volunteer and help your\ncommunity feel safer."),
                 color = p.secondary,
                 fontSize = 12.sp,
                 modifier = Modifier.fillMaxWidth()
@@ -340,7 +343,7 @@ internal fun MaitriVolunteerContent(
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = "Yes, I'd like to help",
+                        text = tr("Yes, I'd like to help"),
                         color = if (isHelp) p.accent else p.secondary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
@@ -366,7 +369,7 @@ internal fun MaitriVolunteerContent(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Not now",
+                        text = tr("Not now"),
                         color = if (isNotNow) p.accent else p.secondary,
                         fontSize = 13.sp,
                         fontWeight = if (isNotNow) FontWeight.SemiBold else FontWeight.Medium
@@ -378,7 +381,7 @@ internal fun MaitriVolunteerContent(
 
             // Section: Required documents
             Text(
-                text = "Volunteer verification",
+                text = tr("Volunteer verification"),
                 color = p.primary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -386,7 +389,7 @@ internal fun MaitriVolunteerContent(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "All 5 documents are required.",
+                text = tr("All 5 documents are required."),
                 color = p.secondary,
                 fontSize = 11.sp,
                 modifier = Modifier.fillMaxWidth()
@@ -431,7 +434,7 @@ internal fun MaitriVolunteerContent(
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = docType.title,
+                                text = tr(docType.title),
                                 color = p.primary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -441,10 +444,10 @@ internal fun MaitriVolunteerContent(
                             Spacer(Modifier.height(2.dp))
                             Text(
                                 text = when (doc.state) {
-                                    DocState.UPLOADED -> if (locked) "Uploaded" else "Uploaded · tap to replace or remove"
-                                    DocState.UPLOADING -> "Uploading…"
-                                    DocState.FAILED -> "Upload failed · tap to retry"
-                                    DocState.EMPTY -> docType.subtitle
+                                    DocState.UPLOADED -> if (locked) tr("Uploaded") else tr("Uploaded · tap to replace or remove")
+                                    DocState.UPLOADING -> tr("Uploading…")
+                                    DocState.FAILED -> tr("Upload failed · tap to retry")
+                                    DocState.EMPTY -> tr(docType.subtitle)
                                 },
                                 color = if (doc.state == DocState.EMPTY) p.secondary else p.accent,
                                 fontSize = 10.sp,
@@ -452,11 +455,11 @@ internal fun MaitriVolunteerContent(
                                 overflow = TextOverflow.Ellipsis
                             )
                             if (docType == VolunteerDocType.DECLARATION) Text(
-                                text = "Download template",
+                                text = tr("Download template"),
                                 color = p.accent,
                                 fontSize = 10.sp,
                                 textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
-                                modifier = Modifier.clickable(onClickLabel = "Download the declaration template", onClick = onTemplate)
+                                modifier = Modifier.clickable(onClickLabel = tr("Download the declaration template"), onClick = onTemplate)
                             )
                         }
                         Spacer(Modifier.width(8.dp))
@@ -475,9 +478,9 @@ internal fun MaitriVolunteerContent(
                                     else -> Icons.Rounded.FileUpload
                                 },
                                 contentDescription = when (doc.state) {
-                                    DocState.UPLOADED -> "Uploaded"
-                                    DocState.FAILED -> "Retry upload"
-                                    else -> "Upload"
+                                    DocState.UPLOADED -> tr("Uploaded")
+                                    DocState.FAILED -> tr("Retry upload")
+                                    else -> tr("Upload")
                                 },
                                 tint = p.accent,
                                 modifier = Modifier.size(16.dp)
@@ -532,7 +535,7 @@ internal fun MaitriVolunteerContent(
                 }
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "I consent to document verification and agree to\nthe Volunteer Declaration.",
+                    text = tr("I consent to document verification and agree to\nthe Volunteer Declaration."),
                     color = p.secondary,
                     fontSize = 11.sp,
                     lineHeight = 15.sp,
@@ -543,7 +546,7 @@ internal fun MaitriVolunteerContent(
             Spacer(Modifier.height(14.dp))
             // Counts only uploads the server confirmed.
             Text(
-                text = "$uploadedCount of ${VolunteerDocType.entries.size} documents uploaded",
+                text = tr("{0} of {1} documents uploaded", uploadedCount, VolunteerDocType.entries.size),
                 color = p.secondary,
                 fontSize = 11.sp,
                 textAlign = TextAlign.Center,
@@ -580,7 +583,7 @@ internal fun MaitriVolunteerContent(
                 elevation = null
             ) {
                 Text(
-                    text = if (locked) "Submitted" else "Submit for review",
+                    text = if (locked) tr("Submitted") else tr("Submit for review"),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold
                 )

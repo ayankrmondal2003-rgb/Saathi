@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.os.SystemClock
 import `in`.maitri.app.R
 import android.widget.Toast
@@ -105,7 +107,7 @@ fun MaitriActiveSos(
             if (whatsApp) context.startActivity(`in`.maitri.app.network.shareTextIntent(text))
             else smsComposer.launch(`in`.maitri.app.network.smsComposerIntent(alert.smsContacts.map { it.phone }, text))
         } catch (_: android.content.ActivityNotFoundException) {
-            Toast.makeText(context, "No messaging app found", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, tr("No messaging app found"), Toast.LENGTH_SHORT).show()
         }
     }
     var delivery by remember(uid, incident.started) { mutableStateOf<List<`in`.maitri.app.network.ContactDeliveryDto>?>(null) }
@@ -145,11 +147,11 @@ fun MaitriActiveSos(
             recorder = r; recordingFile = file; recordingStarted = SystemClock.elapsedRealtime()
         } catch (_: Exception) {
             file.delete()
-            Toast.makeText(context, "Couldn't start recording", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, tr("Couldn't start recording"), Toast.LENGTH_SHORT).show()
         }
     }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) startRecording() else Toast.makeText(context, "Allow the microphone to record a voice note", Toast.LENGTH_LONG).show()
+        if (granted) startRecording() else Toast.makeText(context, tr("Allow the microphone to record a voice note"), Toast.LENGTH_LONG).show()
     }
     fun voice() {
         when {
@@ -173,7 +175,7 @@ fun MaitriActiveSos(
         try {
             takePicture.launch(androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", file))
         } catch (_: android.content.ActivityNotFoundException) {
-            Toast.makeText(context, "No camera app available", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, tr("No camera app available"), Toast.LENGTH_SHORT).show()
         }
     }
     LaunchedEffect(recorder) {
@@ -183,27 +185,27 @@ fun MaitriActiveSos(
 
     if (askVoiceConsent) androidx.compose.material3.AlertDialog(onDismissRequest = { askVoiceConsent = false },
         containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
-        title = { Text("Record a voice note?") },
-        text = { Text("Up to 60 seconds, recorded only while you can see the red indicator. It's stored privately for this SOS; " +
-            "only you can play it, and it's deleted after 30 days.") },
+        title = { Text(tr("Record a voice note?")) },
+        text = { Text(tr("Up to 60 seconds, recorded only while you can see the red indicator. It's stored privately for this SOS; ") +
+            tr("only you can play it, and it's deleted after 30 days.")) },
         confirmButton = { TextButton(onClick = {
             askVoiceConsent = false
             mediaPrefs.edit().putBoolean("voice_consent", true).apply()
             voice()
-        }) { Text("Record", color = p.accent) } },
-        dismissButton = { TextButton(onClick = { askVoiceConsent = false }) { Text("Cancel", color = p.secondary) } })
+        }) { Text(tr("Record"), color = p.accent) } },
+        dismissButton = { TextButton(onClick = { askVoiceConsent = false }) { Text(tr("Cancel"), color = p.secondary) } })
     if (showSmsOffer) smsAlert?.let { alert ->
         val names = alert.smsContacts.joinToString { it.name }
         androidx.compose.material3.AlertDialog(onDismissRequest = { showSmsOffer = false },
             containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
-            title = { Text("Text your circle") },
-            text = { Text("$names ${if (alert.smsContacts.size == 1) "doesn't" else "don't"} use Maitri. Open your messaging app with " +
-                "your live location filled in? You tap Send.") },
-            confirmButton = { TextButton(onClick = { showSmsOffer = false; textCircle(false) }) { Text("Open messages", color = p.accent) } },
+            title = { Text(tr("Text your circle")) },
+            text = { Text((if (alert.smsContacts.size == 1) tr("{0} doesn't use Maitri. Open your messaging app with ", names) else tr("{0} don't use Maitri. Open your messaging app with ", names)) +
+                tr("your live location filled in? You tap Send.")) },
+            confirmButton = { TextButton(onClick = { showSmsOffer = false; textCircle(false) }) { Text(tr("Open messages"), color = p.accent) } },
             dismissButton = { Row {
-                TextButton(onClick = { showSmsOffer = false; textCircle(true) }) { Text("WhatsApp…", color = p.accent) }
+                TextButton(onClick = { showSmsOffer = false; textCircle(true) }) { Text(tr("WhatsApp…"), color = p.accent) }
                 TextButton(onClick = { showSmsOffer = false; smsPrompts.edit().putBoolean("$uid:$incidentId", true).apply() }) {
-                    Text("Not now", color = p.secondary) }
+                    Text(tr("Not now"), color = p.secondary) }
             } })
     }
     // An SOS never waits for a PIN; without one, ask for it now, because ending the SOS needs it.
@@ -216,10 +218,10 @@ fun MaitriActiveSos(
     if (pinMissing && !pinPromptDismissed && !showPinDialog) {
         androidx.compose.material3.AlertDialog(onDismissRequest = { pinPromptDismissed = true },
             containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
-            title = { Text("Set your Safety PIN") },
-            text = { Text("Your SOS is running. You'll need a 6-digit Safety PIN to end it, so set one now.") },
-            confirmButton = { TextButton(onClick = { pinPromptDismissed = true; onSetPin() }) { Text("Set PIN", color = p.accent) } },
-            dismissButton = { TextButton(onClick = { pinPromptDismissed = true }) { Text("Later", color = p.accent) } })
+            title = { Text(tr("Set your Safety PIN")) },
+            text = { Text(tr("Your SOS is running. You'll need a 6-digit Safety PIN to end it, so set one now.")) },
+            confirmButton = { TextButton(onClick = { pinPromptDismissed = true; onSetPin() }) { Text(tr("Set PIN"), color = p.accent) } },
+            dismissButton = { TextButton(onClick = { pinPromptDismissed = true }) { Text(tr("Later"), color = p.accent) } })
     }
 
     // Poll live incident snapshot every 5s while active
@@ -290,12 +292,12 @@ fun MaitriActiveSos(
     }
     val locationPermissions = arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION)
     fun locationAction(hint: LocationHint): Pair<String, () -> Unit>? = when (hint) {
-        LocationHint.PERMISSION_MISSING -> "Allow location" to { permissionLauncher.launch(locationPermissions) }
-        LocationHint.PRECISE_NOT_ALLOWED -> "Allow precise location" to {
+        LocationHint.PERMISSION_MISSING -> tr("Allow location") to { permissionLauncher.launch(locationPermissions) }
+        LocationHint.PRECISE_NOT_ALLOWED -> tr("Allow precise location") to {
             if (shouldAskAgain(context)) permissionLauncher.launch(locationPermissions) else openAppSettings(context)
         }
-        LocationHint.LOCATION_OFF -> "Turn on location" to { openSettings(context, android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS) }
-        LocationHint.AIRPLANE_MODE -> "Open settings" to { openSettings(context, android.provider.Settings.ACTION_AIRPLANE_MODE_SETTINGS) }
+        LocationHint.LOCATION_OFF -> tr("Turn on location") to { openSettings(context, android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS) }
+        LocationHint.AIRPLANE_MODE -> tr("Open settings") to { openSettings(context, android.provider.Settings.ACTION_AIRPLANE_MODE_SETTINGS) }
         else -> null
     }
 
@@ -317,7 +319,7 @@ fun MaitriActiveSos(
     // End SOS via PIN Resolution
     fun verifyPinAndEnd() {
         if (pinValue.length != 6) {
-            pinError = "PIN must be 6 digits."
+            pinError = tr("PIN must be 6 digits.")
             return
         }
 
@@ -328,7 +330,7 @@ fun MaitriActiveSos(
             try {
                 val activeId = tracking.sync.getActiveIncidentId(uid)
                 if (activeId != incidentId) {
-                    pinError = "Unable to confirm this incident."
+                    pinError = tr("Unable to confirm this incident.")
                     return@launch
                 }
                 val result = BackendClient.api.resolveIncident(
@@ -337,12 +339,12 @@ fun MaitriActiveSos(
                     expected = ExpectedAccount(uid)
                 )
                 if (tracking.sync.getActiveIncidentId(uid) != incidentId || result.incidentId != activeId || result.status != "CLOSED" || result.resolutionStatus != "CONFIRMED") {
-                    pinError = "Closure has not been confirmed."
+                    pinError = tr("Closure has not been confirmed.")
                     return@launch
                 }
                 tracking.sync.clearActiveIncident(uid)
                 showPinDialog = false
-                Toast.makeText(context, "Incident safely resolved.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, tr("Incident safely resolved."), Toast.LENGTH_SHORT).show()
                 onEndSos()
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -356,7 +358,7 @@ fun MaitriActiveSos(
     }
 
     EmergencyBoard(if (p.dark) R.drawable.maitri_dark_08 else R.drawable.maitri_light_08,
-        "SOS is active. Circle notified.") {
+        tr("SOS is active. Circle notified.")) {
         val server = snapshot?.lastLocation?.takeIf { updated }
         val shown = shownLocation(server?.latitude, server?.longitude, server?.accuracyMeters,
             server?.recordedAt?.let { `in`.maitri.app.network.serverTimeMillis(it) }, localFix)
@@ -369,58 +371,58 @@ fun MaitriActiveSos(
             snapshot?.activeResponders.orEmpty().mapNotNull { r ->
                 if (r.latitude != null && r.longitude != null) MapMarker(r.latitude, r.longitude, MarkerKind.RESPONDER) else null
             },
-            locationHintText(hint) ?: "Finding your location…", Modifier.offset(24.dp, (136 - 28).dp).size(342.dp, 252.dp),
+            locationHintText(hint) ?: tr("Finding your location…"), Modifier.offset(24.dp, (136 - 28).dp).size(342.dp, 252.dp),
             accuracyMeters = shown?.accuracyMeters)
         locationAction(hint)?.let { (label, act) ->
             Text(label, Modifier.offset(36.dp, (136 - 28 + 12).dp).clip(RoundedCornerShape(16.dp))
                 .background(p.surface).clickable(onClickLabel = label) { act() }
                 .padding(horizontal = 14.dp, vertical = 12.dp), color = p.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         }
-        BoardAction(282, 56, 84, 48, "End SOS") { showPinDialog = true; pinValue = ""; pinError = null }
+        BoardAction(282, 56, 84, 48, tr("End SOS")) { showPinDialog = true; pinValue = ""; pinError = null }
         BoardLabel(24, 405, 342, snapshot?.let { s ->
             val n = s.activeResponders.size
-            if (n == 0) "No responder yet" else "$n ${if (n == 1) "responder" else "responders"} accepted"
-        } ?: "Checking responders…", p.primary, 16)
+            if (n == 0) tr("No responder yet") else if (n == 1) tr("1 responder accepted") else tr("{0} responders accepted", n)
+        } ?: tr("Checking responders…"), p.primary, 16)
         Column(Modifier.offset(40.dp, 412.dp).size(310.dp, 80.dp).verticalScroll(rememberScrollState())) {
             val responders = snapshot?.activeResponders.orEmpty()
-            if (snapshot != null && responders.isEmpty()) Text("Nearby volunteers have been asked. Your circle has your live location.",
+            if (snapshot != null && responders.isEmpty()) Text(tr("Nearby volunteers have been asked. Your circle has your live location."),
                 color = p.secondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
             responders.forEach { responder ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(responder.displayName ?: "Responder", color = p.primary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(responder.displayName ?: tr("Responder"), color = p.primary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         Text(responderStatusLabel(responder.assistanceStatus) +
-                            (responder.distanceMeters?.let { " · ≈ " + distanceLabel(it) + " away" } ?: ""),
+                            (responder.distanceMeters?.let { " · ≈ " + distanceLabel(it) + tr(" away") } ?: ""),
                             color = p.secondary, fontSize = 11.sp)
                     }
                     responder.distanceMeters?.let {
-                        Text("approx. ${walkingMinutes(it)} min", color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text(tr("approx. {0} min", walkingMinutes(it)), color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
         }
         Row(Modifier.offset(30.dp, 549.dp).width(330.dp).horizontalScroll(rememberScrollState())) {
             val statuses = delivery
-            if (statuses.isNullOrEmpty()) Text(if (statuses == null) "Delivery unconfirmed" else "No notifications recorded", color = p.secondary)
+            if (statuses.isNullOrEmpty()) Text(if (statuses == null) tr("Delivery unconfirmed") else tr("No notifications recorded"), color = p.secondary)
             else statuses.forEach { Text("${it.name} · ${`in`.maitri.app.network.circleStatusLabel(it.status)}", Modifier.width(166.dp),
                 color = if (`in`.maitri.app.network.circleStatusReached(it.status)) p.primary else p.secondary, fontSize = 12.sp) }
-            if (smsAlert?.smsContacts?.isNotEmpty() == true) Text("Text circle", Modifier.clip(RoundedCornerShape(12.dp))
-                .clickable(onClickLabel = "Text your circle") { showSmsOffer = true }.padding(horizontal = 8.dp),
+            if (smsAlert?.smsContacts?.isNotEmpty() == true) Text(tr("Text circle"), Modifier.clip(RoundedCornerShape(12.dp))
+                .clickable(onClickLabel = tr("Text your circle")) { showSmsOffer = true }.padding(horizontal = 8.dp),
                 color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
         // Over the artwork's "Tap to record" / "Tap to open" captions: what the capture is doing right now.
         if (recorder != null || uploadingMedia > 0 || savedMedia > 0) {
             Text(if (recorder != null) "● Recording %d:%02d · tap to stop".format(recordingSeconds / 60, recordingSeconds % 60)
-                else if (uploadingMedia > 0) "Uploading $uploadingMedia…" else "$savedMedia saved",
+                else if (uploadingMedia > 0) tr("Uploading {0}…", uploadingMedia) else tr("{0} saved", savedMedia),
                 Modifier.offset(74.dp, (667 - 28).dp).size(112.dp, 22.dp).background(p.card), color = p.accent,
                 fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
-        BoardAction(24, 638, 165, 64, if (recorder != null) "Stop recording" else "Record a voice note") { voice() }
-        BoardAction(201, 638, 165, 64, "Take a photo") { camera() }
+        BoardAction(24, 638, 165, 64, if (recorder != null) tr("Stop recording") else tr("Record a voice note")) { voice() }
+        BoardAction(201, 638, 165, 64, tr("Take a photo")) { camera() }
         BoardLabel(66, 719, 280, when {
-            connecting -> "Connecting to Maitri… · $timerString"
-            updated -> "Updates connected · $timerString"
-            else -> "Awaiting server update · $timerString"
+            connecting -> tr("Connecting to Maitri… · {0}", timerString)
+            updated -> tr("Updates connected · {0}", timerString)
+            else -> tr("Awaiting server update · {0}", timerString)
         }, if (connecting) p.accent else p.secondary)
     }
 
@@ -430,7 +432,7 @@ fun MaitriActiveSos(
             onDismissRequest = { if (!isVerifyingPin) showPinDialog = false },
             title = {
                 Text(
-                    text = "Enter Safety PIN to End SOS",
+                    text = tr("Enter Safety PIN to End SOS"),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = p.primary
@@ -439,7 +441,7 @@ fun MaitriActiveSos(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "Your Safety PIN is required to confirm you are safe and de-escalate emergency responders.",
+                        text = tr("Your Safety PIN is required to confirm you are safe and de-escalate emergency responders."),
                         fontSize = 12.sp,
                         color = p.secondary,
                         lineHeight = 16.sp
@@ -463,7 +465,7 @@ fun MaitriActiveSos(
                         value = pinValue,
                         onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) pinValue = it },
                         visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        label = { Text("6-digit PIN") },
+                        label = { Text(tr("6-digit PIN")) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -479,7 +481,7 @@ fun MaitriActiveSos(
                     if (isVerifyingPin) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                     } else {
-                        Text("Confirm End SOS", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text(tr("Confirm End SOS"), color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             },
@@ -487,7 +489,7 @@ fun MaitriActiveSos(
                 TextButton(
                     onClick = { showPinDialog = false },
                     enabled = !isVerifyingPin
-                ) { Text("Cancel", color = p.secondary) }
+                ) { Text(tr("Cancel"), color = p.secondary) }
             },
             containerColor = p.surface,
             shape = RoundedCornerShape(20.dp)
@@ -514,9 +516,9 @@ internal data class LocationEnvironment(val airplane: Boolean, val locationOn: B
 /** "Sending… · Approx. ±1.2 km · Last known 10:42", plus the reason on a second line when something needs fixing. */
 internal fun locationLine(shown: ShownFix?, hint: LocationHint, now: Long = System.currentTimeMillis()): String {
     val reason = locationHintText(hint)
-    if (shown == null) return reason ?: "Finding your location…"
+    if (shown == null) return reason ?: tr("Finding your location…")
     val parts = listOfNotNull(
-        if (shown.shared) "Location shared" else "Sending…",
+        if (shown.shared) tr("Location shared") else tr("Sending…"),
         accuracyLabel(shown.accuracyMeters),
         if (FixPolicy.isLastKnown(shown.timeMillis, now))
             "Last known " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(shown.timeMillis))
@@ -551,9 +553,9 @@ internal fun shouldAskAgain(context: android.content.Context): Boolean {
 }
 
 internal fun responderStatusLabel(status: String) = when (status) {
-    "ACCEPTED" -> "Accepted"
-    "ON_THE_WAY" -> "On the way"
-    "HELPING" -> "With you"
-    "UNABLE_TO_HELP" -> "Can't help"
+    "ACCEPTED" -> tr("Accepted")
+    "ON_THE_WAY" -> tr("On the way")
+    "HELPING" -> tr("With you")
+    "UNABLE_TO_HELP" -> tr("Can't help")
     else -> status.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }
 }

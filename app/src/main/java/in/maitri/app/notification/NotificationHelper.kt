@@ -1,5 +1,7 @@
 package `in`.maitri.app.notification
 
+import `in`.maitri.app.tr
+
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -173,8 +175,8 @@ object NotificationHelper {
         createEmergencyNotificationChannel(context)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             context.getSystemService(android.app.NotificationManager::class.java).createNotificationChannel(
-                android.app.NotificationChannel(CHANNEL_ID_CIRCLE, "Circle updates", android.app.NotificationManager.IMPORTANCE_DEFAULT)
-                    .apply { description = "Trips, check-ins and circle requests from people you know" })
+                android.app.NotificationChannel(CHANNEL_ID_CIRCLE, tr("Circle updates"), android.app.NotificationManager.IMPORTANCE_DEFAULT)
+                    .apply { description = tr("Trips, check-ins and circle requests from people you know") })
         }
         if (!hasNotificationPermission(context) || !areNotificationsEnabled(context)) return false
         if (!claimAlert(context, "inbox:$inboxId", System.currentTimeMillis())) return false

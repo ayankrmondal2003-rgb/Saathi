@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -360,7 +362,7 @@ fun GlassTopBar(
                         ThemeMode.DARK -> Icons.Rounded.DarkMode
                         ThemeMode.LIGHT -> Icons.Rounded.LightMode
                     },
-                    contentDescription = "Theme: ${themeController.themeMode.name}",
+                    contentDescription = tr("Theme: {0}", themeController.themeMode.name),
                     onClick = {
                         val nextMode = when (themeController.themeMode) {
                             ThemeMode.SYSTEM -> ThemeMode.DARK

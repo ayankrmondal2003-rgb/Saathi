@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -64,10 +66,10 @@ internal fun relativeTime(iso: String, now: Instant = Instant.now()): String {
     val at = runCatching { OffsetDateTime.parse(iso).toInstant() }.getOrNull() ?: return ""
     val minutes = Duration.between(at, now).toMinutes().coerceAtLeast(0)
     return when {
-        minutes < 1 -> "Just now"
-        minutes < 60 -> "$minutes min ago"
-        minutes < 24 * 60 -> "${minutes / 60} h ago"
-        else -> "${minutes / (24 * 60)} d ago"
+        minutes < 1 -> tr("Just now")
+        minutes < 60 -> tr("{0} min ago", minutes)
+        minutes < 24 * 60 -> tr("{0} h ago", minutes / 60)
+        else -> tr("{0} d ago", minutes / (24 * 60))
     }
 }
 
@@ -97,7 +99,7 @@ fun MaitriInbox(uid: String, onBack: () -> Unit, onInvitation: (String) -> Unit)
             items = BackendClient.circle.inbox(account).items
             error = null
         } catch (e: CancellationException) { throw e }
-        catch (_: Exception) { error = "Couldn't load your inbox. Check your connection." }
+        catch (_: Exception) { error = tr("Couldn't load your inbox. Check your connection.") }
     }
     LaunchedEffect(uid) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { while (true) { load(); delay(30_000) } }
@@ -121,17 +123,17 @@ fun MaitriInbox(uid: String, onBack: () -> Unit, onInvitation: (String) -> Unit)
         Spacer(Modifier.height(20.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack, modifier = Modifier.size(44.dp).background(p.surface, CircleShape)) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = p.primary)
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, tr("Back"), tint = p.primary)
             }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text("A LITTLE PEACE OF MIND", color = p.accent, fontSize = 10.sp, letterSpacing = 1.3.sp, fontWeight = FontWeight.SemiBold)
-                Text("Notifications", color = p.primary, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+                Text(tr("A LITTLE PEACE OF MIND"), color = p.accent, fontSize = 10.sp, letterSpacing = 1.3.sp, fontWeight = FontWeight.SemiBold)
+                Text(tr("Notifications"), color = p.primary, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
             }
             if (items.orEmpty().any { !it.read && it.kind != "SOS_REQUEST" }) TextButton(onClick = { scope.launch {
                 runCatching { BackendClient.circle.readAll(account) }
                 load()
-            } }) { Text("Mark all read", color = p.accent, fontSize = 12.sp) }
+            } }) { Text(tr("Mark all read"), color = p.accent, fontSize = 12.sp) }
         }
         Spacer(Modifier.height(16.dp))
         error?.let { Text(it, color = p.accent, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp)) }
@@ -140,7 +142,7 @@ fun MaitriInbox(uid: String, onBack: () -> Unit, onInvitation: (String) -> Unit)
             list == null && error == null -> Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = p.accent)
             }
-            list.isNullOrEmpty() -> Text("Nothing here yet. SOS requests, circle alerts and check-in reminders show up here.",
+            list.isNullOrEmpty() -> Text(tr("Nothing here yet. SOS requests, circle alerts and check-in reminders show up here."),
                 Modifier.fillMaxWidth().padding(top = 48.dp), color = p.secondary, fontSize = 13.sp, textAlign = TextAlign.Center)
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(bottom = LocalFloatingNavBarPadding.current)) {
@@ -152,12 +154,12 @@ fun MaitriInbox(uid: String, onBack: () -> Unit, onInvitation: (String) -> Unit)
     request?.let { id ->
         AlertDialog(onDismissRequest = { request = null }, containerColor = p.surface,
             titleContentColor = p.primary, textContentColor = p.secondary,
-            title = { Text("Join their circle?") },
-            text = { Text("You'll get their SOS alerts and their live location while an SOS is active. You can leave at any time.") },
+            title = { Text(tr("Join their circle?")) },
+            text = { Text(tr("You'll get their SOS alerts and their live location while an SOS is active. You can leave at any time.")) },
             confirmButton = { TextButton(onClick = { request = null; scope.launch {
-                runCatching { BackendClient.circle.answer(id, "accept", account) }; load() } }) { Text("Accept", color = p.accent) } },
+                runCatching { BackendClient.circle.answer(id, "accept", account) }; load() } }) { Text(tr("Accept"), color = p.accent) } },
             dismissButton = { TextButton(onClick = { request = null; scope.launch {
-                runCatching { BackendClient.circle.answer(id, "decline", account) }; load() } }) { Text("Decline", color = p.secondary) } })
+                runCatching { BackendClient.circle.answer(id, "decline", account) }; load() } }) { Text(tr("Decline"), color = p.secondary) } })
     }
     session?.let { id -> CircleSessionViewer(uid, id) { session = null } }
     if (checkIn) MaitriSharingDialog("CHECK_IN") { checkIn = false }
@@ -167,7 +169,7 @@ fun MaitriInbox(uid: String, onBack: () -> Unit, onInvitation: (String) -> Unit)
 private fun InboxRow(item: InboxItemDto, p: MaitriPalette, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().background(if (item.read) p.surface else p.card, RoundedCornerShape(20.dp))
         .clickable(onClick = onClick).padding(14.dp)
-        .semantics { if (!item.read) contentDescription = "Unread. ${item.title}. ${item.body}" },
+        .semantics { if (!item.read) contentDescription = tr("Unread. {0}. {1}", item.title, item.body) },
         verticalAlignment = Alignment.Top) {
         Box(Modifier.size(40.dp).background(p.background, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
             Icon(painterResource(iconFor(item.kind)), null, tint = p.accent, modifier = Modifier.size(20.dp))
@@ -203,7 +205,7 @@ internal fun CircleSessionViewer(uid: String, sessionId: String, dismiss: () -> 
         }
     }
     AlertDialog(onDismissRequest = dismiss, containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
-        title = { Text(if (session?.kind == "CHECK_IN") "Check-in" else "Shared trip") },
+        title = { Text(if (session?.kind == "CHECK_IN") tr("Check-in") else tr("Shared trip")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 error?.let { Text(it, color = p.accent) }
@@ -212,21 +214,21 @@ internal fun CircleSessionViewer(uid: String, sessionId: String, dismiss: () -> 
                     s == null && error == null -> CircularProgressIndicator(color = p.accent)
                     s == null -> Unit
                     s.kind == "CHECK_IN" -> Text(when {
-                        s.status == "STOPPED" -> "They checked in. They're safe."
-                        s.missed -> "They missed this check-in. Try reaching them, and call 112 if you think they're in danger."
-                        else -> "Due " + (s.dueAt?.let { localTime(it) } ?: "soon") + ". You'll be told if they don't check in."
+                        s.status == "STOPPED" -> tr("They checked in. They're safe.")
+                        s.missed -> tr("They missed this check-in. Try reaching them, and call 112 if you think they're in danger.")
+                        else -> tr("Due ") + (s.dueAt?.let { localTime(it) } ?: "soon") + tr(". You'll be told if they don't check in.")
                     })
-                    s.status != "ACTIVE" -> Text("This trip has ended. Their location is no longer shared.")
-                    s.fix == null -> Text("Waiting for their first location…")
+                    s.status != "ACTIVE" -> Text(tr("This trip has ended. Their location is no longer shared."))
+                    s.fix == null -> Text(tr("Waiting for their first location…"))
                     else -> {
                         MaitriMap(listOf(MapMarker(s.fix.latitude, s.fix.longitude, MarkerKind.PERSON_IN_NEED)), "",
                             Modifier.fillMaxWidth().height(220.dp), accuracyMeters = s.fix.accuracyMeters)
-                        Text("Updated " + relativeTime(s.fix.recordedAt))
+                        Text(tr("Updated ") + relativeTime(s.fix.recordedAt))
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = dismiss) { Text("Close", color = p.accent) } })
+        confirmButton = { TextButton(onClick = dismiss) { Text(tr("Close"), color = p.accent) } })
 }
 
 internal fun localTime(iso: String): String = runCatching {

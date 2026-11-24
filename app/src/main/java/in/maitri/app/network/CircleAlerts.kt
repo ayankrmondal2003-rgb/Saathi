@@ -1,5 +1,7 @@
 package `in`.maitri.app.network
 
+import `in`.maitri.app.tr
+
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -42,13 +44,13 @@ interface CircleApi {
 
 /** Per-contact status on screen 08. Never says "sent" for an SMS: Maitri can't see the messaging app. */
 fun circleStatusLabel(status: String): String = when (status) {
-    "OPENED" -> "Opened"
-    "DELIVERED" -> "Push delivered"
-    "PUSH_SENT" -> "Push sent"
-    "SENDING" -> "Sending…"
-    "SMS_PREPARED" -> "SMS prepared"
-    "NOT_REQUESTED" -> "Alerts off"
-    else -> "Not reached"
+    "OPENED" -> tr("Opened")
+    "DELIVERED" -> tr("Push delivered")
+    "PUSH_SENT" -> tr("Push sent")
+    "SENDING" -> tr("Sending…")
+    "SMS_PREPARED" -> tr("SMS prepared")
+    "NOT_REQUESTED" -> tr("Alerts off")
+    else -> tr("Not reached")
 }
 
 /** True for statuses where the contact has (probably) been reached, for the tick icon. */
@@ -56,8 +58,8 @@ fun circleStatusReached(status: String): Boolean = status in setOf("OPENED", "DE
 
 /** The SMS the owner's phone prepares for contacts without the app. The owner taps Send. */
 fun sosSmsText(liveLink: String?): String =
-    if (liveLink.isNullOrBlank()) "I need help. I started an SOS in Maitri. If you can't reach me, call 112."
-    else "I need help. My live location: $liveLink — if you can't reach me, call 112."
+    if (liveLink.isNullOrBlank()) tr("I need help. I started an SOS in Maitri. If you can't reach me, call 112.")
+    else tr("I need help. My live location: {0} — if you can't reach me, call 112.", liveLink)
 
 /**
  * Opens the default SMS app with every number and the text filled in. Samsung Messages separates recipients
@@ -75,4 +77,4 @@ fun shareTextIntent(text: String): Intent = Intent.createChooser(
 
 /** A pairing code invitation the owner can send any way they like. */
 fun inviteText(code: String) =
-    "I've added you to my Maitri circle so my SOS alerts reach you. Install Maitri, then open Circle → Enter a code and type $code (valid 24 hours)."
+    tr("I've added you to my Maitri circle so my SOS alerts reach you. Install Maitri, then open Circle → Enter a code and type {0} (valid 24 hours).", code)

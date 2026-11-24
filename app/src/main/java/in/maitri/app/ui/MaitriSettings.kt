@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -88,11 +90,11 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
                 }) { Text(strings.getString(if (id == S.settings_privacy) S.settings_manage else S.settings_close)) }
             }, dismissButton = if (id == S.settings_help) ({
                 Row {
-                    TextButton(onClick = { dialog = null; onNavigate("BetaInfo") }) { Text("Beta info") }
+                    TextButton(onClick = { dialog = null; onNavigate("BetaInfo") }) { Text(tr("Beta info")) }
                     TextButton(onClick = {
                         dialog = null
                         runCatching { context.startActivity(supportEmailIntent("Maitri help")) }
-                    }) { Text("Email support") }
+                    }) { Text(tr("Email support")) }
                 }
             }) else null)
     }

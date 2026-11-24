@@ -1,5 +1,7 @@
 package `in`.maitri.app.notification
 
+import `in`.maitri.app.tr
+
 import `in`.maitri.app.data.isMaitriVerified
 import android.content.Context
 import androidx.work.*
@@ -25,7 +27,7 @@ class InvitationNotificationWorker(context: Context, params: WorkerParameters) :
                 it.id == invitation && it.incidentId == incident && it.status == "PENDING"
             }
             if (pending && eligible() && NotificationHelper.showSosNotification(applicationContext, invitation,
-                    incident, "Nearby SOS simulation", "Open Maitri to review the invitation.",
+                    incident, tr("Nearby SOS simulation"), tr("Open Maitri to review the invitation."),
                     "RESPONDER_INVITATION_CREATED")) {
                 SosFirebaseMessagingService.saveLastAlertTimestamp(applicationContext, System.currentTimeMillis())
             }

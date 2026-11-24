@@ -1,5 +1,7 @@
 package `in`.maitri.app.network
 
+import `in`.maitri.app.tr
+
 import com.google.gson.JsonParser
 import com.google.gson.annotations.SerializedName
 import java.time.OffsetDateTime
@@ -63,11 +65,11 @@ fun serverTimeMillis(value: String?, now: Long = System.currentTimeMillis()): Lo
 
 /** Text shown to the user when the server refuses this session. Never contains HTTP codes. */
 fun fatalSyncMessage(code: Int, errorCode: String? = null): String = if (errorCode == SOS_RATE_LIMITED)
-    "You've sent the most SOS alerts allowed in an hour, so Maitri can't send another yet. Call 112 now if you need help."
+    tr("You've sent the most SOS alerts allowed in an hour, so Maitri can't send another yet. Call 112 now if you need help.")
 else when (code) {
-    401, 403 -> "Your account can't send SOS updates right now. Sign in again, or call 112 if you need help now."
-    404, 410 -> "This SOS session has ended. Hold SOS again to start a new one. Call 112 if you need help now."
-    else -> "Maitri couldn't start this SOS session. Hold SOS again to retry, or call 112 if you need help now."
+    401, 403 -> tr("Your account can't send SOS updates right now. Sign in again, or call 112 if you need help now.")
+    404, 410 -> tr("This SOS session has ended. Hold SOS again to start a new one. Call 112 if you need help now.")
+    else -> tr("Maitri couldn't start this SOS session. Hold SOS again to retry, or call 112 if you need help now.")
 }
 
 /** Why Home shows a message under the SOS button. */

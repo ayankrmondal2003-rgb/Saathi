@@ -1,5 +1,7 @@
 package `in`.maitri.app.state
 
+import `in`.maitri.app.tr
+
 import android.app.Application
 import android.os.SystemClock
 import `in`.maitri.app.location.LocalTrackingRepository
@@ -54,7 +56,7 @@ class SafetyViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (e: CancellationException) { throw e }
                 catch (e: Exception) {
                     if (current.user?.uid == uid) mutable.value = current.copy(contactsMessage =
-                        "Couldn't load your circle from the server. Contacts shown here may not be used for SOS alerts.")
+                        tr("Couldn't load your circle from the server. Contacts shown here may not be used for SOS alerts."))
                 }
             }
         }
@@ -196,7 +198,7 @@ class SafetyViewModel(app: Application) : AndroidViewModel(app) {
         id: String?,
         name: String,
         phone: String,
-        label: String = "Emergency Contact",
+        label: String = tr("Emergency Contact"),
         isPrimary: Boolean = false,
         source: String = EmergencyContact.SOURCE_MANUAL,
         notifyOnSos: Boolean = true,
@@ -213,7 +215,7 @@ class SafetyViewModel(app: Application) : AndroidViewModel(app) {
         val normalized = EmergencyContact.normalizePhone(phone)
         val duplicate = current.contacts.find { it.normalizedPhoneNumber == normalized && it.id != id }
         if (duplicate != null) {
-            return "This phone number is already saved as \"${duplicate.displayName}\"."
+            return tr("This phone number is already saved as \"{0}\".", duplicate.displayName)
         }
 
         val now = System.currentTimeMillis()
@@ -226,7 +228,7 @@ class SafetyViewModel(app: Application) : AndroidViewModel(app) {
             displayName = name.trim(),
             phoneNumber = phone.trim(),
             normalizedPhoneNumber = normalized,
-            label = label.trim().ifBlank { "Emergency Contact" },
+            label = label.trim().ifBlank { tr("Emergency Contact") },
             isPrimary = shouldBePrimary,
             isVerified = false,
             source = source,

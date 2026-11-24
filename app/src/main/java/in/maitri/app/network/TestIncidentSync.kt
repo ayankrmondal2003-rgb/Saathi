@@ -1,5 +1,7 @@
 package `in`.maitri.app.network
 
+import `in`.maitri.app.tr
+
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
@@ -20,7 +22,7 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 data class ExpectedAccount(val uid: String)
-data class SyncStatus(val uid: String = "", val message: String = "Local demo", val problem: SyncProblem? = null)
+data class SyncStatus(val uid: String = "", val message: String = tr("Local demo"), val problem: SyncProblem? = null)
 
 /** Result of checking the local SOS session against the server's open incident. */
 sealed interface ReconcileOutcome {
@@ -81,7 +83,7 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
         prefs.getString("confirmed:$uid", null)?.takeIf { isShared(uid, it) }
 
     internal fun retriesExhausted(uid: String) {
-        mutable.value = SyncStatus(uid, "Still can't reach Maitri. Tap Try again, or call 112 if you need help now.",
+        mutable.value = SyncStatus(uid, tr("Still can't reach Maitri. Tap Try again, or call 112 if you need help now."),
             SyncProblem.RETRYING)
     }
 
@@ -157,7 +159,7 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
             .putString("confirmed:$uid", key).putString("incident:$uid", open.id).apply()
         authorizedKey = key
         lastCheck = SystemClock.elapsedRealtime()
-        mutable.value = SyncStatus(uid, "Reconnected to your open SOS.")
+        mutable.value = SyncStatus(uid, tr("Reconnected to your open SOS."))
         return started
     }
 
@@ -228,7 +230,7 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
                         lastCleanupScheduled = now
                     }
                 }
-                catch (_: Exception) { mutable.value = SyncStatus(uid, "Couldn't save your latest location on this phone.") }
+                catch (_: Exception) { mutable.value = SyncStatus(uid, tr("Couldn't save your latest location on this phone.")) }
             }
         }
     }
@@ -301,7 +303,7 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
                 } else {
                     Log.w(TAG, "SOS sync interrupted: ${code?.let { "HTTP $it" } ?: failure.javaClass.simpleName}")
                     lastCheck = 0
-                    mutable.value = SyncStatus(uid, "Connecting to Maitri… Your SOS keeps retrying in the background.", SyncProblem.RETRYING)
+                    mutable.value = SyncStatus(uid, tr("Connecting to Maitri… Your SOS keeps retrying in the background."), SyncProblem.RETRYING)
                     UploadResult.RETRY
                 }
             }
@@ -314,7 +316,7 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
         if (force || incident == null || authorizedKey != key || lastCheck == 0L || SystemClock.elapsedRealtime() - lastCheck > 30000L) {
             val response = if (incident == null) {
                 createOrAdopt(key, account) ?: run {
-                    if (active(uid, key)) endLocally(uid, "That SOS session has already ended. Hold SOS again to start a new one.")
+                    if (active(uid, key)) endLocally(uid, tr("That SOS session has already ended. Hold SOS again to start a new one."))
                     return UploadResult.DONE
                 }
             } else {
@@ -324,8 +326,8 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
             if (!active(uid, key) || user(uid) == null) return UploadResult.DONE
             if (response.status != "ACTIVE") {
                 Log.i(TAG, "Server incident is ${response.status}; ending the local session")
-                endLocally(uid, if (response.status == "CLOSED") "Your SOS has ended."
-                    else "Your earlier SOS is still open and needs attention. Call 112 if you need help now.")
+                endLocally(uid, if (response.status == "CLOSED") tr("Your SOS has ended.")
+                    else tr("Your earlier SOS is still open and needs attention. Call 112 if you need help now."))
                 return UploadResult.DONE
             }
             val newlyConfirmed = authorizedKey != key
@@ -351,9 +353,9 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
         if (result == ReplayState.SESSION_CHANGED) return UploadResult.DONE
         if (result == ReplayState.RECHECK) lastCheck = 0
         mutable.value = SyncStatus(uid, when {
-            result == ReplayState.RECHECK -> "Checking your SOS session…"
-            pending.isNotEmpty() -> "Connected · your location is shared"
-            else -> "Connected · waiting for your location"
+            result == ReplayState.RECHECK -> tr("Checking your SOS session…")
+            pending.isNotEmpty() -> tr("Connected · your location is shared")
+            else -> tr("Connected · waiting for your location")
         })
         return UploadResult.ACTIVE
     }

@@ -1,5 +1,7 @@
 package `in`.maitri.app.network
 
+import `in`.maitri.app.tr
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -113,19 +115,19 @@ object Uploads {
 
 /** Words for upload failures; never an HTTP code. */
 fun uploadErrorMessage(error: Throwable): String {
-    if (error is UploadException) return error.message ?: "Upload failed. Try again."
+    if (error is UploadException) return error.message ?: tr("Upload failed. Try again.")
     if (error is HttpException) {
         val code = runCatching {
             JsonParser.parseString(error.response()?.errorBody()?.string()).asJsonObject["detail"].asJsonObject["code"].asString
         }.getOrNull()
         return when (code) {
-            "STORAGE_NOT_CONFIGURED" -> "Document upload isn't switched on yet on the Maitri server. Try again later."
-            "FILE_TYPE_NOT_ALLOWED" -> "Use a PDF, JPG or PNG file."
-            "FILE_TOO_LARGE" -> "This file is larger than 10 MB."
-            "UPLOAD_NOT_FOUND", "UPLOAD_SIZE_MISMATCH" -> "The upload didn't finish. Try again."
-            else -> if (error.code() == 409) "Your application is already submitted, so documents can't change now."
-                else "Upload failed. Try again."
+            "STORAGE_NOT_CONFIGURED" -> tr("Document upload isn't switched on yet on the Maitri server. Try again later.")
+            "FILE_TYPE_NOT_ALLOWED" -> tr("Use a PDF, JPG or PNG file.")
+            "FILE_TOO_LARGE" -> tr("This file is larger than 10 MB.")
+            "UPLOAD_NOT_FOUND", "UPLOAD_SIZE_MISMATCH" -> tr("The upload didn't finish. Try again.")
+            else -> if (error.code() == 409) tr("Your application is already submitted, so documents can't change now.")
+                else tr("Upload failed. Try again.")
         }
     }
-    return "Couldn't reach Maitri. Check your connection and try again."
+    return tr("Couldn't reach Maitri. Check your connection and try again.")
 }

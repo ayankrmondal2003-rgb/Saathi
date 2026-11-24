@@ -1,5 +1,7 @@
 package `in`.maitri.app.location
 
+import `in`.maitri.app.tr
+
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -35,18 +37,18 @@ fun locationHint(airplaneMode: Boolean, locationOn: Boolean, allowed: Boolean, p
 
 fun locationHintText(hint: LocationHint): String? = when (hint) {
     LocationHint.NONE -> null
-    LocationHint.SEARCHING -> "Finding your location…"
-    LocationHint.PERMISSION_MISSING -> "Location not allowed"
-    LocationHint.LOCATION_OFF -> "Location is off"
-    LocationHint.AIRPLANE_MODE -> "Airplane mode is on"
-    LocationHint.PRECISE_NOT_ALLOWED -> "Precise location not allowed"
-    LocationHint.WEAK_SIGNAL -> "Weak GPS signal — move near a window"
+    LocationHint.SEARCHING -> tr("Finding your location…")
+    LocationHint.PERMISSION_MISSING -> tr("Location not allowed")
+    LocationHint.LOCATION_OFF -> tr("Location is off")
+    LocationHint.AIRPLANE_MODE -> tr("Airplane mode is on")
+    LocationHint.PRECISE_NOT_ALLOWED -> tr("Precise location not allowed")
+    LocationHint.WEAK_SIGNAL -> tr("Weak GPS signal — move near a window")
 }
 
 /** "±12 m" when precise; "Approx. ±650 m" / "Approx. ±1.2 km" when not. */
 fun accuracyLabel(meters: Double): String = when {
     meters <= TrackingConfig.PRECISE_METRES -> "±${meters.roundToInt()} m"
-    meters < 1000 -> "Approx. ±${(meters / 10).roundToInt() * 10} m"
+    meters < 1000 -> tr("Approx. ±{0} m", (meters / 10).roundToInt() * 10)
     else -> String.format(Locale.US, "Approx. ±%.1f km", meters / 1000)
 }
 

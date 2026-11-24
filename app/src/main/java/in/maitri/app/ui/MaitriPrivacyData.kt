@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -63,10 +65,10 @@ internal fun deleteErrorMessage(error: Throwable): String {
         }.getOrNull()
     }
     return when (code) {
-        "SOS_OPEN" -> "End your SOS with your Safety PIN first, then delete your account."
-        "REAUTH_REQUIRED" -> "Sign in again to confirm, then try once more."
-        "STORAGE_UNAVAILABLE", "STORAGE_NOT_CONFIGURED", "IDENTITY_UNAVAILABLE" -> "Maitri couldn't finish deleting right now. Nothing was deleted; try again later."
-        else -> if (error is HttpException) "Your account couldn't be deleted. Try again." else "Couldn't reach Maitri. Check your connection."
+        "SOS_OPEN" -> tr("End your SOS with your Safety PIN first, then delete your account.")
+        "REAUTH_REQUIRED" -> tr("Sign in again to confirm, then try once more.")
+        "STORAGE_UNAVAILABLE", "STORAGE_NOT_CONFIGURED", "IDENTITY_UNAVAILABLE" -> tr("Maitri couldn't finish deleting right now. Nothing was deleted; try again later.")
+        else -> if (error is HttpException) tr("Your account couldn't be deleted. Try again.") else tr("Couldn't reach Maitri. Check your connection.")
     }
 }
 
@@ -96,7 +98,7 @@ fun MaitriPrivacyData(onBack: () -> Unit, onDeleted: () -> Unit) {
                 context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("application/json")
                     .putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Save your Maitri data"))
             } catch (e: CancellationException) { throw e }
-            catch (_: Exception) { message = "Couldn't download your data. Check your connection." }
+            catch (_: Exception) { message = tr("Couldn't download your data. Check your connection.") }
             finally { busy = false }
         }
     }
@@ -126,7 +128,7 @@ fun MaitriPrivacyData(onBack: () -> Unit, onDeleted: () -> Unit) {
                 runCatching { FirebaseAuth.getInstance().signOut() }
                 onDeleted()
             } catch (e: CancellationException) { throw e }
-            catch (e: com.google.firebase.auth.FirebaseAuthInvalidCredentialsException) { message = "That password isn't right." }
+            catch (e: com.google.firebase.auth.FirebaseAuthInvalidCredentialsException) { message = tr("That password isn't right.") }
             catch (e: `in`.maitri.app.data.GoogleSignInUnavailable) { message = e.userMessage }
             catch (e: Exception) { message = deleteErrorMessage(e) }
             finally { busy = false; password = "" }
@@ -138,57 +140,57 @@ fun MaitriPrivacyData(onBack: () -> Unit, onDeleted: () -> Unit) {
         Spacer(Modifier.height(20.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack, modifier = Modifier.size(44.dp).background(p.surface, CircleShape)) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = p.primary)
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, tr("Back"), tint = p.primary)
             }
             Spacer(Modifier.width(16.dp))
             Column {
-                Text("PROFILE & SETTINGS", color = p.accent, fontSize = 10.sp, letterSpacing = 1.3.sp, fontWeight = FontWeight.SemiBold)
-                Text("Privacy & data", color = p.primary, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+                Text(tr("PROFILE & SETTINGS"), color = p.accent, fontSize = 10.sp, letterSpacing = 1.3.sp, fontWeight = FontWeight.SemiBold)
+                Text(tr("Privacy & data"), color = p.primary, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
             }
         }
         Spacer(Modifier.height(20.dp))
         Column(Modifier.fillMaxWidth().background(p.card, RoundedCornerShape(24.dp)).padding(18.dp)) {
-            Text("Stay in control of your information.", color = p.primary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(tr("Stay in control of your information."), color = p.primary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))
-            Text("Maitri keeps SOS locations for 7 days after an SOS ends and SOS photos and voice notes for 30 days. " +
-                "Medical notes are encrypted and shown only to a responder helping you.", color = p.secondary, fontSize = 12.sp, lineHeight = 17.sp)
+            Text(tr("Maitri keeps SOS locations for 7 days after an SOS ends and SOS photos and voice notes for 30 days. ") +
+                tr("Medical notes are encrypted and shown only to a responder helping you."), color = p.secondary, fontSize = 12.sp, lineHeight = 17.sp)
         }
         Spacer(Modifier.height(16.dp))
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = p.accent)
         message?.let { Text(it, color = p.accent, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp)) }
-        PrivacyRow(p, "Export my data", "Download everything Maitri keeps about you, as a file") { if (!busy) export() }
-        PrivacyRow(p, "Privacy policy", "What we collect, why, and who can see it") { openLink(context, MaitriLinks.PRIVACY) }
-        PrivacyRow(p, "Terms of service", "How Maitri works during the beta") { openLink(context, MaitriLinks.TERMS) }
-        PrivacyRow(p, "Permissions", "Location, notifications and microphone") {
+        PrivacyRow(p, tr("Export my data"), tr("Download everything Maitri keeps about you, as a file")) { if (!busy) export() }
+        PrivacyRow(p, tr("Privacy policy"), tr("What we collect, why, and who can see it")) { openLink(context, MaitriLinks.PRIVACY) }
+        PrivacyRow(p, tr("Terms of service"), tr("How Maitri works during the beta")) { openLink(context, MaitriLinks.TERMS) }
+        PrivacyRow(p, tr("Permissions"), tr("Location, notifications and microphone")) {
             context.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.fromParts("package", context.packageName, null)))
         }
-        PrivacyRow(p, "Delete my account", "Remove your account and data from Maitri", danger = true) { if (!busy) confirmDelete = true }
+        PrivacyRow(p, tr("Delete my account"), tr("Remove your account and data from Maitri"), danger = true) { if (!busy) confirmDelete = true }
         Spacer(Modifier.height(LocalFloatingNavBarPadding.current))
     }
 
     if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false },
         containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
-        title = { Text("Delete your account?") },
-        text = { Text("This deletes your profile, circle, contacts, SOS history, photos, voice notes, volunteer documents and " +
-            "your sign-in. It can't be undone. You'll be asked to sign in again to confirm.") },
+        title = { Text(tr("Delete your account?")) },
+        text = { Text(tr("This deletes your profile, circle, contacts, SOS history, photos, voice notes, volunteer documents and ") +
+            tr("your sign-in. It can't be undone. You'll be asked to sign in again to confirm.")) },
         confirmButton = { TextButton(onClick = {
             confirmDelete = false
             val google = user?.providerData?.any { it.providerId == GoogleAuthProvider.PROVIDER_ID } == true
             if (google) delete() else askPassword = true
-        }) { Text("Delete", color = p.accent, fontWeight = FontWeight.SemiBold) } },
-        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel", color = p.secondary) } })
+        }) { Text(tr("Delete"), color = p.accent, fontWeight = FontWeight.SemiBold) } },
+        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(tr("Cancel"), color = p.secondary) } })
     if (askPassword) AlertDialog(onDismissRequest = { askPassword = false },
         containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
-        title = { Text("Confirm it's you") },
+        title = { Text(tr("Confirm it's you")) },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Enter the password for ${user?.email.orEmpty()}.")
-            OutlinedTextField(password, { password = it }, singleLine = true, label = { Text("Password") },
+            Text(tr("Enter the password for {0}.", user?.email.orEmpty()))
+            OutlinedTextField(password, { password = it }, singleLine = true, label = { Text(tr("Password")) },
                 visualTransformation = PasswordVisualTransformation())
         } },
         confirmButton = { TextButton(enabled = password.isNotBlank(), onClick = { askPassword = false; delete() }) {
-            Text("Delete my account", color = p.accent) } },
-        dismissButton = { TextButton(onClick = { askPassword = false; password = "" }) { Text("Cancel", color = p.secondary) } })
+            Text(tr("Delete my account"), color = p.accent) } },
+        dismissButton = { TextButton(onClick = { askPassword = false; password = "" }) { Text(tr("Cancel"), color = p.secondary) } })
 }
 
 @Composable

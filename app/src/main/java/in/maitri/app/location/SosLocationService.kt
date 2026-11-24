@@ -1,5 +1,7 @@
 package `in`.maitri.app.location
 
+import `in`.maitri.app.tr
+
 import `in`.maitri.app.data.isMaitriVerified
 import android.app.*
 import android.content.*
@@ -66,14 +68,14 @@ class SosLocationService : Service() {
                 return START_NOT_STICKY
             }
             val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(NotificationChannel("demo_tracking", "Demo location tracking",
+            manager.createNotificationChannel(NotificationChannel("demo_tracking", tr("Demo location tracking"),
                 NotificationManager.IMPORTANCE_LOW))
             val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_IMMUTABLE)
             val notification = NotificationCompat.Builder(this, "demo_tracking")
                 .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-                .setContentTitle("Maitri — Location sharing active")
-                .setContentText("Open Maitri to view sharing status or end it.")
+                .setContentTitle(tr("Maitri — Location sharing active"))
+                .setContentText(tr("Open Maitri to view sharing status or end it."))
                 .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
                 .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE).build()
             if (Build.VERSION.SDK_INT >= 29) startForeground(301, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)

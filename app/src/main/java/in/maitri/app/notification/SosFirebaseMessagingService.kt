@@ -1,5 +1,7 @@
 package `in`.maitri.app.notification
 
+import `in`.maitri.app.tr
+
 import android.content.Context
 import kotlinx.coroutines.channels.awaitClose
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -51,8 +53,8 @@ class SosFirebaseMessagingService : FirebaseMessagingService() {
             }
             "TEST_ALERT", "EMERGENCY_TEST_NOTIFICATION" -> {
                 val testId = data["notification_id"] ?: remoteMessage.messageId ?: UUID.randomUUID().toString()
-                val title = remoteMessage.notification?.title ?: "Maitri alert"
-                val body = remoteMessage.notification?.body ?: "This is an authorized test notification."
+                val title = remoteMessage.notification?.title ?: tr("Maitri alert")
+                val body = remoteMessage.notification?.body ?: tr("This is an authorized test notification.")
                 NotificationHelper.showSosNotification(
                     context = applicationContext,
                     alertId = testId,
@@ -67,7 +69,7 @@ class SosFirebaseMessagingService : FirebaseMessagingService() {
                 val inboxId = data["inbox_id"]?.takeIf { runCatching { UUID.fromString(it) }.isSuccess } ?: return
                 val url = data["url"]?.takeIf { it.startsWith("https://") }
                 val shown = NotificationHelper.showInboxNotification(applicationContext, inboxId, eventType,
-                    data["title"].orEmpty().ifBlank { "Maitri" }.take(120), data["body"].orEmpty().take(500), url)
+                    data["title"].orEmpty().ifBlank { tr("Maitri") }.take(120), data["body"].orEmpty().take(500), url)
                 // Tell the server the push reached this phone: the only basis for "Push delivered" on the sender's screen.
                 val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
                 if (shown && uid != null) scope.launch {

@@ -1,7 +1,7 @@
 package `in`.maitri.app
 
 import `in`.maitri.app.network.MaitriLinks
-import `in`.maitri.app.ui.BETA_SECTIONS
+import `in`.maitri.app.ui.betaSections
 import `in`.maitri.app.ui.deleteErrorMessage
 import org.junit.Assert.*
 import org.junit.Test
@@ -32,8 +32,8 @@ class PrivacyTest {
     }
 
     @Test fun betaInfoPutsTheEmergencyNumberFirst() {
-        assertTrue(BETA_SECTIONS.first().second.contains("112"))
-        assertTrue(BETA_SECTIONS.any { it.first == "Testing an SOS safely" && it.second.contains("Safety PIN") })
+        assertTrue(betaSections().first().second.contains("112"))
+        assertTrue(betaSections().any { it.first == "Testing an SOS safely" && it.second.contains("Safety PIN") })
     }
 
     @Test fun deleteErrorsAreInWords() {

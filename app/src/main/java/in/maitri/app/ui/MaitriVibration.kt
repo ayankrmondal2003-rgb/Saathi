@@ -1,5 +1,8 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+import `in`.maitri.app.trKey
+
 import android.content.Context
 import android.os.Build
 import `in`.maitri.app.R
@@ -40,20 +43,20 @@ enum class VibrationPattern(
     val amplitudes: IntArray?
 ) {
     GENTLE(
-        title = "Gentle",
-        subtitle = "Short, soft pulses",
+        title = trKey("Gentle"),
+        subtitle = trKey("Short, soft pulses"),
         timings = longArrayOf(0, 150, 150, 150, 150, 150),
         amplitudes = intArrayOf(0, 100, 0, 100, 0, 100)
     ),
     STEADY(
-        title = "Steady",
-        subtitle = "Balanced, clear pulses",
+        title = trKey("Steady"),
+        subtitle = trKey("Balanced, clear pulses"),
         timings = longArrayOf(0, 350, 200, 350, 200, 350),
         amplitudes = intArrayOf(0, 180, 0, 180, 0, 180)
     ),
     STRONG(
-        title = "Strong",
-        subtitle = "Longer, stronger pulses",
+        title = trKey("Strong"),
+        subtitle = trKey("Longer, stronger pulses"),
         timings = longArrayOf(0, 700, 200, 700, 200, 700, 200, 700),
         amplitudes = intArrayOf(0, 255, 0, 255, 0, 255, 0, 255)
     )

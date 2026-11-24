@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import `in`.maitri.app.tr
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -53,9 +55,9 @@ internal object OpenFreeMap {
     const val DARK_STYLE_ASSET = "map/maitri-dark.json"
     const val ATTRIBUTION = "© OpenFreeMap © OpenMapTiles © OpenStreetMap contributors"
     val LINKS = listOf(
-        "OpenFreeMap" to "https://openfreemap.org",
-        "OpenMapTiles" to "https://www.openmaptiles.org/",
-        "OpenStreetMap contributors" to "https://www.openstreetmap.org/copyright")
+        tr("OpenFreeMap") to "https://openfreemap.org",
+        tr("OpenMapTiles") to "https://www.openmaptiles.org/",
+        tr("OpenStreetMap contributors") to "https://www.openstreetmap.org/copyright")
 }
 
 /** A point drawn on the map. [kind] picks the marker artwork. */
@@ -83,7 +85,7 @@ internal fun distanceLabel(meters: Double): String =
 
 /** e.g. "≈ 650 m away · approx. 11 min walk". */
 internal fun approxDistanceAndWalk(meters: Double): String =
-    "≈ ${distanceLabel(meters)} away · approx. ${walkingMinutes(meters)} min walk"
+    tr("≈ {0} away · approx. {1} min walk", distanceLabel(meters), walkingMinutes(meters))
 
 /** Accuracy circle as a 64-point polygon (lon/lat ring, closed). */
 internal fun circleRing(latitude: Double, longitude: Double, radiusMeters: Double, steps: Int = 64): List<Pair<Double, Double>> {
@@ -138,15 +140,15 @@ internal fun MaitriMap(markers: List<MapMarker>, emptyLabel: String, modifier: M
         Text(OpenFreeMap.ATTRIBUTION,
             Modifier.align(Alignment.BottomStart).fillMaxWidth()
                 .background((if (p.dark) Color.Black else Color.White).copy(alpha = 0.72f))
-                .clickable(onClickLabel = "Map data credits") { showCredits = true }
+                .clickable(onClickLabel = tr("Map data credits")) { showCredits = true }
                 .padding(horizontal = 8.dp, vertical = 2.dp),
             color = if (p.dark) Color(0xFFE8D9E1) else Color(0xFF40303A), fontSize = 8.sp, lineHeight = 10.sp,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
-    if (showCredits) AlertDialog(onDismissRequest = { showCredits = false }, title = { Text("Map data") },
+    if (showCredits) AlertDialog(onDismissRequest = { showCredits = false }, title = { Text(tr("Map data")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Map tiles from OpenFreeMap, built with OpenMapTiles. Map data © OpenStreetMap contributors.")
+                Text(tr("Map tiles from OpenFreeMap, built with OpenMapTiles. Map data © OpenStreetMap contributors."))
                 OpenFreeMap.LINKS.forEach { (name, url) ->
                     TextButton(onClick = {
                         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
@@ -154,7 +156,7 @@ internal fun MaitriMap(markers: List<MapMarker>, emptyLabel: String, modifier: M
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { showCredits = false }) { Text("Close") } })
+        confirmButton = { TextButton(onClick = { showCredits = false }) { Text(tr("Close")) } })
 }
 
 private data class MapData(val markers: List<MapMarker>, val accuracyMeters: Double?, val dark: Boolean)
