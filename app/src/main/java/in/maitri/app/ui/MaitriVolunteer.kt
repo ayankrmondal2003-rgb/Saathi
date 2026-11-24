@@ -302,7 +302,7 @@ internal fun MaitriVolunteerContent(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = tr("Join maitri as a volunteer and help your\ncommunity feel safer."),
+                text = designBreaks(tr("Join maitri as a volunteer and help your\ncommunity feel safer.")),
                 color = p.secondary,
                 fontSize = 12.sp,
                 modifier = Modifier.fillMaxWidth()
@@ -342,12 +342,8 @@ internal fun MaitriVolunteerContent(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = tr("Yes, I'd like to help"),
-                        color = if (isHelp) p.accent else p.secondary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    FitText(tr("Yes, I'd like to help"), Modifier, if (isHelp) p.accent else p.secondary, 13f,
+                        weight = FontWeight.SemiBold)
                 }
 
                 // Not now
@@ -433,26 +429,16 @@ internal fun MaitriVolunteerContent(
                         )
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = tr(docType.title),
-                                color = p.primary,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            FitText(tr(docType.title), Modifier, p.primary, 12f, weight = FontWeight.SemiBold)
                             Spacer(Modifier.height(2.dp))
-                            Text(
+                            FitText(
                                 text = when (doc.state) {
                                     DocState.UPLOADED -> if (locked) tr("Uploaded") else tr("Uploaded · tap to replace or remove")
                                     DocState.UPLOADING -> tr("Uploading…")
                                     DocState.FAILED -> tr("Upload failed · tap to retry")
                                     DocState.EMPTY -> tr(docType.subtitle)
                                 },
-                                color = if (doc.state == DocState.EMPTY) p.secondary else p.accent,
-                                fontSize = 10.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                modifier = Modifier, color = if (doc.state == DocState.EMPTY) p.secondary else p.accent, size = 10f
                             )
                             if (docType == VolunteerDocType.DECLARATION) Text(
                                 text = tr("Download template"),
@@ -535,7 +521,7 @@ internal fun MaitriVolunteerContent(
                 }
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = tr("I consent to document verification and agree to\nthe Volunteer Declaration."),
+                    text = designBreaks(tr("I consent to document verification and agree to\nthe Volunteer Declaration.")),
                     color = p.secondary,
                     fontSize = 11.sp,
                     lineHeight = 15.sp,

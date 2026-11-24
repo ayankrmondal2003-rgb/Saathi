@@ -103,12 +103,15 @@ internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Bool
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(tr("A LITTLE PEACE OF MIND"), color = p.accent, fontSize = 10.sp, letterSpacing = 1.3.sp, fontWeight = FontWeight.SemiBold)
+                    // The tagline gives way first, so the Beta tag keeps its width with large text.
+                    Text(tr("A LITTLE PEACE OF MIND"), Modifier.weight(1f, fill = false), color = p.accent, fontSize = 10.sp,
+                        letterSpacing = 1.3.sp, fontWeight = FontWeight.SemiBold)
                     if (beta) {
                         Spacer(Modifier.width(8.dp))
-                        Text("BETA", Modifier.background(p.card, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp)
+                        Text("BETA", Modifier.wrapContentWidth(unbounded = true).background(p.card, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp)
                             .semantics { contentDescription = tr("Beta version") },
-                            color = p.accent, fontSize = 9.sp, letterSpacing = 0.8.sp, fontWeight = FontWeight.SemiBold)
+                            color = p.accent, fontSize = 9.sp, letterSpacing = 0.8.sp, fontWeight = FontWeight.SemiBold,
+                            maxLines = 1, softWrap = false)
                     }
                 }
                 Spacer(Modifier.height(6.dp))
@@ -141,9 +144,9 @@ internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Bool
             session()
         }
         Spacer(Modifier.height(20.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            MaitriQuickAction(tr("Share my trip"), tr("Let someone follow along"), R.drawable.maitri_pin, p, Modifier.weight(1f), trip)
-            MaitriQuickAction(tr("Check in"), tr("Set a time to check in"), R.drawable.maitri_clock, p, Modifier.weight(1f), checkIn)
+        Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            MaitriQuickAction(tr("Share my trip"), tr("Let someone follow along"), R.drawable.maitri_pin, p, Modifier.weight(1f).fillMaxHeight(), trip)
+            MaitriQuickAction(tr("Check in"), tr("Set a time to check in"), R.drawable.maitri_clock, p, Modifier.weight(1f).fillMaxHeight(), checkIn)
         }
         Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

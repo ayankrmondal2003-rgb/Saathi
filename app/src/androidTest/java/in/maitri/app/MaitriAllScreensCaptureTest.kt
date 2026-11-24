@@ -28,7 +28,8 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Captures screens 01-14 in Light and Dark for side-by-side review against design-reference/crops.
+ * Captures screens 01-14 in Light and Dark for side-by-side review against design-reference/crops, and again at
+ * 150% text ("large-light-02.png", ...) the way phones with a big font setting see them.
  * Network-free: stateless boards or screens whose loaders fail closed without a session. Never creates an incident.
  */
 class MaitriAllScreensCaptureTest {
@@ -68,7 +69,12 @@ class MaitriAllScreensCaptureTest {
         "13" to { CompositionLocalProvider(LocalInspectionMode provides true) { MaitriPin(uid = null, onBack = {}) } },
         "14" to { MaitriEditProfile(user = null, onBack = {}) })
 
-    @Test fun captureAllScreensInBothThemes() {
+    @Test fun captureAllScreensInBothThemes() = capture(fontScale = null, prefix = "")
+
+    /** Settings → Font size at 150% (the largest common setting): no clipped, broken or hidden text. */
+    @Test fun captureAllScreensWithLargeText() = capture(fontScale = 1.5f, prefix = "large-")
+
+    private fun capture(fontScale: Float?, prefix: String) {
         val context = instrumentation.targetContext
         assumeFalse("Unlock device", context.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked)
         val out = File(context.getExternalFilesDir(null), "checkpoint-d").apply { mkdirs() }
@@ -85,7 +91,12 @@ class MaitriAllScreensCaptureTest {
                                     override fun getSharedPreferences(name: String, mode: Int) = super.getSharedPreferences("capture_$name", mode)
                                 }).apply { setMode(if (dark) ThemeMode.DARK else ThemeMode.LIGHT) }
                             }
-                            CompositionLocalProvider(LocalThemeController provides controller) { key(screen, dark) { content() } }
+                            val density = androidx.compose.ui.platform.LocalDensity.current
+                            CompositionLocalProvider(LocalThemeController provides controller,
+                                androidx.compose.ui.platform.LocalDensity provides
+                                    androidx.compose.ui.unit.Density(density.density, fontScale ?: density.fontScale)) {
+                                key(screen, dark) { content() }
+                            }
                         }
                     }
                     instrumentation.waitForIdleSync()
@@ -100,7 +111,7 @@ class MaitriAllScreensCaptureTest {
                     val shot = requireNotNull(generateSequence { instrumentation.uiAutomation.takeScreenshot()
                         ?: null.also { SystemClock.sleep(700) } }.take(5).firstOrNull { it != null }
                         ?: instrumentation.uiAutomation.takeScreenshot()) { "Screenshot failed for $screen" }
-                    File(out, "${if (dark) "dark" else "light"}-$screen.png").outputStream()
+                    File(out, "$prefix${if (dark) "dark" else "light"}-$screen.png").outputStream()
                         .use { shot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
                 }
             }

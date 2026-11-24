@@ -202,7 +202,7 @@ internal fun MaitriCircleContent(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = tr("These contacts receive your SOS and\nlive location when you ask for help."),
+                        text = designBreaks(tr("These contacts receive your SOS and\nlive location when you ask for help.")),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Normal,
                         color = p.secondary,
@@ -334,7 +334,7 @@ internal fun MaitriCircleContent(
                         )
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            text = tr("Turn alerts on for the people you want\nto notify in an emergency."),
+                            text = designBreaks(tr("Turn alerts on for the people you want\nto notify in an emergency.")),
                             fontSize = 11.sp,
                             color = p.secondary,
                             lineHeight = 15.sp
@@ -602,23 +602,11 @@ private fun ContactCardItem(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = contact.displayName,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = palette.primary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        FitText(contact.displayName, Modifier, palette.primary, 15f, weight = FontWeight.SemiBold)
                     }
                     Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = if (contact.isPrimary) tr("{0} · Primary contact", contact.label) else contact.label,
-                        fontSize = 11.sp,
-                        color = palette.secondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    FitText(if (contact.isPrimary) tr("{0} · Primary contact", contact.label) else contact.label,
+                        Modifier, palette.secondary, 11f)
                 }
 
                 // Edit Button (44x36dp, rx=18dp)
@@ -650,7 +638,9 @@ private fun ContactCardItem(
                 // Left: Custom Mini Toggle Switch matching SVG (32x18dp, rx=9dp)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
+                    // Takes the space left by Invite/Remove, so those never break mid-word with large text.
                     modifier = Modifier
+                        .weight(1f, fill = false)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { onToggleSos(!contact.notifyOnSos) }
                         .padding(vertical = 2.dp, horizontal = 4.dp)
@@ -673,12 +663,8 @@ private fun ContactCardItem(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    Text(
-                        text = if (contact.notifyOnSos) tr("SOS alerts on") else tr("SOS alerts off"),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (contact.notifyOnSos) palette.primary else palette.secondary
-                    )
+                    FitText(if (contact.notifyOnSos) tr("SOS alerts on") else tr("SOS alerts off"), Modifier,
+                        if (contact.notifyOnSos) palette.primary else palette.secondary, 11f, weight = FontWeight.Medium)
                 }
 
                 // Middle: whether SOS alerts reach this person as a push (linked Maitri account) or by your SMS.
@@ -687,6 +673,7 @@ private fun ContactCardItem(
                     fontSize = 11.sp,
                     fontWeight = if (onMaitri) FontWeight.Medium else FontWeight.SemiBold,
                     color = if (onMaitri) palette.secondary else palette.accent,
+                    maxLines = 1, softWrap = false,
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
                         .then(if (onMaitri) Modifier else Modifier.clickable(onClickLabel = tr("Invite {0} to Maitri", contact.displayName), onClick = onInvite))
@@ -699,6 +686,7 @@ private fun ContactCardItem(
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = palette.accent,
+                    maxLines = 1, softWrap = false,
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
                         .clickable(onClick = onRemove)

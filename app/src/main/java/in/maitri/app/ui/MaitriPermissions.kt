@@ -211,8 +211,7 @@ private fun readAccessCanPrompt(context: Context, row: PermissionRow): Boolean {
 @Composable
 private fun RowText(text: String, y: Int, height: Int, size: Int, color: Color, weight: FontWeight) {
     Box(Modifier.offset(52.dp, y.dp).width(256.dp)) {
-        Text(text, color = color, fontSize = size.sp, lineHeight = height.sp, fontWeight = weight,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        FitText(text, Modifier, color, size.toFloat(), height.toFloat(), weight)
     }
 }
 

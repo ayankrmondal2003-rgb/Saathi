@@ -535,7 +535,7 @@ internal fun MaitriLoginContent(
                     val link = androidx.compose.ui.text.TextLinkStyles(androidx.compose.ui.text.SpanStyle(color = p.accent))
                     append(tr("By continuing, you agree to the "))
                     withLink(androidx.compose.ui.text.LinkAnnotation.Url(`in`.maitri.app.network.MaitriLinks.TERMS, link)) { append(tr("Terms of Service")) }
-                    append(tr("\nand "))
+                    append(designBreaks(tr("\nand ")))
                     withLink(androidx.compose.ui.text.LinkAnnotation.Url(`in`.maitri.app.network.MaitriLinks.PRIVACY, link)) { append(tr("Privacy Policy")) }
                     append(".")
                 },

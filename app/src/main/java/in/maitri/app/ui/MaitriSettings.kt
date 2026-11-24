@@ -106,9 +106,9 @@ private fun ProfileRow(y: Int, height: Int, title: Int, detail: Int, value: Stri
     val p = maitriPalette()
     Box(settingsSlot(24, y, 342, height).clickable(role = Role.Button, onClick = onClick)) {
         Column(Modifier.align(Alignment.CenterStart).padding(start = 56.dp, end = if (value == null) 26.dp else 83.dp)) {
-            Text(strings.getString(title), color = p.primary, fontSize = 14.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
+            FitText(strings.getString(title), Modifier, p.primary, 14f, 16f, FontWeight.SemiBold)
             Spacer(Modifier.height(3.dp))
-            Text(strings.getString(detail), color = p.secondary, fontSize = 10.sp, lineHeight = 12.sp, maxLines = 2)
+            FitText(strings.getString(detail), Modifier, p.secondary, 10f, 12f)
         }
         if (value != null) Text(value, Modifier.align(Alignment.CenterEnd).padding(end = if (title == S.settings_vibrations) 24.dp else 36.dp),
             color = if (title == S.settings_vibrations) p.accent else p.secondary, fontSize = 11.sp)

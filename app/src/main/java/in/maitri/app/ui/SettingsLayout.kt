@@ -95,10 +95,8 @@ internal fun SettingsText(label: String, x: Int, y: Int, width: Int, height: Int
     val modifier = settingsSlot(x, y, width, height)
     Box(if (action == null) modifier else modifier.clickable(role = Role.Button, onClick = action),
         contentAlignment = if (center) Alignment.Center else Alignment.CenterStart) {
-        Text(label, color = color, fontSize = size.sp, lineHeight = line.sp,
-            fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
-            textAlign = if (center) TextAlign.Center else TextAlign.Start, maxLines = maxLines,
-            overflow = TextOverflow.Ellipsis)
+        FitText(label, Modifier, color, size.toFloat(), line.toFloat(),
+            if (bold) FontWeight.SemiBold else FontWeight.Normal, if (center) TextAlign.Center else TextAlign.Start, maxLines)
     }
 }
 
