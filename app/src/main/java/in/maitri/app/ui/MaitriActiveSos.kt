@@ -57,7 +57,9 @@ fun MaitriActiveSos(
     incidentId: String,
     onAccessLost: () -> Unit,
     onEndSos: () -> Unit,
-    onSetPin: () -> Unit = {}
+    onSetPin: () -> Unit = {},
+    /** Opened from Home's "End SOS": show the Safety PIN dialog straight away. */
+    requestEnd: Boolean = false
 ) {
     val p = maitriPalette()
     val context = LocalContext.current
@@ -66,7 +68,7 @@ fun MaitriActiveSos(
     val tracking = remember(context) { LocalTrackingRepository.get(context) }
     var snapshot by remember(uid, incident.started) { mutableStateOf<IncidentSnapshotDto?>(null) }
     var circleAlerted by rememberSaveable(uid, incidentId) { mutableStateOf(false) }
-    var showPinDialog by rememberSaveable { mutableStateOf(false) }
+    var showPinDialog by rememberSaveable { mutableStateOf(requestEnd) }
     var pinValue by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
     var isVerifyingPin by remember { mutableStateOf(false) }

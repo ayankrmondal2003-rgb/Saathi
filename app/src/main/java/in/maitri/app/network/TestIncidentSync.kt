@@ -2,6 +2,7 @@ package `in`.maitri.app.network
 
 import android.content.Context
 import android.os.SystemClock
+import android.util.Log
 import androidx.work.*
 import `in`.maitri.app.location.LocationUpdate
 import `in`.maitri.app.location.LocalTrackingRepository
@@ -19,7 +20,16 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 data class ExpectedAccount(val uid: String)
-data class SyncStatus(val uid: String = "", val message: String = "Local demo")
+data class SyncStatus(val uid: String = "", val message: String = "Local demo", val problem: SyncProblem? = null)
+
+/** Result of checking the local SOS session against the server's open incident. */
+sealed interface ReconcileOutcome {
+    data object Unchanged : ReconcileOutcome
+    data class Adopted(val startedAtMillis: Long) : ReconcileOutcome
+    data object Cleared : ReconcileOutcome
+}
+
+private const val TAG = "MaitriSosSync"
 internal enum class UploadResult { ACTIVE, RETRY, DONE }
 
 internal enum class ReplayState { COMPLETE, RECHECK, SESSION_CHANGED }
@@ -71,7 +81,99 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
         prefs.getString("confirmed:$uid", null)?.takeIf { isShared(uid, it) }
 
     internal fun retriesExhausted(uid: String) {
-        mutable.value = SyncStatus(uid, "Sync paused after repeated failures · reopen to retry")
+        mutable.value = SyncStatus(uid, "Still can't reach Maitri. Tap Try again, or call 112 if you need help now.",
+            SyncProblem.RETRYING)
+    }
+
+    /** "Try again" on Home: drop the backoff and sync this session now. */
+    fun retryNow(uid: String) {
+        worker?.cancel()
+        worker = null
+        lastCheck = 0
+        wake(uid)
+    }
+
+    /** Hides an ENDED message once the user has seen it. */
+    fun dismissProblem(uid: String) {
+        if (mutable.value.uid == uid && mutable.value.problem == SyncProblem.ENDED) mutable.value = SyncStatus(uid, "")
+    }
+
+    /** Stops the session on this phone (service, queued fixes, local session) so Home never shows a dead SOS as open. */
+    private fun endLocally(uid: String, message: String, problem: SyncProblem? = SyncProblem.ENDED) {
+        clearActiveIncident(uid)
+        LocalTrackingRepository.get(context).close()
+        mutable.value = SyncStatus(uid, message, problem)
+    }
+
+    /**
+     * Run at sign-in and app start. Adopts the server's open incident when this phone lost its link to it
+     * (reinstall, cleared data, signed out and back in), and clears a local session the server has already ended.
+     * Network failures change nothing.
+     */
+    suspend fun reconcile(uid: String): ReconcileOutcome {
+        val outcome = withContext(Dispatchers.Main.immediate) {
+            serial.withLock {
+                user(uid) ?: return@withLock ReconcileOutcome.Unchanged
+                val server = try {
+                    val response = BackendClient.api.activeIncident(ExpectedAccount(uid))
+                    when {
+                        response.code() == 204 -> null
+                        response.isSuccessful -> response.body() ?: return@withLock ReconcileOutcome.Unchanged
+                        else -> {
+                            Log.w(TAG, "Active incident lookup failed: HTTP ${response.code()}")
+                            return@withLock ReconcileOutcome.Unchanged
+                        }
+                    }
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (failure: Exception) {
+                    Log.w(TAG, "Active incident lookup unavailable: ${failure.javaClass.simpleName}")
+                    return@withLock ReconcileOutcome.Unchanged
+                }
+                when (decideReconcile(getActiveIncidentId(uid), server?.id, server?.status)) {
+                    ReconcileAction.KEEP -> ReconcileOutcome.Unchanged
+                    ReconcileAction.CLEAR_LOCAL -> {
+                        Log.i(TAG, "Server has no open incident; clearing the local SOS session")
+                        endLocally(uid, "", problem = null)
+                        ReconcileOutcome.Cleared
+                    }
+                    ReconcileAction.ADOPT -> {
+                        val open = requireNotNull(server)
+                        Log.i(TAG, "Adopting open server incident ${open.id}")
+                        ReconcileOutcome.Adopted(adopt(uid, open))
+                    }
+                }
+            }
+        }
+        if (outcome is ReconcileOutcome.Adopted) wake(uid)
+        return outcome
+    }
+
+    /** Links this phone's session (creating one if needed) to an open server incident. Caller holds [serial]. */
+    private fun adopt(uid: String, open: ActiveIncidentDto): Long {
+        val started = serverTimeMillis(open.startedAt)
+        LocalTrackingRepository.get(context).begin(uid, started)
+        val key = session().id
+        prefs.edit().putStringSet(uid, keys(uid) + key).putLong("started:$uid", started)
+            .putString("confirmed:$uid", key).putString("incident:$uid", open.id).apply()
+        authorizedKey = key
+        lastCheck = SystemClock.elapsedRealtime()
+        mutable.value = SyncStatus(uid, "Reconnected to your open SOS.")
+        return started
+    }
+
+    /** POST /api/incidents; on 409 the server already has this user's incident, so it is looked up and adopted. */
+    private suspend fun createOrAdopt(key: String, account: ExpectedAccount): IncidentDto? {
+        try {
+            return BackendClient.api.createTest(key, TestIncidentRequest(), account)
+        } catch (failure: HttpException) {
+            if (failure.code() != 409) throw failure
+            val conflict = parseIncidentConflict(runCatching { failure.response()?.errorBody()?.string() }.getOrNull())
+            Log.i(TAG, "Incident create conflict ${conflict?.code ?: "unstructured"}; looking up the open incident")
+        }
+        val lookup = BackendClient.api.activeIncident(account)
+        if (lookup.code() == 204) return null
+        if (!lookup.isSuccessful) throw HttpException(lookup)
+        return lookup.body()?.let { IncidentDto(it.id, it.status) }
     }
 
     fun canStart(uid: String, key: String) = !isShared(uid, key) ||
@@ -98,7 +200,7 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
                         lastCleanupScheduled = now
                     }
                 }
-                catch (_: Exception) { mutable.value = SyncStatus(uid, "Could not save pending fix") }
+                catch (_: Exception) { mutable.value = SyncStatus(uid, "Couldn't save your latest location on this phone.") }
             }
         }
     }
@@ -162,14 +264,14 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) {
                 val code = (failure as? HttpException)?.code()
-                if (code != null && code in 400..499 && code !in listOf(408, 429)) {
-                    authorizedKey = null
-                    context.stopService(android.content.Intent(context, `in`.maitri.app.location.SosLocationService::class.java))
-                    mutable.value = SyncStatus(uid, "Server refused synchronization ($code). Reopen after checking access.")
+                if (code != null && isFatalSyncCode(code)) {
+                    Log.w(TAG, "SOS sync refused: HTTP $code ${errorDetail(failure)}")
+                    endLocally(uid, fatalSyncMessage(code))
                     UploadResult.DONE
                 } else {
+                    Log.w(TAG, "SOS sync interrupted: ${code?.let { "HTTP $it" } ?: failure.javaClass.simpleName}")
                     lastCheck = 0
-                    mutable.value = SyncStatus(uid, "Sync interrupted · waiting for network retry")
+                    mutable.value = SyncStatus(uid, "Can't reach Maitri right now. Your SOS keeps retrying.", SyncProblem.RETRYING)
                     UploadResult.RETRY
                 }
             }
@@ -181,19 +283,19 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
         var incident = getActiveIncidentId(uid)
         if (force || incident == null || authorizedKey != key || lastCheck == 0L || SystemClock.elapsedRealtime() - lastCheck > 30000L) {
             val response = if (incident == null) {
-                BackendClient.api.createTest(key, TestIncidentRequest(), account)
+                createOrAdopt(key, account) ?: run {
+                    if (active(uid, key)) endLocally(uid, "That SOS session has already ended. Hold SOS again to start a new one.")
+                    return UploadResult.DONE
+                }
             } else {
                 val current = BackendClient.api.incidentLocation(incident, account)
                 IncidentDto(incident, current.status)
             }
             if (!active(uid, key) || user(uid) == null) return UploadResult.DONE
             if (response.status != "ACTIVE") {
-                authorizedKey = null
-                if (response.status == "CLOSED") {
-                    clearActiveIncident(uid)
-                    LocalTrackingRepository.get(context).close()
-                }
-                mutable.value = SyncStatus(uid, "Server incident: " + response.status)
+                Log.i(TAG, "Server incident is ${response.status}; ending the local session")
+                endLocally(uid, if (response.status == "CLOSED") "Your SOS has ended."
+                    else "Your earlier SOS is still open and needs attention. Call 112 if you need help now.")
                 return UploadResult.DONE
             }
             prefs.edit().putString("confirmed:$uid", key).putString("incident:$uid", response.id).apply()
@@ -214,13 +316,16 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
         if (result == ReplayState.SESSION_CHANGED) return UploadResult.DONE
         if (result == ReplayState.RECHECK) lastCheck = 0
         mutable.value = SyncStatus(uid, when {
-            result == ReplayState.RECHECK -> "Fix rejected · checking incident state"
-            pending.isNotEmpty() -> "Server accepted fix at " + Instant.ofEpochMilli(pending.last().timestampMillis)
-            else -> "Test incident connected · no pending fixes"
+            result == ReplayState.RECHECK -> "Checking your SOS session…"
+            pending.isNotEmpty() -> "Connected · your location is shared"
+            else -> "Connected · waiting for your location"
         })
         return UploadResult.ACTIVE
     }
 }
+
+private fun errorDetail(failure: Exception): String =
+    (failure as? HttpException)?.let { runCatching { it.response()?.errorBody()?.string() }.getOrNull() }?.take(300).orEmpty()
 
 class IncidentUploadWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result {

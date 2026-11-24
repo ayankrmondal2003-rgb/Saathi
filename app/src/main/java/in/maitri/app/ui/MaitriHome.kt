@@ -29,6 +29,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import `in`.maitri.app.R
 import `in`.maitri.app.data.DemoState
 import `in`.maitri.app.data.IncidentStatus
+import `in`.maitri.app.network.SyncProblem
 import `in`.maitri.app.ui.theme.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -54,7 +55,8 @@ internal fun maitriPalette(): MaitriPalette {
 }
 
 @Composable
-fun MaitriHome(state: DemoState, start: (Boolean) -> Unit, contacts: () -> Unit) {
+fun MaitriHome(state: DemoState, start: (Boolean) -> Unit, contacts: () -> Unit,
+               session: @Composable ColumnScope.() -> Unit = {}) {
     val p = maitriPalette()
     val context = LocalContext.current
     var confirm by rememberSaveable { mutableStateOf(false) }
@@ -69,7 +71,8 @@ fun MaitriHome(state: DemoState, start: (Boolean) -> Unit, contacts: () -> Unit)
                 .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
         },
         trip = { sharingKind = "TRIP" },
-        checkIn = { sharingKind = "CHECK_IN" })
+        checkIn = { sharingKind = "CHECK_IN" },
+        session = session)
     if (confirm) {
         AlertDialog(onDismissRequest = { confirm = false; share = false },
             containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
@@ -97,7 +100,7 @@ fun MaitriHome(state: DemoState, start: (Boolean) -> Unit, contacts: () -> Unit)
 @Composable
 internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Boolean,
     onSos: () -> Unit, contacts: () -> Unit, notifications: () -> Unit,
-    trip: () -> Unit, checkIn: () -> Unit) {
+    trip: () -> Unit, checkIn: () -> Unit, session: @Composable ColumnScope.() -> Unit = {}) {
     Column(Modifier.fillMaxSize().background(p.background).statusBarsPadding()
         .verticalScroll(rememberScrollState())
         .padding(start = 24.dp, end = 24.dp, top = 22.dp, bottom = LocalFloatingNavBarPadding.current)) {
@@ -126,6 +129,7 @@ internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Bool
             Spacer(Modifier.height(14.dp))
             Text(if (active) "Hold for 3 seconds to open your SOS" else "Hold for 3 seconds to alert your circle",
                 color = p.accent, fontSize = 11.sp, textAlign = TextAlign.Center)
+            session()
         }
         Spacer(Modifier.height(20.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -256,5 +260,39 @@ fun MaitriBottomBar(currentRoute: String?, onTabSelected: (String) -> Unit, modi
 @Composable private fun MaitriHomeDarkPreview() {
     CompositionLocalProvider(LocalFloatingNavBarPadding provides 80.dp) {
         MaitriHomeContent(MaitriPalette(true), 0, false, {}, {}, {}, {}, {})
+    }
+}
+
+/**
+ * Under the SOS button: what the session is doing (never an HTTP code) and what the user can do about it.
+ * Resume opens screen 08; End opens the Safety PIN on screen 08, or ends a session the server never confirmed.
+ */
+@Composable
+internal fun SosSessionPanel(p: MaitriPalette, active: Boolean, message: String?, problem: SyncProblem?,
+    onResume: () -> Unit, onEnd: () -> Unit, onRetry: () -> Unit, onDismiss: () -> Unit) {
+    if (!active && message.isNullOrBlank()) return
+    Spacer(Modifier.height(12.dp))
+    if (!message.isNullOrBlank()) {
+        Text(message, Modifier.padding(horizontal = 20.dp).semantics { liveRegion = LiveRegionMode.Polite },
+            color = if (problem != null) p.accent else p.secondary, fontSize = 12.sp, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(8.dp))
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (active) {
+            if (problem == SyncProblem.RETRYING) SessionAction("Try again", p, onRetry)
+            SessionAction("Resume SOS", p, onResume)
+            SessionAction("End SOS", p, onEnd)
+        } else if (problem == SyncProblem.ENDED) {
+            SessionAction("OK", p, onDismiss)
+        }
+    }
+}
+
+@Composable
+private fun SessionAction(label: String, p: MaitriPalette, click: () -> Unit) {
+    OutlinedButton(onClick = click, modifier = Modifier.heightIn(min = 48.dp),
+        border = BorderStroke(1.dp, p.accent), colors = ButtonDefaults.outlinedButtonColors(contentColor = p.accent),
+        contentPadding = PaddingValues(horizontal = 14.dp)) {
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
 }

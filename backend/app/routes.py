@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import insert
 from app.core import account, database, identity
 from app.database.v1 import devices, incidents, invitations, locations, responders, users
 from app.schemas import (
-    CreateIncident, Decision, DeviceRegister, Fix, Incident, IncidentResolutionRequest,
+    ActiveIncident, CreateIncident, Decision, DeviceRegister, Fix, Incident, IncidentResolutionRequest,
     IncidentResolutionResponse, IncidentSnapshot, Profile, ProfileDetailsEdit, ProfileEdit, ResponderStatusUpdate,
     SafetyPinChange, SafetyPinRecovery, SafetyPinSetup, SafetyPinStatus, TestAlertResponse,
     TrustedContact, TrustedContactAlertBatchResponse, TrustedContactCreate, TrustedContactUpdate,
@@ -86,6 +86,13 @@ async def responder_fix(body: Fix, request: Request, user=Depends(account), db=D
 async def create(body: CreateIncident, request: Request, idempotency_key: UUID = Header(),
                  user=Depends(account), db=Depends(database)):
     return dict(await service.create(db, user, body, idempotency_key, request.app.state.settings))
+
+
+@router.get("/incidents/active", response_model=ActiveIncident, responses={204: {"description": "No open incident"}})
+async def active_incident(user=Depends(account), db=Depends(database)):
+    """The caller's own open (non-CLOSED) incident, so the app can resume it after losing local state."""
+    row = await service.open_incident(db, user.id)
+    return Response(status_code=204) if row is None else dict(row)
 
 
 @router.post("/incidents/{incident_id}/location", status_code=204)

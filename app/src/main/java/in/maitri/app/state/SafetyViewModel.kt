@@ -94,6 +94,22 @@ class SafetyViewModel(app: Application) : AndroidViewModel(app) {
                 DemoState(profile, repository.load(identity.uid), incident = restored, responder = profile.responder)
             }
         refreshContacts()
+        reconcileIncident(identity.uid)
+    }
+
+    /**
+     * Matches Home to the server: resumes an open server incident this phone lost track of, and drops a local
+     * session the server already ended (the session collector in init then marks the incident ENDED).
+     */
+    private fun reconcileIncident(uid: String) {
+        if (BuildConfig.API_BASE_URL.isBlank()) return
+        viewModelScope.launch {
+            val outcome = tracking.sync.reconcile(uid)
+            if (outcome is ReconcileOutcome.Adopted && current.user?.uid == uid && current.incident?.status != IncidentStatus.ACTIVE) {
+                val elapsed = (System.currentTimeMillis() - outcome.startedAtMillis).coerceAtLeast(0)
+                mutable.value = current.copy(incident = SosIncident(SystemClock.elapsedRealtime() - elapsed))
+            }
+        }
     }
 
     fun start(share: Boolean) {

@@ -234,6 +234,8 @@ internal fun MainGraph(
     val sync = remember(context) { LocalTrackingRepository.get(context).sync }
     var authorizedJourney by remember(uid) { mutableStateOf<String?>(null) }
     var confirmedActive by remember(uid) { mutableStateOf<String?>(null) }
+    // "End SOS" on Home opens screen 08 with the Safety PIN dialog already showing.
+    var endRequested by remember(uid) { mutableStateOf(false) }
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
@@ -315,6 +317,7 @@ internal fun MainGraph(
                         }
                     }
                     val onStartIncident: (Boolean) -> Unit = { share ->
+                        sync.dismissProblem(uid)
                         if (state.incident?.status != IncidentStatus.ACTIVE) {
                             vm.start(share)
                             startDemoTracking(context, uid)
@@ -322,17 +325,39 @@ internal fun MainGraph(
                         val session = LocalTrackingRepository.get(context).session.value
                         if (sync.isShared(uid, session.id)) requested = true else localPractice = true
                     }
-                    if (requested && id == null) {
-                        LaunchedEffect(syncState) {
-                            android.widget.Toast.makeText(context, if (syncState.uid == uid) syncState.message else "Waiting for incident confirmation", android.widget.Toast.LENGTH_SHORT).show()
-                        }
+                    val ownStatus = syncState.uid == uid
+                    val problem = if (ownStatus) syncState.problem else null
+                    // A session the sync layer ended can no longer be confirmed; stop waiting for it.
+                    LaunchedEffect(problem) { if (problem == SyncProblem.ENDED) { requested = false; endRequested = false } }
+                    val sessionMessage = when {
+                        problem != null -> syncState.message
+                        requested && id == null -> "Connecting your SOS to Maitri…"
+                        else -> null
                     }
                     val onContactsClick = remember { { tab("Contacts") } }
+                    val active = state.incident?.status == IncidentStatus.ACTIVE
 
                     MaitriHome(
                         state = state,
                         start = onStartIncident,
-                        contacts = onContactsClick
+                        contacts = onContactsClick,
+                        session = {
+                            SosSessionPanel(maitriPalette(), active, sessionMessage, problem,
+                                onResume = { onStartIncident(false) },
+                                onEnd = {
+                                    if (sync.getActiveIncidentId(uid) != null) {
+                                        endRequested = true
+                                        onStartIncident(false)
+                                    } else {
+                                        // Never confirmed by the server: nothing to resolve with the PIN.
+                                        sync.clearActiveIncident(uid)
+                                        vm.end()
+                                        requested = false
+                                    }
+                                },
+                                onRetry = { sync.retryNow(uid) },
+                                onDismiss = { sync.dismissProblem(uid) })
+                        }
                     )
                 }
                 composable(
@@ -352,8 +377,10 @@ internal fun MainGraph(
                 ) {
                     val incident = state.incident
                     if (incident?.status == IncidentStatus.ACTIVE && confirmedActive != null && confirmedActive == sync.getActiveIncidentId(uid)) {
+                        LaunchedEffect(Unit) { endRequested = false }
                         MaitriActiveSos(
                             incident = incident,
+                            requestEnd = endRequested,
                             incidentId = requireNotNull(confirmedActive),
                             uid = state.user?.uid.orEmpty(),
                             onAccessLost = { nav.popBackStack() },

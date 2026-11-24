@@ -1,11 +1,11 @@
 # MAITRI SERVER-BASED FEATURE TEST REPORT
 
-**Execution Timestamp:** 2026-11-24T02:25:16Z
+**Execution Timestamp:** 2026-11-24T02:49:25Z
 **Environment:** Isolated PostgreSQL + PostGIS (Port dynamically allocated)
 **Safety Guard Status:** VERIFIED_ISOLATED (No production connections, live SOS disabled)
 **Alembic Head Revision:** `0011`
 **PostGIS Version:** `3.7.0`
-**Duration:** 81.3s
+**Duration:** 41.09s
 **Overall Status:** **PASS**
 
 ---
@@ -14,7 +14,7 @@
 
 | Total Tests | Passed | Failed | Errors | Skipped | Pass Rate | Overall Result |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **116** | **116** | **0** | **0** | **0** | **100.0%** | **PASS** |
+| **124** | **124** | **0** | **0** | **0** | **100.0%** | **PASS** |
 
 All tests were executed against genuine local FastAPI endpoints, authentic database schemas with PostGIS spatial evaluation, and multi-actor synthetic authentication (`VICTIM_A`, `RESPONDER_B`, `TRUSTED_CONTACT_C`, `UNAUTHORIZED_USER_D`). No production database was contacted, no SMS or real FCM push was sent, and emergency broadcasting remained strictly disabled.
 

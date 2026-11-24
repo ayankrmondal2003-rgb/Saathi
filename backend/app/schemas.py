@@ -86,6 +86,13 @@ class Incident(BaseModel):
     is_test: bool
 
 
+class ActiveIncident(BaseModel):
+    id: UUID
+    status: str
+    started_at: datetime
+    idempotency_key: UUID
+
+
 class Decision(Input):
     decision: Literal["ACCEPTED", "DECLINED"]
 

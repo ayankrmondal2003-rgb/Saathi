@@ -227,3 +227,21 @@ Tests at `cdbd1af` plus the contract-test path fix:
 | SOS still defaults to a local-only practice session unless "share" is ticked, and the server accepts only test incidents (R2) | open, Phase E |
 
 Tests at `7f98d68`: Android JVM 141/141; device 26/26 on SM-E625F (Android 13).
+
+### SOS "Server refused synchronization (409)" fix
+
+Cause: the server already had an open incident for the user (unique index `uq_open_incident_owner`), while the phone had lost its local link to it (reinstall, cleared data, sign-out/sign-in, or an SOS never ended with the PIN). `create()` answered 409, and the app treated every 4xx as fatal: it stopped the location service but left the local session running, so Home said "Your SOS session is open." The app always sends `{"is_test": true}` with no location, so `IDEMPOTENCY_MISMATCH` and `LOCATION_CONFLICT` could not occur from it.
+
+| Change | Where |
+|---|---|
+| `GET /api/incidents/active` (owner only; 200 or 204) | `routes.py`, `services/incidents.py` |
+| Structured 409s: `INCIDENT_ALREADY_OPEN` (with `incident_id`), `IDEMPOTENCY_MISMATCH`, `LOCATION_CONFLICT`; `X-Error-Code` header | `services/incidents.py` |
+| Idempotency hash leaves out the fix; legacy full-body hashes still accepted | `request_digests` |
+| A fix sent with create never fails creation; a replay applies a newer fix | `apply_creation_fix` |
+| Orphaned ACTIVE incidents (no fix and no responder activity for `ORPHANED_INCIDENT_HOURS`, default 12) are closed with `INCIDENT_AUTO_EXPIRED`; duress and resolution requests are untouched; no migration (uses `CLOSED`) | `expire_orphaned`, background loop in `main.py` |
+| Close side effects shared by PIN resolution and expiry | `revoke_incident_access` |
+| App adopts the open incident on 409; 409 is never fatal; fatal codes end the local session too | `TestIncidentSync.kt`, `IncidentRecovery.kt` |
+| Reconcile at sign-in/app start: adopt the server's open incident, or clear a local session the server ended | `SafetyViewModel.reconcileIncident` |
+| Home: Resume SOS / End SOS (Safety PIN) and an inline status with Try again; no raw HTTP codes; technical detail goes to logcat tag `MaitriSosSync` | `MaitriHome.kt`, `SafetyApp.kt` |
+
+Tests: Android JVM 149/149 (8 new in `IncidentRecoveryTest`); isolated backend 124/124 (8 new in `test_incident_recovery.py`). Needs the backend deployed before the on-phone checks.

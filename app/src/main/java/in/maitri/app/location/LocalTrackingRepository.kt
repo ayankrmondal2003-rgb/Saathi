@@ -29,9 +29,9 @@ class LocalTrackingRepository private constructor(private val context: Context) 
         persist(TrackingSession(uid, key, sync.startedAt(uid), TrackingState.STOPPED))
     }
 
-    fun begin(uid: String) {
+    fun begin(uid: String, startedAt: Long = System.currentTimeMillis()) {
         if (session.value.owner == uid && session.value.id.isNotEmpty()) return
-        persist(TrackingSession(uid, UUID.randomUUID().toString(), System.currentTimeMillis()))
+        persist(TrackingSession(uid, UUID.randomUUID().toString(), startedAt))
     }
     fun change(id: String, block: (TrackingSession) -> TrackingSession) {
         val old = session.value

@@ -345,7 +345,9 @@ def test_share_my_trip_complete_flow(maitri_env):
     # 10. Database verification: Confirm NO emergency incident was created
     async def verify_db():
         async with sessions() as db:
-            count = await db.scalar(text("SELECT count(*) FROM incidents"))
+            # Scoped to this test's owner: other tests share the database and leave their own incidents.
+            count = await db.scalar(text("SELECT count(*) FROM incidents i JOIN users u ON u.id = i.victim_user_id "
+                                         "WHERE u.firebase_uid LIKE :prefix"), {"prefix": prefix + "%"})
             return count
     assert client.portal.call(verify_db) == 0, "No emergency incident should be created during circle trip sharing!"
 

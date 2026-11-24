@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 import asyncio
 from contextlib import suppress
 from app.services.geofence import tick
+from app.services.incidents import expire_orphaned
 from app.services.outbox_worker import process_outbox_batch
 import logging
 import os
@@ -43,6 +44,14 @@ def create_app(settings=None, *, initialize_firebase=True):
                         await cleanup_circle(db)
                 except (SQLAlchemyError, OSError):
                     logging.getLogger("surakshanet").warning("Geofence batch unavailable")
+                try:
+                    async with app.state.sessions.begin() as db:
+                        expired = await expire_orphaned(db, settings)
+                    for incident_id in expired:
+                        logging.getLogger("surakshanet").info("Auto-expired orphaned incident %s", incident_id)
+                        await getattr(app.state, "hub", hub).close_incident(incident_id, reason="Incident expired after inactivity")
+                except (SQLAlchemyError, OSError):
+                    logging.getLogger("surakshanet").warning("Orphaned incident expiry unavailable")
 
         async def periodic_outbox():
             while True:

@@ -193,6 +193,7 @@ interface BackendApi {
     @GET("api/users/me") suspend fun profile(@Tag expected: ExpectedAccount? = null): ProfileDto
     @PUT("api/users/me") suspend fun profile(@Body request: ProfileRequest, @Tag expected: ExpectedAccount): ProfileDto
     @PATCH("api/users/me") suspend fun profileDetails(@Body request: ProfileDetailsRequest, @Tag expected: ExpectedAccount): ProfileDto
+    @GET("api/incidents/active") suspend fun activeIncident(@Tag expected: ExpectedAccount): retrofit2.Response<ActiveIncidentDto>
     @POST("api/incidents") suspend fun createTest(@Header("Idempotency-Key") key: String, @Body request: TestIncidentRequest, @Tag expected: ExpectedAccount): IncidentDto
     @POST("api/devices/register") suspend fun registerDevice(@Body request: DeviceRegistrationDto, @Tag expected: ExpectedAccount): StatusDto
     @DELETE("api/devices/{token}") suspend fun unregisterDevice(@Path("token") token: String): retrofit2.Response<Unit>

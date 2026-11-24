@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 import hashlib
 from fastapi import HTTPException
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from app.database.v1 import events, incidents, invitations, responders, trusted_contact_grants, users
 from app.services.geofence import evaluate, point
 
@@ -36,7 +36,7 @@ async def update_fix(db, row, fix, settings):
         if (fix.recorded_at, fix.latitude, fix.longitude, fix.accuracy_meters, fix.is_mock) == (
             row.location_recorded_at, row.latitude, row.longitude, row.location_accuracy_meters, row.location_is_mock):
             return False
-        raise HTTPException(409, "Location superseded or conflicting")
+        raise conflict("LOCATION_CONFLICT", "Location superseded or conflicting")
     if row.location_is_mock is not None and row.location_is_mock != fix.is_mock:
         raise HTTPException(422, "Location source type cannot change during a test incident")
     fix.check(settings)
@@ -47,23 +47,94 @@ async def update_fix(db, row, fix, settings):
     return True
 
 
+def conflict(code, message, incident_id=None):
+    """A 409 the app can act on: {"detail": {"code", "message", "incident_id"}} plus an X-Error-Code header."""
+    detail = {"code": code, "message": message}
+    if incident_id is not None:
+        detail["incident_id"] = str(incident_id)
+    return HTTPException(409, detail, headers={"X-Error-Code": code})
+
+
+def request_digests(body):
+    """Stable hash of the request without the GPS fix, so a retry carrying a newer fix is the same request.
+    The second value is the pre-release hash of the full body, still accepted for incidents created before."""
+    stable = hashlib.sha256(body.model_dump_json(exclude={"location"}).encode()).hexdigest()
+    legacy = hashlib.sha256(body.model_dump_json().encode()).hexdigest()
+    return stable, legacy
+
+
+async def apply_creation_fix(db, row, fix, settings):
+    """A fix sent with create is best effort: a stale, duplicate or invalid fix never fails the SOS itself."""
+    if fix is None or row.status != "ACTIVE":
+        return
+    try:
+        await update_fix(db, await incident_row(db, row.id), fix, settings)
+    except HTTPException:
+        pass
+
+
+async def open_incident(db, user_id):
+    return (await db.execute(select(incidents).where(incidents.c.victim_user_id == user_id,
+        incidents.c.status != "CLOSED"))).mappings().first()
+
+
 async def create(db, user, body, key, settings):
-    digest = hashlib.sha256(body.model_dump_json().encode()).hexdigest()
+    digest, legacy = request_digests(body)
     # account() holds this owner's row lock for the whole request transaction.
     existing = (await db.execute(select(incidents).where(incidents.c.victim_user_id == user.id,
         incidents.c.idempotency_key == key))).mappings().first()
     if existing:
-        if existing.request_hash != digest:
-            raise HTTPException(409, "Idempotency key already used with different input")
+        if existing.request_hash not in (digest, legacy):
+            raise conflict("IDEMPOTENCY_MISMATCH", "Idempotency key already used with different input", existing.id)
+        await apply_creation_fix(db, existing, body.location, settings)
         return existing
-    if await db.scalar(select(incidents.c.id).where(incidents.c.victim_user_id == user.id, incidents.c.status != "CLOSED")):
-        raise HTTPException(409, "An incident is already open")
+    already = await open_incident(db, user.id)
+    if already:
+        raise conflict("INCIDENT_ALREADY_OPEN", "An incident is already open", already.id)
     result = (await db.execute(incidents.insert().values(victim_user_id=user.id, idempotency_key=key,
         request_hash=digest, radius_meters=settings.radius_meters).returning(incidents))).mappings().one()
     await audit(db, result.id, user.id, "TEST_INCIDENT_CREATED")
-    if body.location:
-        await update_fix(db, result, body.location, settings)
+    await apply_creation_fix(db, result, body.location, settings)
     return result
+
+
+async def revoke_incident_access(db, incident_id, now):
+    """Side effects shared by every way an incident closes: pending alerts stop and nobody keeps access."""
+    await db.execute(text("UPDATE notification_outbox SET delivery_status='CANCELLED' WHERE incident_id=:id "
+                          "AND delivery_status IN ('PENDING','RETRY_SCHEDULED','SENDING')"), {"id": incident_id})
+    await db.execute(text("UPDATE incident_invitations SET status='EXPIRED' WHERE incident_id=:id AND status='PENDING'"),
+                     {"id": incident_id})
+    await db.execute(update(responders).where(responders.c.incident_id == incident_id, responders.c.revoked_at.is_(None))
+                     .values(authorization_status="REVOKED", revoked_at=now))
+    await db.execute(text("UPDATE trusted_contact_grants SET authorization_status='REVOKED', revoked_at=:now "
+                          "WHERE incident_id=:id AND authorization_status='AUTHORIZED'"), {"id": incident_id, "now": now})
+
+
+async def expire_orphaned(db, settings, batch=50):
+    """Closes ACTIVE incidents nobody has touched for `orphaned_incident_hours`: no fix received and no
+    responder activity in that window. Duress (ESCALATION_REQUIRED) and resolution requests are never touched."""
+    rows = (await db.execute(text("""
+        SELECT i.id, i.victim_user_id FROM incidents i
+        WHERE i.status = 'ACTIVE'
+          AND i.started_at < now() - make_interval(hours => :hours)
+          AND COALESCE(i.location_received_at, i.started_at) < now() - make_interval(hours => :hours)
+          AND NOT EXISTS (SELECT 1 FROM incident_responders r WHERE r.incident_id = i.id
+              AND GREATEST(r.accepted_at, COALESCE(r.assistance_updated_at, r.accepted_at))
+                  >= now() - make_interval(hours => :hours))
+          AND NOT EXISTS (SELECT 1 FROM incident_invitations v WHERE v.incident_id = i.id
+              AND COALESCE(v.responded_at, v.invited_at) >= now() - make_interval(hours => :hours))
+        ORDER BY i.started_at LIMIT :batch FOR UPDATE OF i SKIP LOCKED"""),
+        {"hours": settings.orphaned_incident_hours, "batch": batch})).all()
+    now = datetime.now(timezone.utc)
+    for incident_id, owner_id in rows:
+        await db.execute(update(incidents).where(incidents.c.id == incident_id, incidents.c.status == "ACTIVE")
+                         .values(status="CLOSED", ended_at=now))
+        await revoke_incident_access(db, incident_id, now)
+        # actor_user_id is NOT NULL; the owner is recorded and the metadata says the system closed it.
+        await db.execute(events.insert().values(incident_id=incident_id, actor_user_id=owner_id,
+            event_type="INCIDENT_AUTO_EXPIRED",
+            metadata={"actor": "system", "idle_hours": settings.orphaned_incident_hours}))
+    return [incident_id for incident_id, _ in rows]
 
 
 async def may_read(db, incident, user):
