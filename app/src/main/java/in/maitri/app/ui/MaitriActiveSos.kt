@@ -168,6 +168,8 @@ fun MaitriActiveSos(
         else -> null
     }
 
+    val connecting by `in`.maitri.app.network.BackendLatency.connecting.collectAsStateWithLifecycle()
+
     // Elapsed timer calculation
     val elapsedSeconds by produceState(0L, incident.started) {
         while (true) {
@@ -256,7 +258,11 @@ fun MaitriActiveSos(
         }
         BoardAction(24, 638, 165, 64, "Voice recorder") { openCapture(android.provider.MediaStore.Audio.Media.RECORD_SOUND_ACTION) }
         BoardAction(201, 638, 165, 64, "Open camera") { openCapture(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA) }
-        BoardLabel(66, 719, 280, if (updated) "Updates connected · $timerString" else "Awaiting server update · $timerString", p.secondary)
+        BoardLabel(66, 719, 280, when {
+            connecting -> "Connecting to Maitri… · $timerString"
+            updated -> "Updates connected · $timerString"
+            else -> "Awaiting server update · $timerString"
+        }, if (connecting) p.accent else p.secondary)
     }
 
     // Safety PIN Resolution Modal

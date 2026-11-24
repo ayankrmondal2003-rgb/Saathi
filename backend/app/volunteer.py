@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import Field
 from sqlalchemy import text
 from app.core import account, database
+from app.files import UploadRequest, create_upload
 from app.schemas import Input
 
 router = APIRouter(prefix="/api/volunteer")
@@ -38,7 +39,8 @@ async def one(db, sql, **params):
 
 
 @router.get("/status")
-async def get_volunteer_status(user=Depends(account), db=Depends(database)):
+async def get_volunteer_status(request: Request, user=Depends(account), db=Depends(database)):
+    storage_ready = request.app.state.settings.storage_configured
     row = await one(db, "SELECT * FROM volunteer_applications WHERE user_id = :uid", uid=user.id)
     if not row:
         return {
@@ -50,7 +52,7 @@ async def get_volunteer_status(user=Depends(account), db=Depends(database)):
             "has_photo": False,
             "has_declaration": False,
             "consent_declared": False,
-            "secure_storage_ready": False,
+            "secure_storage_ready": storage_ready,
             "submitted_at": None,
             "reviewer_notes": None,
         }
@@ -63,7 +65,7 @@ async def get_volunteer_status(user=Depends(account), db=Depends(database)):
         "has_photo": row["has_photo"],
         "has_declaration": row["has_declaration"],
         "consent_declared": row["consent_declared"],
-        "secure_storage_ready": False,
+        "secure_storage_ready": storage_ready,
         "submitted_at": row["submitted_at"].isoformat() if row["submitted_at"] else None,
         "reviewer_notes": row["reviewer_notes"],
     }
@@ -108,13 +110,12 @@ async def set_volunteer_consent(body: ConsentRequest, user=Depends(account), db=
 
 
 @router.post("/upload-document")
-async def upload_volunteer_document(body: DocumentUploadMetadata, user=Depends(account), db=Depends(database)):
-    # Per Security Policy 2.3: Live identity documents must not be collected
-    # until private, encrypted, short-lived signed-url object storage is configured.
-    raise HTTPException(
-        503,
-        detail="Live volunteer document upload is BLOCKED pending reviewed private object storage infrastructure."
-    )
+async def upload_volunteer_document(body: DocumentUploadMetadata, request: Request, user=Depends(account),
+                                    db=Depends(database)):
+    """Per Security Policy 2.3 identity documents go only to private storage with short-lived signed URLs.
+    Returns a presigned upload (see app/files.py); 503 while that storage is not configured."""
+    return await create_upload(db, request, user, UploadRequest(kind="VOLUNTEER_DOC", doc_type=body.doc_type,
+        mime_type=body.mime_type, size_bytes=body.file_size_bytes))
 
 
 @router.post("/submit")

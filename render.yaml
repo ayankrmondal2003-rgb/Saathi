@@ -1,3 +1,5 @@
+# Zero-cost layout (see DEPLOYMENT.md): Render Free runs only the API. The database is Neon Free, files are in a
+# private Cloudflare R2 bucket, and Redis is not used (single worker, in-memory realtime bus).
 services:
   - type: web
     name: surakshanet-api
@@ -6,17 +8,24 @@ services:
     plan: free
     region: singapore
     autoDeployTrigger: "off"
+    # Cheap and process-local: never opens a database connection, so it does not wake Neon.
     healthCheckPath: /ready
     dockerCommand: sh /app/start-render.sh
     envVars:
+      # Neon connection string (direct, non-pooler endpoint), pasted in the dashboard. Never committed,
+      # and not linked to a Render database.
       - key: DATABASE_URL
-        # Owner supplies the existing database's internal connection URL privately.
         sync: false
-      - key: REDIS_URL
-        fromService:
-          name: surakshanet-kv
-          type: keyvalue
-          property: connectionString
+      # Private file storage (Cloudflare R2, S3 API). Leave unset to keep uploads disabled.
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      # REDIS_URL is intentionally absent: optional, only needed when running more than one worker.
       # Synthetic fixes are supported. The API and outbox enforce the test UID allowlist.
       - key: ENVIRONMENT
         value: development
@@ -26,9 +35,3 @@ services:
         value: /etc/secrets/firebase-admin.json
       - key: TEST_ACCOUNT_UIDS
         sync: false
-  - type: keyvalue
-    name: surakshanet-kv
-    region: singapore
-    plan: free
-    ipAllowList: []
-    maxmemoryPolicy: noeviction

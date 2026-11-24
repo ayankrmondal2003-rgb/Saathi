@@ -290,7 +290,7 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
                 } else {
                     Log.w(TAG, "SOS sync interrupted: ${code?.let { "HTTP $it" } ?: failure.javaClass.simpleName}")
                     lastCheck = 0
-                    mutable.value = SyncStatus(uid, "Can't reach Maitri right now. Your SOS keeps retrying.", SyncProblem.RETRYING)
+                    mutable.value = SyncStatus(uid, "Connecting to Maitri… Your SOS keeps retrying in the background.", SyncProblem.RETRYING)
                     UploadResult.RETRY
                 }
             }
@@ -367,7 +367,8 @@ class IncidentUploadWorker(context: Context, parameters: WorkerParameters) : Cor
         val sync = LocalTrackingRepository.get(applicationContext).sync
         return when (sync.recover(uid, key, true)) {
             UploadResult.DONE -> Result.success()
-            UploadResult.RETRY -> if (runAttemptCount < 5) Result.retry() else {
+            // Exponential from 10 s: ten attempts cover about 2.8 hours, far beyond a cold start.
+            UploadResult.RETRY -> if (runAttemptCount < 10) Result.retry() else {
                 sync.retriesExhausted(uid)
                 Result.failure()
             }

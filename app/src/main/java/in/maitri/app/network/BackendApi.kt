@@ -249,6 +249,8 @@ object BackendClient {
             .connectTimeout(60, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
+            // Before the token interceptor: a cold Render start (up to a minute) shows "Connecting to Maitri…".
+            .addInterceptor(BackendLatency.interceptor)
             .addInterceptor(bearer)
             .build()
         Retrofit.Builder().baseUrl(base).client(client).addConverterFactory(GsonConverterFactory.create()).build()

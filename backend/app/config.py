@@ -41,6 +41,26 @@ class Settings(BaseSettings):
     audit_days: int = Field(30, ge=1)
     # ACTIVE incidents with no fix and no responder activity for this long are closed (orphaned sessions).
     orphaned_incident_hours: int = Field(12, ge=1, le=168)
+    # Background loops touch the database only while the API had a request in the last db_idle_seconds,
+    # plus one sweep per idle_sweep_seconds, so a free Neon compute can suspend when nobody uses Maitri.
+    db_idle_seconds: int = Field(900, ge=60, le=86400)
+    idle_sweep_seconds: int = Field(3600, ge=300, le=86400)
+
+    # Private file storage: Cloudflare R2 (or any S3-compatible store) through short-lived presigned URLs.
+    # Files never pass through, or are written to, this server. Unset = uploads stay disabled (503).
+    r2_account_id: str | None = None
+    r2_access_key_id: str | None = None
+    r2_secret_access_key: SecretStr | None = None
+    r2_bucket: str | None = None
+    r2_endpoint: str | None = None  # override for other S3 stores; defaults to the R2 account endpoint
+    upload_url_seconds: int = Field(300, ge=30, le=3600)
+    download_url_seconds: int = Field(300, ge=30, le=3600)
+    max_upload_bytes: int = Field(10 * 1024 * 1024, gt=0, le=100 * 1024 * 1024)
+
+    @property
+    def storage_configured(self) -> bool:
+        return bool(self.r2_access_key_id and self.r2_secret_access_key and self.r2_bucket
+                    and (self.r2_endpoint or self.r2_account_id))
 
     @field_validator("database_url")
     @classmethod

@@ -424,7 +424,7 @@ def test_volunteer_application_lifecycle(maitri_env):
     assert res_consent.status_code == 200
     assert client.get("/api/volunteer/status", headers={"X-Test-Actor": "RESPONDER_B"}).json()["consent_declared"] is True
 
-    # 5. Document upload attempt must be BLOCKED with 503 pending reviewed private object storage
+    # 5. Document upload stays blocked (503) while private object storage is not configured
     upload_res = client.post("/api/volunteer/upload-document", headers={"X-Test-Actor": "RESPONDER_B"}, json={
         "doc_type": "GOVT_ID",
         "file_name": "id_card.pdf",
@@ -432,7 +432,7 @@ def test_volunteer_application_lifecycle(maitri_env):
         "mime_type": "application/pdf"
     })
     assert upload_res.status_code == 503
-    assert "BLOCKED" in upload_res.json()["detail"]
+    assert upload_res.json()["detail"]["code"] == "STORAGE_NOT_CONFIGURED"
 
     # 6. Submit attempt without required 5 documents fails with 422
     submit_res = client.post("/api/volunteer/submit", headers={"X-Test-Actor": "RESPONDER_B"})

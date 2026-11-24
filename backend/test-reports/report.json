@@ -1,16 +1,16 @@
 {
-  "timestamp": "2026-11-24T03:13:19Z",
-  "duration_seconds": 55.62,
+  "timestamp": "2026-11-24T03:51:20Z",
+  "duration_seconds": 37.03,
   "overall_status": "PASS",
-  "total_tests": 131,
-  "passed": 131,
+  "total_tests": 143,
+  "passed": 143,
   "failed": 0,
   "errors": 0,
   "skipped": 0,
   "database": {
     "engine": "PostgreSQL 16",
     "postgis_version": "3.7.0",
-    "alembic_revision": "0011",
+    "alembic_revision": "0012",
     "database_name": "surakshanet_test"
   },
   "safety_guard": "VERIFIED_ISOLATED"

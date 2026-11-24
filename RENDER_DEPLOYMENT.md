@@ -1,5 +1,7 @@
 # Free Render deployment for the controlled demo
 
+> **Superseded by [DEPLOYMENT.md](DEPLOYMENT.md).** The free stack now uses Neon for the database, Cloudflare R2 for files, no Redis, and a cron-job.org keep-alive. This page describes the earlier Render Postgres + Key Value layout and is kept for reference.
+
 ## Before pushing or syncing
 
 1. Open the existing **surakshanet_db** in Render. Check its plan, workspace, region, creation date, and expiry. For a zero-cost rehearsal it must already be Free and remain active through the demo. The Blueprint creates only a Free web service and Free Key Value. It cannot change an existing database bill.
