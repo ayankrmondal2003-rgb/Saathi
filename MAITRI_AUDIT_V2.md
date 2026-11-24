@@ -226,4 +226,4 @@ Tests at `cdbd1af` plus the contract-test path fix:
 | Local fake SOS data: `contactAlertStatuses` / `PROVIDER_ACCEPTED` on start, closure and "test alert"; `SosIncident.notified = 3, accepted = 1` defaults | removed. Screen 08 shows only server delivery status (`contactDelivery`) |
 | SOS still defaults to a local-only practice session unless "share" is ticked, and the server accepts only test incidents (R2) | open, Phase E |
 
-Tests: Android JVM 141/141.
+Tests at `7f98d68`: Android JVM 141/141; device 26/26 on SM-E625F (Android 13).
