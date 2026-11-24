@@ -136,6 +136,26 @@ def main():
         k = keys()
         (I18N / "keys.json").write_text(json.dumps(k, ensure_ascii=False, indent=1), encoding="utf8")
         print(len(k), "texts")
+    elif cmd == "merge":
+        # tools/i18n/batch*.json: {"English": [hi, bn, mr, ta, te]} -> one table per language.
+        merged = {code: {} for code in LANGUAGES}
+        bad = []
+        for batch in sorted((ROOT / "tools/i18n").glob("batch*.json")):
+            for en, values in json.loads(batch.read_text(encoding="utf8")).items():
+                wanted = sorted(re.findall(r"\{\d+\}", en))
+                for code, text in zip(LANGUAGES, values):
+                    if sorted(re.findall(r"\{\d+\}", text)) != wanted:
+                        bad.append((code, en))
+                    merged[code][en] = text
+        if bad:
+            for code, en in bad:
+                print("placeholder mismatch", code, en[:60])
+            sys.exit(1)
+        for code, table in merged.items():
+            out = {"_review": "Machine-drafted translation; needs review by a native speaker before release."}
+            out.update(dict(sorted(table.items())))
+            (I18N / f"{code}.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf8")
+            print(code, len(table))
     elif cmd == "check":
         k = keys()
         bad = 0

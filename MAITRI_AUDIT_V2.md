@@ -210,6 +210,7 @@ Status "server-tested" means covered by the isolated backend suite and Android u
 | P4 | R5/R6/R7 volunteer uploads to R2, declaration template, application status, /admin review with audit log; 14 profile photo | server-tested |
 | P5 | 08 in-app voice (60 s, consent, indicator) and photo uploaded via WorkManager; responders' names, approx. distance/ETA and map pins; 07 Call only with consent, false-alarm report; 06 distance band + expiry countdown; 11 pattern saved and used for alerts; full-screen request where Android allows; 12 battery tips; 14 call consent | server-tested |
 | P6 | R8 export + account deletion (in app and web page); R18 privacy/terms/deletion pages (docs/site, GitHub Pages); 14 medical notes encrypted on the server, shown to an active responder (07), email change via verification; 09 Privacy & data screen, Help with support email and Beta info; 03 Terms/Privacy links; retention jobs now run (SOS location 7 days, SOS media 30 days) | server-tested |
+| P7 | 10 full-app translations: 630 app texts in Hindi, Bengali, Marathi, Tamil, Telugu via tr() + assets/i18n (screens 09–14 keep their string resources); machine-drafted, marked for native review; I18nTest enforces coverage and placeholders | works on the emulator in Hindi, except English words baked into the 06/07/08 artwork (fixed when P10 draws those screens natively) |
 | P3 | R4 circle alerts without SMS; R9 missed check-in; 02 bell inbox, Share my trip, Check in; 05 pairing; 08 Circle notified | server-tested |
 
 P3 detail:

@@ -199,7 +199,7 @@ internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: Str
                                          onMedicalNotes: (() -> Unit)? = null) {
     EmergencyBoard(if (p.dark) R.drawable.maitri_dark_07 else R.drawable.maitri_light_07,
         tr("On your way. Keep both of you safe. Request more responders before you approach.")) {
-        BoardLabel(84, 59, 270, tr("RESPONDER · ") + (assistanceStatus ?: "AUTHORIZED").replace('_', ' '), p.accent, 11)
+        BoardLabel(84, 59, 270, tr("RESPONDER · ") + (assistanceStatus?.let { responderStatusLabel(it) } ?: tr("Accepted")).uppercase(), p.accent, 11)
         BoardAction(24, 51, 342, 65, tr("Update responder status"), !busy, onStatus)
         // Live map over the crop's map area (342 x 320 at 24,140): the person in need and, when known, you.
         MaitriMap(listOfNotNull(coordinates?.let { MapMarker(it.first, it.second, MarkerKind.PERSON_IN_NEED) },
