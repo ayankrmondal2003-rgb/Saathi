@@ -150,3 +150,34 @@ async def delete_file(file_id: UUID, request: Request, user=Depends(account), db
             await db.execute(text(f"UPDATE volunteer_applications SET {column} = false, updated_at = now() WHERE user_id = :uid"
                                   " AND status NOT IN ('SUBMITTED', 'UNDER_REVIEW', 'APPROVED')"), {"uid": user.id})
     return Response(status_code=204)
+
+
+class PhotoRequest(Input):
+    file_id: UUID
+
+
+@router.post("/profile-photo")
+async def set_profile_photo(body: PhotoRequest, request: Request, user=Depends(account), db=Depends(database)):
+    row = await owned_file(db, body.file_id, user)
+    if row["kind"] != "PROFILE_PHOTO" or row["status"] != "UPLOADED":
+        raise HTTPException(409, {"code": "UPLOAD_NOT_FOUND", "message": "Upload the photo first"})
+    previous = await db.scalar(text("SELECT photo_file_id FROM users WHERE id = :uid"), {"uid": user.id})
+    await db.execute(text("UPDATE users SET photo_file_id = :f, updated_at = now() WHERE id = :uid"),
+                     {"f": body.file_id, "uid": user.id})
+    if previous and previous != body.file_id:
+        old = await db.scalar(text("SELECT object_key FROM stored_files WHERE id = :id"), {"id": previous})
+        await db.execute(text("DELETE FROM stored_files WHERE id = :id"), {"id": previous})
+        if old:
+            try:
+                await bucket_for(request).delete(old)
+            except (httpx.HTTPError, HTTPException):
+                pass  # an orphaned object is removed by the bucket lifecycle rule; the account no longer points at it
+    return {"file_id": str(body.file_id)}
+
+
+@router.get("/profile-photo")
+async def get_profile_photo(request: Request, user=Depends(account), db=Depends(database)):
+    file_id = await db.scalar(text("SELECT photo_file_id FROM users WHERE id = :uid"), {"uid": user.id})
+    if file_id is None:
+        return {"file_id": None, "download_url": None}
+    return {**(await download_url(file_id, request, user, db))}

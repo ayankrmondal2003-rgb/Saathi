@@ -20,6 +20,8 @@ class Identity:
     auth_time: int = 0
     phone: str = ""
     phone_verified: bool = False
+    # Firebase custom claim {"admin": true}, set by scripts/set_admin_claim.py; gates /api/admin only.
+    admin: bool = False
 
 
 async def identity(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
@@ -41,7 +43,7 @@ async def identity(request: Request, credentials: HTTPAuthorizationCredentials |
     if not getattr(settings, "open_access", False) and claims["uid"] not in settings.test_account_uids:
         raise HTTPException(403, "Test account required")
     return Identity(claims["uid"], claims["email"] if email_ok else "", claims.get("name") or "", email_ok,
-                    claims.get("auth_time", 0), phone, bool(phone))
+                    claims.get("auth_time", 0), phone, bool(phone), claims.get("admin") is True)
 
 
 async def database(request: Request):

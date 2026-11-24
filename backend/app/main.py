@@ -24,6 +24,7 @@ from app.inbox import router as inbox_router, send_pending_pushes, cleanup as cl
 from app.circle import router as circle_members_router
 from app.live_link import router as live_router
 from app.checkins import CheckInScheduler
+from app.admin import router as admin_router
 from app.services.outbox_worker import default_firebase_sender
 from app.services.realtime import hub
 
@@ -144,6 +145,7 @@ def create_app(settings=None, *, initialize_firebase=True):
     app.include_router(inbox_router)
     app.include_router(circle_members_router)
     app.include_router(live_router)
+    app.include_router(admin_router)
     app.include_router(ws_router)
 
     @app.get("/health")

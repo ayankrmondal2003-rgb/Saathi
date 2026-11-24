@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     firebase_project_id: str = Field(min_length=1)
     google_application_credentials: str | None = None
     environment: Literal["development", "test", "beta", "production"] = "development"
+    # Firebase web app config for the /admin sign-in page (public values from the Firebase console).
+    firebase_web_api_key: str | None = None
+    firebase_auth_domain: str | None = None
     # Signs /l/<token> live-location links. Without it links break on every restart.
     live_link_secret: SecretStr | None = None
     # Public https origin used in live links (e.g. https://surakshanet-api.onrender.com); request host if empty.
