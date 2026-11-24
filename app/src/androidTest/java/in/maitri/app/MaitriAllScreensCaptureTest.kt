@@ -56,8 +56,9 @@ class MaitriAllScreensCaptureTest {
             p(), { _, _, _, _, _, _ -> null }, {}, { _, _ -> }) } },
         "06" to { MaitriIncomingContent(p(), "Nearby emergency", "Distance unavailable", "Arrival time unavailable",
             false, null, {}, {}) },
-        // Synthetic test coordinate (New Delhi), as used by the backend suite; renders the live Esri map and pin.
-        "07" to { MaitriResponderJourneyBoard(p(), "ON_THE_WAY", 28.6139 to 77.2090, false, {}, {}, {}, {}, distanceMeters = 650.0) },
+        // Synthetic test coordinate (New Delhi), as used by the backend suite; renders the live map with both markers.
+        "07" to { MaitriResponderJourneyBoard(p(), "ON_THE_WAY", 28.6139 to 77.2090, false, {}, {}, {}, {}, distanceMeters = 650.0,
+            self = 28.6080 to 77.2050) },
         "08" to { MaitriActiveSos(SosIncident(SystemClock.elapsedRealtime()), "capture-no-session", "capture-no-incident", {}, {}) },
         "09" to { Docked("Profile") { MaitriSettings(null, {}, {}) } },
         "10" to { MaitriLanguage(onBack = {}) },
@@ -87,7 +88,8 @@ class MaitriAllScreensCaptureTest {
                         }
                     }
                     instrumentation.waitForIdleSync()
-                    SystemClock.sleep(1200)
+                    // Map screens fetch the style and vector tiles over the network.
+                    SystemClock.sleep(if (screen == "07" || screen == "08") 8000 else 1200)
                     scenario.onActivity { activity ->
                         activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
                             .hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)

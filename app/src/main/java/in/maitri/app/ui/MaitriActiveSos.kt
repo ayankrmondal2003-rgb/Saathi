@@ -249,9 +249,8 @@ fun MaitriActiveSos(
             shown?.accuracyMeters?.toFloat(), shown?.shared == true, elapsedSeconds * 1000, environment.online)
         BoardLabel(24, 98, 330, locationLine(shown, hint),
             if (hint == LocationHint.NONE || hint == LocationHint.SEARCHING) p.secondary else p.accent)
-        // Live Esri map over the crop's map area (342 x 252 at 24,136): the phone's own fix at once, then the server's.
-        EsriMap(shown?.let { it.latitude to it.longitude },
-            if (shown?.shared == true) "Your shared location" else "Your location (sending…)",
+        // Live map over the crop's map area (342 x 252 at 24,136): the phone's own fix at once, then the server's.
+        MaitriMap(listOfNotNull(shown?.let { MapMarker(it.latitude, it.longitude, MarkerKind.PERSON_IN_NEED) }),
             locationHintText(hint) ?: "Finding your location…", Modifier.offset(24.dp, (136 - 28).dp).size(342.dp, 252.dp),
             accuracyMeters = shown?.accuracyMeters)
         locationAction(hint)?.let { (label, act) ->

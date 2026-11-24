@@ -27,14 +27,6 @@ fun localSetting(name: String, legacy: String? = null): String {
         ?: legacy?.let { providers.gradleProperty(it).orNull ?: local.getProperty(it) } ?: ""
 }
 
-/** Optional ArcGIS Location Platform key for Esri basemap tiles; kept in local.properties, never committed. */
-fun esriApiKey(): String {
-    val local = localProperties()
-    val key = providers.gradleProperty("maitriEsriApiKey").orNull ?: local.getProperty("maitriEsriApiKey", "")
-    require(key.matches(Regex("[A-Za-z0-9._-]*"))) { "maitriEsriApiKey contains unexpected characters" }
-    return "\"" + key + "\""
-}
-
 fun backendUrl(property: String, legacy: String): String {
     val url = localSetting(property, legacy)
     if (url.isNotEmpty()) {
@@ -65,7 +57,6 @@ android {
         versionName = "$major.$minor.$patch-beta.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "ESRI_API_KEY", esriApiKey())
     }
 
     // Upload key for Play App Signing. Passwords come only from local.properties (or -P), never from the repo.
@@ -109,7 +100,8 @@ android {
 
 dependencies {
     // Raster map view for Esri World Street Map tiles (screens 07 and 08).
-    implementation("org.osmdroid:osmdroid-android:6.1.20")
+    // MapLibre + OpenFreeMap tiles: no API key, free for commercial use.
+    implementation("org.maplibre.gl:android-sdk:13.7.1")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
