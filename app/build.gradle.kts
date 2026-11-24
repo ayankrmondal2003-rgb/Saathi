@@ -99,7 +99,6 @@ android {
 }
 
 dependencies {
-    // Raster map view for Esri World Street Map tiles (screens 07 and 08).
     // MapLibre + OpenFreeMap tiles: no API key, free for commercial use.
     implementation("org.maplibre.gl:android-sdk:13.7.1")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
