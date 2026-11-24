@@ -18,6 +18,8 @@ object SosMedia {
     const val MAX_VOICE_MS = 60_000
     const val TAG = "sos-media"
 
+    /** Lets the SOS screen show photo and voice uploads under their own tiles. */
+    fun kindTag(kind: String) = "$TAG:kind:$kind"
     fun dir(context: Context) = File(context.filesDir, "sos-media").apply { mkdirs() }
 
     fun newFile(context: Context, prefix: String, extension: String) =
@@ -30,7 +32,7 @@ object SosMedia {
                 "incident" to incidentId, "uid" to uid))
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
-            .addTag(TAG).addTag("$TAG:$incidentId")
+            .addTag(TAG).addTag("$TAG:$incidentId").addTag(kindTag(kind))
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork("sos-media:${file.name}", ExistingWorkPolicy.KEEP, request)
     }

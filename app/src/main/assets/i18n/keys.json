@@ -634,6 +634,7 @@
  "{0} has multiple phone numbers. Choose which one to add:",
  "{0} min",
  "{0} min ago",
+ "{0} not sent",
  "{0} of {1} documents uploaded",
  "{0} people",
  "{0} responders accepted",
@@ -646,5 +647,6 @@
  "• Translations are machine-drafted and still being checked.",
  "• Trip sharing updates while Maitri is open.\n",
  "• Volunteers only get requests after a reviewer approves them.\n",
- "≈ {0} away · approx. {1} min walk"
+ "≈ {0} away · approx. {1} min walk",
+ "● Recording {0} · tap to stop"
 ]

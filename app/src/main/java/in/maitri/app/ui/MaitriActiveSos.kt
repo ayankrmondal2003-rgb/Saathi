@@ -123,8 +123,8 @@ fun MaitriActiveSos(
     val pendingMedia by remember(incidentId) {
         androidx.work.WorkManager.getInstance(context).getWorkInfosByTagFlow("${`in`.maitri.app.network.SosMedia.TAG}:$incidentId")
     }.collectAsStateWithLifecycle(emptyList())
-    val uploadingMedia = pendingMedia.count { !it.state.isFinished }
-    val savedMedia = pendingMedia.count { it.state == androidx.work.WorkInfo.State.SUCCEEDED }
+    val voiceStatus = mediaStatus(pendingMedia.filter { `in`.maitri.app.network.SosMedia.kindTag("SOS_VOICE") in it.tags }.map { it.state })
+    val photoStatus = mediaStatus(pendingMedia.filter { `in`.maitri.app.network.SosMedia.kindTag("SOS_PHOTO") in it.tags }.map { it.state })
     fun stopRecording() {
         val r = recorder ?: return
         recorder = null
@@ -416,12 +416,13 @@ fun MaitriActiveSos(
                 color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
         // Over the artwork's "Tap to record" / "Tap to open" captions: what the capture is doing right now.
-        if (recorder != null || uploadingMedia > 0 || savedMedia > 0) {
-            Text(if (recorder != null) "● Recording %d:%02d · tap to stop".format(recordingSeconds / 60, recordingSeconds % 60)
-                else if (uploadingMedia > 0) tr("Uploading {0}…", uploadingMedia) else tr("{0} saved", savedMedia),
-                Modifier.offset(74.dp, (667 - 28).dp).size(112.dp, 22.dp).background(p.card), color = p.accent,
-                fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-        }
+        // Each tile shows its own uploads: voice under Voice, photos under Camera.
+        val voiceLine = if (recorder != null) tr("● Recording {0} · tap to stop", "%d:%02d".format(recordingSeconds / 60, recordingSeconds % 60))
+            else voiceStatus
+        voiceLine?.let { Text(it, Modifier.offset(74.dp, (667 - 28).dp).size(112.dp, 22.dp).background(p.card), color = p.accent,
+            fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+        photoStatus?.let { Text(it, Modifier.offset(251.dp, (667 - 28).dp).size(112.dp, 22.dp).background(p.card), color = p.accent,
+            fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
         BoardAction(24, 638, 165, 64, if (recorder != null) tr("Stop recording") else tr("Record a voice note")) { voice() }
         BoardAction(201, 638, 165, 64, tr("Take a photo")) { camera() }
         BoardLabel(66, 719, 280, when {
@@ -555,6 +556,19 @@ internal fun shouldAskAgain(context: android.content.Context): Boolean {
     prefs.edit().putBoolean("asked", true).apply()
     return !asked || androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(activity,
         android.Manifest.permission.ACCESS_FINE_LOCATION)
+}
+
+/** "Uploading 1…", "2 saved", "1 not sent", or null when nothing of that kind was captured. Pure, for tests. */
+internal fun mediaStatus(states: List<androidx.work.WorkInfo.State>): String? {
+    val uploading = states.count { !it.isFinished }
+    val saved = states.count { it == androidx.work.WorkInfo.State.SUCCEEDED }
+    val failed = states.count { it == androidx.work.WorkInfo.State.FAILED || it == androidx.work.WorkInfo.State.CANCELLED }
+    return when {
+        uploading > 0 -> tr("Uploading {0}…", uploading)
+        saved > 0 && failed == 0 -> tr("{0} saved", saved)
+        failed > 0 -> tr("{0} not sent", failed)
+        else -> null
+    }
 }
 
 internal fun responderStatusLabel(status: String) = when (status) {

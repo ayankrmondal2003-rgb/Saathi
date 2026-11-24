@@ -637,6 +637,7 @@
  "{0} has multiple phone numbers. Choose which one to add:": "{0}కి అనేక ఫోన్ నంబర్లు ఉన్నాయి. ఏది జోడించాలో ఎంచుకోండి:",
  "{0} min": "{0} నిమిషాలు",
  "{0} min ago": "{0} నిమిషాల క్రితం",
+ "{0} not sent": "{0} పంపబడలేదు",
  "{0} of {1} documents uploaded": "{1}లో {0} పత్రాలు అప్‌లోడ్ అయ్యాయి",
  "{0} people": "{0} మంది",
  "{0} responders accepted": "{0} మంది సహాయకులు అంగీకరించారు",
@@ -649,5 +650,6 @@
  "• Translations are machine-drafted and still being checked.": "• అనువాదాలు యంత్రంతో తయారయ్యాయి, ఇంకా తనిఖీ జరుగుతోంది.",
  "• Trip sharing updates while Maitri is open.\n": "• Maitri తెరిచి ఉన్నప్పుడు ప్రయాణ షేరింగ్ అప్‌డేట్ అవుతుంది.\n",
  "• Volunteers only get requests after a reviewer approves them.\n": "• సమీక్షకుడు ఆమోదించిన తర్వాతే స్వచ్ఛంద సేవకులకు అభ్యర్థనలు వస్తాయి.\n",
- "≈ {0} away · approx. {1} min walk": "≈ {0} దూరంలో · సుమారు {1} నిమిషాల నడక"
+ "≈ {0} away · approx. {1} min walk": "≈ {0} దూరంలో · సుమారు {1} నిమిషాల నడక",
+ "● Recording {0} · tap to stop": "● రికార్డింగ్ {0} · ఆపడానికి ట్యాప్ చేయండి"
 }

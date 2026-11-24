@@ -53,13 +53,16 @@ internal fun CircleSosViewer(uid: String, incidentId: String, liveUrl: String?, 
     var preparing by remember { mutableStateOf<String?>(null) }
     val player = remember { arrayOfNulls<MediaPlayer>(1) }
 
-    fun stop() {
-        player[0]?.runCatching { stop(); release() }
+    // The player is called explicitly (mp.stop()): inside `player?.runCatching { stop() }` a local function named
+    // stop() wins over MediaPlayer.stop() and calls itself forever (that crashed the app on Stop).
+    fun stopPlayback() {
+        val mp = player[0]
         player[0] = null
+        if (mp != null) { runCatching { mp.stop() }; runCatching { mp.release() } }
         playing = null
         preparing = null
     }
-    DisposableEffect(Unit) { onDispose { stop() } }
+    DisposableEffect(Unit) { onDispose { stopPlayback() } }
 
     LaunchedEffect(incidentId) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -73,7 +76,7 @@ internal fun CircleSosViewer(uid: String, incidentId: String, liveUrl: String?, 
     }
 
     suspend fun play(item: SosMediaItemDto) {
-        stop()
+        stopPlayback()
         preparing = item.fileId
         val url = try { BackendClient.files.downloadUrl(item.fileId, account).downloadUrl }
             catch (e: CancellationException) { throw e } catch (_: Exception) { null }
@@ -86,10 +89,10 @@ internal fun CircleSosViewer(uid: String, incidentId: String, liveUrl: String?, 
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
             mp.setDataSource(url)
             mp.setOnPreparedListener { if (player[0] === it) { preparing = null; playing = item.fileId; it.start() } }
-            mp.setOnCompletionListener { if (player[0] === it) stop() }
-            mp.setOnErrorListener { it2, _, _ -> if (player[0] === it2) { stop(); error = tr("Couldn't play this voice note.") }; true }
+            mp.setOnCompletionListener { if (player[0] === it) stopPlayback() }
+            mp.setOnErrorListener { it2, _, _ -> if (player[0] === it2) { stopPlayback(); error = tr("Couldn't play this voice note.") }; true }
             mp.prepareAsync()
-        }.onFailure { stop(); error = tr("Couldn't play this voice note.") }
+        }.onFailure { stopPlayback(); error = tr("Couldn't play this voice note.") }
     }
 
     AlertDialog(onDismissRequest = dismiss, containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
@@ -111,7 +114,7 @@ internal fun CircleSosViewer(uid: String, incidentId: String, liveUrl: String?, 
                         if (item.kind == "SOS_PHOTO") SosPhoto(account, item, p)
                         else VoiceRow(tr("Voice note {0}", list.take(index + 1).count { it.kind == "SOS_VOICE" }),
                             relativeTime(item.uploadedAt.orEmpty()), item.fileId == playing, item.fileId == preparing, p,
-                            onToggle = { if (item.fileId == playing || item.fileId == preparing) stop() else play(item) })
+                            onToggle = { if (item.fileId == playing || item.fileId == preparing) stopPlayback() else play(item) })
                     }
                 }
                 Text(tr("Only their circle can see these. They're deleted 30 days after the SOS."), fontSize = 11.sp)

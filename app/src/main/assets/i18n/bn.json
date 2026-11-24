@@ -637,6 +637,7 @@
  "{0} has multiple phone numbers. Choose which one to add:": "{0}-এর একাধিক ফোন নম্বর আছে। কোনটি যোগ করবেন বেছে নিন:",
  "{0} min": "{0} মিনিট",
  "{0} min ago": "{0} মিনিট আগে",
+ "{0} not sent": "{0}টি পাঠানো যায়নি",
  "{0} of {1} documents uploaded": "{1}টির মধ্যে {0}টি নথি আপলোড হয়েছে",
  "{0} people": "{0} জন",
  "{0} responders accepted": "{0} জন সাহায্যকারী গ্রহণ করেছেন",
@@ -649,5 +650,6 @@
  "• Translations are machine-drafted and still being checked.": "• অনুবাদ যন্ত্রে তৈরি এবং এখনও যাচাই চলছে।",
  "• Trip sharing updates while Maitri is open.\n": "• Maitri খোলা থাকাকালীন যাত্রা শেয়ার আপডেট হয়।\n",
  "• Volunteers only get requests after a reviewer approves them.\n": "• পর্যালোচক অনুমোদন দিলে তবেই স্বেচ্ছাসেবকরা অনুরোধ পান।\n",
- "≈ {0} away · approx. {1} min walk": "≈ {0} দূরে · আনুমানিক {1} মিনিট হাঁটা"
+ "≈ {0} away · approx. {1} min walk": "≈ {0} দূরে · আনুমানিক {1} মিনিট হাঁটা",
+ "● Recording {0} · tap to stop": "● রেকর্ডিং {0} · থামাতে ট্যাপ করুন"
 }
