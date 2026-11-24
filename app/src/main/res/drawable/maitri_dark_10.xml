@@ -1,0 +1,14 @@
+<!-- Static geometry from the approved dark screen 10 crop. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt" android:width="390dp" android:height="788dp" android:viewportWidth="390" android:viewportHeight="788">
+    <group android:translateX="-892" android:translateY="-1000">
+        <path android:pathData="M892,972 h390 v844 h-390 Z" android:fillColor="#19151B"/>
+        <path android:pathData="M938,1038 h0 a22,22 0,0 1 22,22 v0 a22,22 0,0 1 -22,22 h-0 a22,22 0,0 1 -22,-22 v-0 a22,22 0,0 1 22,-22 Z" android:fillColor="#28212A"/>
+        <path android:pathData="M940.75 1053.58L934.333 1060L940.75 1066.42" android:strokeColor="#FAEFF5" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+        <path android:pathData="M938,1116 h298 a22,22 0,0 1 22,22 v44 a22,22 0,0 1 -22,22 h-298 a22,22 0,0 1 -22,-22 v-44 a22,22 0,0 1 22,-22 Z" android:fillColor="#36232F"/>
+        <path android:pathData="M932,1224 h310 a16,16 0,0 1 16,16 v16 a16,16 0,0 1 -16,16 h-310 a16,16 0,0 1 -16,-16 v-16 a16,16 0,0 1 16,-16 Z" android:fillColor="#28212A"/>
+        <path android:pathData="M944.167 1246.75C944.167 1249.74 941.742 1252.17 938.75 1252.17C935.758 1252.17 933.333 1249.74 933.333 1246.75C933.333 1243.76 935.758 1241.33 938.75 1241.33C941.742 1241.33 944.167 1243.76 944.167 1246.75Z" android:strokeColor="#C3ADBA" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+        <path android:pathData="M943.333 1251.33L947.5 1255.5" android:strokeColor="#C3ADBA" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+        <path android:pathData="M938,1292 h298 a22,22 0,0 1 22,22 v292 a22,22 0,0 1 -22,22 h-298 a22,22 0,0 1 -22,-22 v-292 a22,22 0,0 1 22,-22 Z" android:fillColor="#28212A"/>
+        <path android:pathData="M942,1708 h290 a26,26 0,0 1 26,26 v0 a26,26 0,0 1 -26,26 h-290 a26,26 0,0 1 -26,-26 v-0 a26,26 0,0 1 26,-26 Z" android:fillColor="#FF9CBE"/>
+    </group>
+</vector>

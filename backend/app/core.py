@@ -18,6 +18,8 @@ class Identity:
     name: str
     verified: bool
     auth_time: int = 0
+    phone: str = ""
+    phone_verified: bool = False
 
 
 async def identity(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
@@ -30,11 +32,15 @@ async def identity(request: Request, credentials: HTTPAuthorizationCredentials |
         raise HTTPException(401, "Invalid session", headers={"WWW-Authenticate": "Bearer"}) from None
     except FirebaseError:
         raise HTTPException(503, "Identity service unavailable") from None
-    if claims.get("email_verified") is not True or not claims.get("email"):
-        raise HTTPException(403, "Verified email required")
+    email_ok = claims.get("email_verified") is True and bool(claims.get("email"))
+    # Firebase only sets phone_number once the number has been confirmed by OTP.
+    phone = claims.get("phone_number") or ""
+    if not email_ok and not phone:
+        raise HTTPException(403, "Verified email or phone required")
     if claims["uid"] not in request.app.state.settings.test_account_uids:
         raise HTTPException(403, "Test account required")
-    return Identity(claims["uid"], claims["email"], claims.get("name") or "", True, claims.get("auth_time", 0))
+    return Identity(claims["uid"], claims["email"] if email_ok else "", claims.get("name") or "", email_ok,
+                    claims.get("auth_time", 0), phone, bool(phone))
 
 
 async def database(request: Request):
@@ -44,9 +50,13 @@ async def database(request: Request):
 
 async def account(who=Depends(identity), db=Depends(database)):
     query = insert(users).values(firebase_uid=who.uid, display_name=who.name[:256], email=who.email,
-                                 email_verified=who.verified)
+                                 email_verified=who.verified, phone_verified=who.phone_verified,
+                                 phone_number=who.phone or None)
     query = query.on_conflict_do_update(index_elements=[users.c.firebase_uid],
-        set_={"email": who.email, "email_verified": who.verified, "updated_at": func.now()})
+        set_={"email": who.email, "email_verified": who.verified, "phone_verified": who.phone_verified,
+              # Keep a number the user edited on screen 14; fill it from the verified phone otherwise.
+              "phone_number": func.coalesce(users.c.phone_number, query.excluded.phone_number),
+              "updated_at": func.now()})
     user = (await db.execute(query.returning(users))).mappings().one()
     if user.account_status != "ACTIVE":
         raise HTTPException(403, "Account unavailable")

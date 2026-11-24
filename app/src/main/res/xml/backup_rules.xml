@@ -1,3 +1,3 @@
 <full-backup-content>
-    <include domain="sharedpref" path="suraksha_theme_pref.xml" />
+    <include domain="sharedpref" path="maitri_theme_pref.xml" />
 </full-backup-content>

@@ -91,7 +91,7 @@ def main():
             print("      Safety Guard: PASSED (isolated local database verified, production hosts blocked)", flush=True)
 
             # 3. Alembic Migrations
-            print("[4/6] Applying Alembic migration chain through 0009...", flush=True)
+            print("[4/6] Applying Alembic migration chain through 0011...", flush=True)
             run(sys.executable, "-m", "alembic", "upgrade", "head")
             alembic_rev = sql("SELECT version_num FROM alembic_version")
             print(f"      Alembic Migration: PASSED (Head Revision: {alembic_rev})", flush=True)
@@ -198,7 +198,7 @@ All tests were executed against genuine local FastAPI endpoints, authentic datab
 | **SAFETY PIN** | `/api/security/safety-pin/*`, `/resolve` | 6-digit non-sequential PIN setup, wrong PIN 403, correct PIN incident closure (CLOSED) | **PASS** |
 | **FCM LOCAL OUTBOX** | `outbox_worker.py` | Fake transport processes invitation notification, payload strictly omits coordinates | **PASS** |
 | **ANDROID API CONTRACTS** | `BackendApi.kt` vs FastAPI routes | 100% path, HTTP method, and parameter parity across all 46 endpoints | **PASS** |
-| **HEALTH & DIAGNOSTICS** | `/health`, `/ready` | HTTP 200 service readiness, PostGIS version confirmation, Alembic revision 0009 | **PASS** |
+| **HEALTH & DIAGNOSTICS** | `/health`, `/ready` | HTTP 200 service readiness, PostGIS version confirmation, Alembic revision 0010 | **PASS** |
 
 ---
 
@@ -250,14 +250,14 @@ To make the live Render backend match the verified local test server:
            backend/tests/test_maitri_features.py \\
            backend/tests/run_maitri_server_tests.py \\
            backend/test-maitri-server.ps1 \\
-           app/src/main/java/com/example/surakshanet/network/BackendApi.kt \\
-           app/src/main/java/com/example/surakshanet/ui/MaitriSharingDialog.kt
+           app/src/main/java/in/maitri/app/network/BackendApi.kt \\
+           app/src/main/java/in/maitri/app/ui/MaitriSharingDialog.kt
 
    git commit -m "Deploy circle sharing, volunteer verification, safety guard, and server test suite"
    git push origin master
    ```
 2. Trigger **Manual Deploy → Deploy latest commit** in the Render Dashboard.
-3. Confirm in Render logs that migrations `0008` and `0009` apply automatically during startup.
+3. Confirm in Render logs that migrations `0008` through `0010` apply automatically during startup.
 4. Verify `/ready` returns HTTP 200.
 """
     Path(output_path).write_text(content, encoding="utf-8")

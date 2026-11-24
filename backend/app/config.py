@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     expired_invitation_days: int = Field(7, ge=1)
     expired_grant_days: int = Field(7, ge=1)
     audit_days: int = Field(30, ge=1)
+    # ACTIVE incidents with no fix and no responder activity for this long are closed (orphaned sessions).
+    orphaned_incident_hours: int = Field(12, ge=1, le=168)
 
     @field_validator("database_url")
     @classmethod

@@ -11,8 +11,8 @@ from sqlalchemy.dialects.postgresql import insert
 from app.core import account, database, identity
 from app.database.v1 import devices, incidents, invitations, locations, responders, users
 from app.schemas import (
-    CreateIncident, Decision, DeviceRegister, Fix, Incident, IncidentResolutionRequest,
-    IncidentResolutionResponse, IncidentSnapshot, Profile, ProfileEdit, ResponderStatusUpdate,
+    ActiveIncident, CreateIncident, Decision, DeviceRegister, Fix, Incident, IncidentResolutionRequest,
+    IncidentResolutionResponse, IncidentSnapshot, Profile, ProfileDetailsEdit, ProfileEdit, ResponderStatusUpdate,
     SafetyPinChange, SafetyPinRecovery, SafetyPinSetup, SafetyPinStatus, TestAlertResponse,
     TrustedContact, TrustedContactAlertBatchResponse, TrustedContactCreate, TrustedContactUpdate,
     IncidentContactAlertStatus, WsTicketResponse
@@ -54,6 +54,16 @@ async def profile(body: ProfileEdit, request: Request, user=Depends(account), db
     return {field: result[field] for field in Profile.model_fields}
 
 
+@router.patch("/users/me", response_model=Profile)
+async def profile_details(body: ProfileDetailsEdit, user=Depends(account), db=Depends(database)):
+    changes = body.model_dump(exclude_unset=True)
+    if not changes:
+        return {field: user[field] for field in Profile.model_fields}
+    result = (await db.execute(update(users).where(users.c.id == user.id).values(
+        **changes, updated_at=func.now()).returning(users))).mappings().one()
+    return {field: result[field] for field in Profile.model_fields}
+
+
 @router.put("/responders/location", status_code=204)
 async def responder_fix(body: Fix, request: Request, user=Depends(account), db=Depends(database)):
     if not user.responder_available or not user.responder_opt_in:
@@ -66,7 +76,8 @@ async def responder_fix(body: Fix, request: Request, user=Depends(account), db=D
         set_={**{c: query.excluded[c] for c in columns}, "received_at": func.now()},
         where=locations.c.recorded_at < query.excluded.recorded_at)
     if await db.scalar(query.returning(locations.c.user_id)) is None:
-        raise HTTPException(409, "A location with this timestamp or newer already exists")
+        raise HTTPException(409, "A location with this timestamp or newer already exists",
+                            headers={"X-Error-Code": "STALE_OR_DUPLICATE_LOCATION"})
     await responder_changed(db, user.id, request.app.state.settings)
     return Response(status_code=204)
 
@@ -75,6 +86,13 @@ async def responder_fix(body: Fix, request: Request, user=Depends(account), db=D
 async def create(body: CreateIncident, request: Request, idempotency_key: UUID = Header(),
                  user=Depends(account), db=Depends(database)):
     return dict(await service.create(db, user, body, idempotency_key, request.app.state.settings))
+
+
+@router.get("/incidents/active", response_model=ActiveIncident, responses={204: {"description": "No open incident"}})
+async def active_incident(user=Depends(account), db=Depends(database)):
+    """The caller's own open (non-CLOSED) incident, so the app can resume it after losing local state."""
+    row = await service.open_incident(db, user.id)
+    return Response(status_code=204) if row is None else dict(row)
 
 
 @router.post("/incidents/{incident_id}/location", status_code=204)
@@ -137,6 +155,19 @@ async def ws_ticket(incident_id: UUID, request: Request, user=Depends(account), 
         "expires_at": ticket_data.expires_at,
         "role": role
     }
+
+
+@router.post("/incidents/{incident_id}/request-help")
+async def request_help(incident_id: UUID, request: Request, user=Depends(account), db=Depends(database)):
+    from app.services.moving_geofence import invite, parameters
+
+    incident = await service.incident_row(db, incident_id)
+    service.active(incident)
+    if incident.victim_user_id == user.id:
+        raise HTTPException(403, "Authorized responder required")
+    await service.may_read(db, incident, user)
+    queued = await invite(db, dict(parameters(request.app.state.settings), id=incident_id))
+    return {"queued": len(queued)}
 
 
 @router.put("/incidents/{incident_id}/responders/status")
@@ -221,6 +252,9 @@ async def respond(invitation_id: UUID, body: Decision, request: Request, user=De
     if body.decision == "ACCEPTED":
         if not user.responder_opt_in or not user.responder_available:
             raise HTTPException(403, "Responder unavailable")
+        # Re-checked at acceptance: approval may be revoked after the invitation was sent.
+        if await db.scalar(text("SELECT status FROM volunteer_applications WHERE user_id=:id"), {"id": user.id}) != "APPROVED":
+            raise HTTPException(403, "Volunteer approval required")
         settings = request.app.state.settings
         eligible = await db.scalar(select(locations.c.user_id).select_from(locations.join(incidents,
             func.ST_DWithin(locations.c.location, incidents.c.latest_location, incidents.c.radius_meters))).where(
@@ -335,22 +369,7 @@ async def trigger_trusted_contact_alerts(incident_id: UUID, user=Depends(account
 
 @router.get("/incidents/{incident_id}/trusted-contacts", response_model=list[IncidentContactAlertStatus])
 async def get_incident_contact_statuses(incident_id: UUID, user=Depends(account), db=Depends(database)):
-    contacts = await tc_service.list_contacts(db, user.id)
-    now = datetime.now(timezone.utc)
-    return [
-        {
-            "contact_id": c["id"],
-            "display_name": c["display_name"],
-            "masked_phone": tc_service.mask_phone(c["phone_number"]),
-            "is_primary": c["is_primary"],
-            "delivery_status": "PROVIDER_ACCEPTED" if c["notify_on_sos"] else "NOT_REQUESTED",
-            "message_preview": "SurakshaNet SOS: I may need urgent help.",
-            "location_disclosed": c["include_location_link"],
-            "tracking_granted": c["allow_live_tracking"],
-            "updated_at": now
-        }
-        for c in contacts
-    ]
+    return await tc_service.incident_contact_statuses(db, user.id, incident_id)
 
 
 @router.post("/incidents/{incident_id}/invitations/{invitation_id}/revoke", status_code=204)
@@ -417,7 +436,7 @@ async def test_alert(device_id: str, request: Request, user=Depends(account), db
         "created_at": datetime.now(timezone.utc).isoformat(),
         "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
     }
-    title = "SurakshaNet Test Alert"
+    title = "Maitri alert"
     body = "This is an authorized test notification for your registered device."
     from starlette.concurrency import run_in_threadpool
     results = await run_in_threadpool(sender, list(tokens), title, body, payload, firebase_app)

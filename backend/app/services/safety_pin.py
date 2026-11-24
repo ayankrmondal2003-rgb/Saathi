@@ -282,24 +282,7 @@ async def resolve_incident_with_pin(db, hub, incident_id: UUID, user, pin: str, 
                 ended_at=now
             )
         )
-        await db.execute(
-            text("UPDATE notification_outbox SET delivery_status='CANCELLED' WHERE incident_id=:id AND delivery_status IN ('PENDING','RETRY_SCHEDULED','SENDING')"),
-            {"id": incident_id}
-        )
-        await db.execute(
-            text("UPDATE incident_invitations SET status='EXPIRED' WHERE incident_id=:id AND status='PENDING'"),
-            {"id": incident_id}
-        )
-        await db.execute(
-            update(responders).where(
-                responders.c.incident_id == incident_id,
-                responders.c.revoked_at.is_(None)
-            ).values(authorization_status="REVOKED", revoked_at=now)
-        )
-        await db.execute(
-            text("UPDATE trusted_contact_grants SET authorization_status='REVOKED', revoked_at=:now WHERE incident_id=:id AND authorization_status='AUTHORIZED'"),
-            {"id": incident_id, "now": now}
-        )
+        await service.revoke_incident_access(db, incident_id, now)
         closure_contacts = (await db.execute(
             select(trusted_contacts.c.id).where(
                 trusted_contacts.c.owner_user_id == user.id,

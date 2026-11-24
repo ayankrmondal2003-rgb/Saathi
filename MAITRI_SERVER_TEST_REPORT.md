@@ -1,11 +1,11 @@
 # MAITRI SERVER-BASED FEATURE TEST REPORT
 
-**Execution Timestamp:** 2026-11-23T00:40:27Z
+**Execution Timestamp:** 2026-11-24T02:49:25Z
 **Environment:** Isolated PostgreSQL + PostGIS (Port dynamically allocated)
 **Safety Guard Status:** VERIFIED_ISOLATED (No production connections, live SOS disabled)
-**Alembic Head Revision:** `0009`
+**Alembic Head Revision:** `0011`
 **PostGIS Version:** `3.7.0`
-**Duration:** 33.07s
+**Duration:** 41.09s
 **Overall Status:** **PASS**
 
 ---
@@ -14,7 +14,7 @@
 
 | Total Tests | Passed | Failed | Errors | Skipped | Pass Rate | Overall Result |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **97** | **97** | **0** | **0** | **0** | **100.0%** | **PASS** |
+| **124** | **124** | **0** | **0** | **0** | **100.0%** | **PASS** |
 
 All tests were executed against genuine local FastAPI endpoints, authentic database schemas with PostGIS spatial evaluation, and multi-actor synthetic authentication (`VICTIM_A`, `RESPONDER_B`, `TRUSTED_CONTACT_C`, `UNAUTHORIZED_USER_D`). No production database was contacted, no SMS or real FCM push was sent, and emergency broadcasting remained strictly disabled.
 
@@ -39,7 +39,7 @@ All tests were executed against genuine local FastAPI endpoints, authentic datab
 | **SAFETY PIN** | `/api/security/safety-pin/*`, `/resolve` | 6-digit non-sequential PIN setup, wrong PIN 403, correct PIN incident closure (CLOSED) | **PASS** |
 | **FCM LOCAL OUTBOX** | `outbox_worker.py` | Fake transport processes invitation notification, payload strictly omits coordinates | **PASS** |
 | **ANDROID API CONTRACTS** | `BackendApi.kt` vs FastAPI routes | 100% path, HTTP method, and parameter parity across all 46 endpoints | **PASS** |
-| **HEALTH & DIAGNOSTICS** | `/health`, `/ready` | HTTP 200 service readiness, PostGIS version confirmation, Alembic revision 0009 | **PASS** |
+| **HEALTH & DIAGNOSTICS** | `/health`, `/ready` | HTTP 200 service readiness, PostGIS version confirmation, Alembic revision 0010 | **PASS** |
 
 ---
 
@@ -91,12 +91,12 @@ To make the live Render backend match the verified local test server:
            backend/tests/test_maitri_features.py \
            backend/tests/run_maitri_server_tests.py \
            backend/test-maitri-server.ps1 \
-           app/src/main/java/com/example/surakshanet/network/BackendApi.kt \
-           app/src/main/java/com/example/surakshanet/ui/MaitriSharingDialog.kt
+           app/src/main/java/in/maitri/app/network/BackendApi.kt \
+           app/src/main/java/in/maitri/app/ui/MaitriSharingDialog.kt
 
    git commit -m "Deploy circle sharing, volunteer verification, safety guard, and server test suite"
    git push origin master
    ```
 2. Trigger **Manual Deploy → Deploy latest commit** in the Render Dashboard.
-3. Confirm in Render logs that migrations `0008` and `0009` apply automatically during startup.
+3. Confirm in Render logs that migrations `0008` through `0010` apply automatically during startup.
 4. Verify `/ready` returns HTTP 200.

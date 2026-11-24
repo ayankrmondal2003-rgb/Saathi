@@ -1,0 +1,14 @@
+<!-- Static geometry from the approved dark screen 11 crop. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt" android:width="390dp" android:height="788dp" android:viewportWidth="390" android:viewportHeight="788">
+    <group android:translateX="-1322" android:translateY="-1000">
+        <path android:pathData="M1322,972 h390 v844 h-390 Z" android:fillColor="#19151B"/>
+        <path android:pathData="M1368,1038 h0 a22,22 0,0 1 22,22 v0 a22,22 0,0 1 -22,22 h-0 a22,22 0,0 1 -22,-22 v-0 a22,22 0,0 1 22,-22 Z" android:fillColor="#28212A"/>
+        <path android:pathData="M1370.75 1053.58L1364.33 1060L1370.75 1066.42" android:strokeColor="#FAEFF5" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+        <path android:pathData="M1374,1116 h286 a28,28 0,0 1 28,28 v140 a28,28 0,0 1 -28,28 h-286 a28,28 0,0 1 -28,-28 v-140 a28,28 0,0 1 28,-28 Z" android:fillColor="#36232F"/>
+        <path android:pathData="M1513 1150H1521C1523.21 1150 1525 1151.79 1525 1154V1178C1525 1180.21 1523.21 1182 1521 1182H1513C1510.79 1182 1509 1180.21 1509 1178V1154C1509 1151.79 1510.79 1150 1513 1150Z" android:strokeColor="#FF9CBE" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+        <path android:pathData="M1501 1156L1497 1162L1501 1170L1497 1176M1533 1156L1537 1162L1533 1170L1537 1176" android:strokeColor="#FF9CBE" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+        <path android:pathData="M1474.5,1274 h85 a12.5,12.5 0,0 1 12.5,12.5 v0 a12.5,12.5 0,0 1 -12.5,12.5 h-85 a12.5,12.5 0,0 1 -12.5,-12.5 v-0 a12.5,12.5 0,0 1 12.5,-12.5 Z" android:fillColor="#28212A"/>
+        <path android:pathData="M1366,1370 h302 a20,20 0,0 1 20,20 v122 a20,20 0,0 1 -20,20 h-302 a20,20 0,0 1 -20,-20 v-122 a20,20 0,0 1 20,-20 Z" android:fillColor="#28212A"/>
+        <path android:pathData="M1372,1624 h290 a26,26 0,0 1 26,26 v0 a26,26 0,0 1 -26,26 h-290 a26,26 0,0 1 -26,-26 v-0 a26,26 0,0 1 26,-26 Z" android:fillColor="#FF9CBE"/>
+    </group>
+</vector>

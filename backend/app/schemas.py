@@ -2,7 +2,8 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 from fastapi import HTTPException
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+import re
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
 
 class Input(BaseModel):
@@ -30,10 +31,48 @@ class ProfileEdit(Input):
     responder_available: bool
 
 
+PHONE_PATTERN = re.compile(r"^\+?[0-9][0-9 ()-]{5,30}$")
+
+
+class ProfileDetailsEdit(Input):
+    """Partial contact-detail update. Responder flags are deliberately excluded."""
+    display_name: str | None = Field(default=None, min_length=1, max_length=256)
+    phone_number: str | None = Field(default=None, max_length=32)
+    city: str | None = Field(default=None, max_length=128)
+
+    @field_validator("display_name")
+    @classmethod
+    def name_required(cls, value):
+        if value is None or not value.strip():
+            raise ValueError("Name is required")
+        return value.strip()
+
+    @field_validator("phone_number")
+    @classmethod
+    def phone(cls, value):
+        value = (value or "").strip()
+        if not value:
+            return None
+        digits = sum(c.isdigit() for c in value)
+        if not PHONE_PATTERN.fullmatch(value) or not 7 <= digits <= 15:
+            raise ValueError("Enter a valid phone number")
+        return value
+
+    @field_validator("city")
+    @classmethod
+    def place(cls, value):
+        value = (value or "").strip()
+        if any(ord(c) < 32 for c in value):
+            raise ValueError("City contains unsupported characters")
+        return value or None
+
+
 class Profile(ProfileEdit):
     id: UUID
     email: str
     email_verified: bool
+    phone_number: str | None = None
+    city: str | None = None
 
 
 class CreateIncident(Input):
@@ -45,6 +84,13 @@ class Incident(BaseModel):
     id: UUID
     status: str
     is_test: bool
+
+
+class ActiveIncident(BaseModel):
+    id: UUID
+    status: str
+    started_at: datetime
+    idempotency_key: UUID
 
 
 class Decision(Input):

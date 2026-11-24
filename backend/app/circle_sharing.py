@@ -53,10 +53,14 @@ async def rate_limit(db, user_id, table, limit, interval):
 @router.post("/pairing-code")
 async def pairing(body: PairingRequest, request: Request, user=Depends(account), db=Depends(database)):
     await rate_limit(db, user.id, "circle_pairing_codes", 20, "1 hour")
+    email = body.owner_email.strip()
+    if "@" not in email:
+        raise HTTPException(422, "Enter the circle owner's email address")
+    # Email lookup only matches owners whose email is verified; phone-only accounts have no email.
     owner = await one(db, """SELECT id FROM users WHERE lower(email)=lower(:email)
         AND id<>:recipient AND account_status='ACTIVE' AND email_verified
         AND firebase_uid=ANY(CAST(:allowed AS text[]))""",
-        email=body.owner_email.strip(), recipient=user.id, allowed=list(request.app.state.settings.test_account_uids))
+        email=email, recipient=user.id, allowed=list(request.app.state.settings.test_account_uids))
     if not owner:
         raise HTTPException(404, "Eligible sharing account unavailable")
     code = secrets.token_urlsafe(32)
@@ -113,7 +117,7 @@ async def recipient_links(db, owner, contacts, allowed, trip):
         WHERE l.owner_id=:owner AND c.owner_user_id=:owner
         AND c.id=ANY(CAST(:contacts AS uuid[])) AND l.revoked_at IS NULL
         AND (NOT :trip OR c.allow_live_tracking)
-        AND u.account_status='ACTIVE' AND u.email_verified
+        AND u.account_status='ACTIVE' AND (u.email_verified OR u.phone_verified)
         AND u.firebase_uid=ANY(CAST(:allowed AS text[]))"""),
         {"owner": owner, "contacts": contacts, "allowed": list(allowed), "trip": trip})
     ids = list(result.scalars())

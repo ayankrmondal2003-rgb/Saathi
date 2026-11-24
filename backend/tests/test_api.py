@@ -53,7 +53,7 @@ async def test_health_and_authentication(monkeypatch):
             raise ValueError("invalid")
         monkeypatch.setattr("app.core.auth.verify_id_token", reject)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            assert (await client.get("/health")).json() == {"status":"ok","service":"SurakshaNet API"}
+            assert (await client.get("/health")).json() == {"status":"ok","service":"Maitri API"}
             for headers in [{}, {"Authorization":"Bearer invalid"}]:
                 assert (await client.get("/api/users/me", headers=headers)).status_code == 401
             monkeypatch.setattr("app.core.auth.verify_id_token", lambda *a, **kw: {"uid":"test","email_verified":False})
@@ -86,7 +86,7 @@ async def test_uvicorn_loopback_health():
             async with httpx.AsyncClient(trust_env=False) as client:
                 response = await client.get(f"http://127.0.0.1:{port}/health")
                 assert response.status_code == 200
-                assert response.json()["service"] == "SurakshaNet API"
+                assert response.json()["service"] == "Maitri API"
         finally:
             server.should_exit = True
             await task

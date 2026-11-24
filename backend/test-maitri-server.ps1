@@ -5,7 +5,7 @@
     1. Checks Docker & PostgreSQL tools availability.
     2. Enforces testing environment safety guards (blocks production/Render hosts).
     3. Initializes an isolated PostgreSQL + PostGIS test cluster.
-    4. Applies Alembic migrations through 0009.
+    4. Applies Alembic migrations through 0010.
     5. Runs all 97 automated feature integration tests.
     6. Produces JUnit XML, JSON metrics, and MAITRI_SERVER_TEST_REPORT.md.
     7. Cleans up isolated infrastructure and exits with appropriate exit code.
