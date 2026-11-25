@@ -18,7 +18,11 @@ data class CircleInviteDto(val code: String, @SerializedName("expires_at") val e
 data class AcceptInviteRequest(val code: String)
 data class AcceptInviteDto(val status: String, @SerializedName("owner_name") val ownerName: String?)
 data class CircleRequestDto(val id: String, @SerializedName("owner_name") val ownerName: String)
-data class MembershipDto(@SerializedName("link_id") val linkId: String, @SerializedName("owner_name") val ownerName: String)
+/** A circle this account is in. [addedBack]: LINKED (each other's circles), REQUESTED (waiting for them), or null. */
+data class MembershipDto(@SerializedName("link_id") val linkId: String, @SerializedName("owner_name") val ownerName: String,
+    @SerializedName("since") val since: String? = null, @SerializedName("added_back") val addedBack: String? = null)
+data class AddBackRequest(@SerializedName("phone_number") val phoneNumber: String? = null)
+data class AddBackDto(val status: String, @SerializedName("contact_id") val contactId: String? = null)
 
 data class SmsContactDto(@SerializedName("contact_id") val contactId: String,
     @SerializedName("display_name") val name: String, @SerializedName("phone_number") val phone: String)
@@ -37,6 +41,8 @@ interface CircleApi {
     @POST("api/circle/requests/{id}/{decision}") suspend fun answer(@Path("id") id: String, @Path("decision") decision: String,
         @Tag expected: ExpectedAccount): StatusDto
     @GET("api/circle/memberships") suspend fun memberships(@Tag expected: ExpectedAccount): List<MembershipDto>
+    @POST("api/circle/memberships/{id}/add-back") suspend fun addBack(@Path("id") linkId: String, @Body body: AddBackRequest,
+        @Tag expected: ExpectedAccount): AddBackDto
     @POST("api/incidents/{id}/trusted-contacts/alert") suspend fun alert(@Path("id") id: String, @Tag expected: ExpectedAccount): CircleAlertDto
     @POST("api/incidents/{id}/trusted-contacts/sms-prepared") suspend fun smsPrepared(@Path("id") id: String,
         @Body body: SmsPreparedRequest, @Tag expected: ExpectedAccount): retrofit2.Response<Unit>

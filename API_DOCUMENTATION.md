@@ -48,7 +48,8 @@ Access: **public** (no sign-in), **account** (Firebase ID token), **admin** (tok
 |---|---|---|---|
 | POST | `/api/circle/invites` | account | Creates an 8-character invite code for one trusted contact (valid 7 days). |
 | POST | `/api/circle/invites/accept` | account | The contact enters the code: links their account to that trusted contact. Rate limited. |
-| GET | `/api/circle/memberships` | account | Circles this account belongs to (whose SOS alerts it receives). |
+| GET | `/api/circle/memberships` | account | Circles this account belongs to (whose SOS alerts it receives), and whether it has added each owner back. |
+| POST | `/api/circle/memberships/{link_id}/add-back` | account | Save the circle's owner as my contact and send them a circle request (their choice to accept). |
 | GET | `/api/circle/requests` | account | Circle requests waiting for this account's answer (made by phone-number match). |
 | POST | `/api/circle/requests/{request_id}/{decision}` | account | Accept or decline a circle request (`decision` is accept or decline). |
 

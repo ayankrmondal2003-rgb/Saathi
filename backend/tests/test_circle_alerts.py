@@ -192,3 +192,47 @@ async def test_inbox_lists_pending_sos_requests_and_counts_unread(world):
     await pair(call, "owner", linked, "responder")
     assert (await call("owner", "POST", "/inbox/read-all")).status_code == 204
     assert (await inbox(call, "owner"))["unread_count"] == 0
+
+
+async def test_recipient_can_add_the_owner_back_and_both_must_choose(world):
+    call, sessions, _ = world
+    friend_contact = await contact(call, "owner", "Friend", "+919800000001")
+    await pair(call, "owner", friend_contact, "friend")
+    membership = (await call("friend", "GET", "/circle/memberships")).json()[0]
+    assert membership["owner_name"] == "owner" and membership["added_back"] is None
+    # The owner's typed profile number is never used; the friend is asked for it.
+    async with sessions.begin() as db:
+        await db.execute(text("UPDATE users SET phone_number='+919833333333' WHERE display_name='owner'"))
+    needed = await call("friend", "POST", f"/circle/memberships/{membership['link_id']}/add-back", json={})
+    assert needed.status_code == 422 and needed.json()["detail"]["code"] == "PHONE_NEEDED"
+    # A verified number is used directly: one tap.
+    async with sessions.begin() as db:
+        await db.execute(text("UPDATE users SET phone_verified=true WHERE display_name='owner'"))
+    added = await call("friend", "POST", f"/circle/memberships/{membership['link_id']}/add-back", json={})
+    assert added.status_code == 200 and added.json()["status"] == "REQUESTED", added.text
+    saved = (await call("friend", "GET", "/trusted-contacts")).json()
+    assert [(c["display_name"], c["phone_number"]) for c in saved] == [("owner", "+919833333333")]
+    assert (await call("friend", "GET", "/circle/memberships")).json()[0]["added_back"] == "REQUESTED"
+    # Not mutual until the owner accepts.
+    assert (await call("owner", "GET", "/circle/memberships")).json() == []
+    requests = (await call("owner", "GET", "/circle/requests")).json()
+    assert len(requests) == 1 and requests[0]["owner_name"] == "friend"
+    assert (await call("owner", "POST", f"/circle/requests/{requests[0]['id']}/accept")).json()["status"] == "LINKED"
+    assert (await call("owner", "GET", "/circle/memberships")).json()[0]["owner_name"] == "friend"
+    assert (await call("friend", "GET", "/circle/memberships")).json()[0]["added_back"] == "LINKED"
+    # Repeating is harmless; strangers can't use someone else's membership.
+    again = await call("friend", "POST", f"/circle/memberships/{membership['link_id']}/add-back", json={})
+    assert again.json()["status"] == "LINKED"
+    other = await call("stranger", "POST", f"/circle/memberships/{membership['link_id']}/add-back", json={})
+    assert other.status_code == 404
+
+
+async def test_add_back_with_a_typed_number_reuses_an_existing_contact(world):
+    call, _, _ = world
+    friend_contact = await contact(call, "owner", "Friend", "+919800000001")
+    await pair(call, "owner", friend_contact, "friend")
+    existing = await contact(call, "friend", "Owner (saved earlier)", "+919844444444")
+    link_id = (await call("friend", "GET", "/circle/memberships")).json()[0]["link_id"]
+    added = await call("friend", "POST", f"/circle/memberships/{link_id}/add-back", json={"phone_number": "98444 44444"})
+    assert added.json() == {"status": "REQUESTED", "contact_id": existing}
+    assert len((await call("friend", "GET", "/trusted-contacts")).json()) == 1
