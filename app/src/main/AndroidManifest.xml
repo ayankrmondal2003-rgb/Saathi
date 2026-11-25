@@ -27,6 +27,14 @@
         android:roundIcon="@mipmap/maitri_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.Maitri">
+        <!-- WorkManager starts on demand (MaitriApp is its Configuration.Provider), not during app start-up. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data android:name="androidx.work.WorkManagerInitializer" android:value="androidx.startup" tools:node="remove" />
+        </provider>
         <service android:name=".location.SosLocationService" android:exported="false" android:foregroundServiceType="location" />
         <service
             android:name=".notification.SosFirebaseMessagingService"

@@ -26,8 +26,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // The system splash shows the Maitri logo until the first frame; a longer account check shows MaitriLoader.
-        installSplashScreen()
+        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Cold start: everything the first screens need starts loading now, in parallel (see Preloader).
+        `in`.maitri.app.startup.Preloader.start(this)
+        // Hand-off: the system splash fades into "Getting things ready" instead of cutting to it.
+        splash.setOnExitAnimationListener { view ->
+            view.view.animate().alpha(0f).setDuration(200L).withEndAction { view.remove() }.start()
+        }
         NotificationHelper.createEmergencyNotificationChannel(this)
         handleIntent(intent)
         enableEdgeToEdge()

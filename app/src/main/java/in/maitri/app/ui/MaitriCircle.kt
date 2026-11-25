@@ -47,14 +47,19 @@ fun MaitriCircle(
     val p = maitriPalette()
     val context = LocalContext.current
     val uid = remember { runCatching { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid }.getOrNull() }
-    var linked by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var memberships by remember { mutableStateOf<List<`in`.maitri.app.network.MembershipDto>>(emptyList()) }
+    var linked by remember { mutableStateOf(`in`.maitri.app.startup.StartupCache.get<List<`in`.maitri.app.network.CircleLinkDto>>(uid,
+        `in`.maitri.app.startup.StartupCache.LINKS).orEmpty().filter { it.owner }.map { it.contactId }.toSet()) }
+    var memberships by remember { mutableStateOf(`in`.maitri.app.startup.StartupCache.get<List<`in`.maitri.app.network.MembershipDto>>(uid,
+        `in`.maitri.app.startup.StartupCache.MEMBERSHIPS).orEmpty()) }
     var refresh by remember { mutableIntStateOf(0) }
     LaunchedEffect(uid, refresh, contacts.size) {
         val account = uid?.let { `in`.maitri.app.network.ExpectedAccount(it) } ?: return@LaunchedEffect
         try {
-            linked = `in`.maitri.app.network.BackendClient.api.circleLinks(account).filter { it.owner }.map { it.contactId }.toSet()
+            val links = `in`.maitri.app.network.BackendClient.api.circleLinks(account)
+            linked = links.filter { it.owner }.map { it.contactId }.toSet()
+            `in`.maitri.app.startup.StartupCache.put(uid, `in`.maitri.app.startup.StartupCache.LINKS, links)
             memberships = `in`.maitri.app.network.BackendClient.circle.memberships(account)
+            `in`.maitri.app.startup.StartupCache.put(uid, `in`.maitri.app.startup.StartupCache.MEMBERSHIPS, memberships)
         } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
     }
     LaunchedEffect(message) {

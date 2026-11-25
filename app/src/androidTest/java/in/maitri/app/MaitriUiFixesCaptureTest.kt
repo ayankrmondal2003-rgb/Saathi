@@ -89,6 +89,8 @@ class MaitriUiFixesCaptureTest {
                     null, maitriPalette()) {}
             }
         }),
+        Triple("startup", null, @Composable { MaitriStartupScreen() }),
+        Triple("startup-static", null, @Composable { MaitriStartupScreen(animate = false) }),
         Triple("loader", null, @Composable {
             Box(Modifier.fillMaxSize().background(maitriPalette().background), contentAlignment = Alignment.Center) {
                 MaitriLoader(message = "Connecting to Maitri…", delayMillis = 0)

@@ -3,6 +3,7 @@ package `in`.maitri.app.navigation
 import `in`.maitri.app.tr
 import `in`.maitri.app.trKey
 
+import kotlinx.coroutines.flow.first
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -101,6 +102,26 @@ private fun SafetyNavigation(vm: SafetyViewModel, pendingInvitationId: String?, 
         if (identity != null) {
             `in`.maitri.app.notification.DeviceRepository.get(context).registerCurrentToken()
         }
+    }
+    // Every cold start shows "Getting things ready" while Preloader works in parallel: at least 700 ms (no flicker),
+    // at most 2.5 s, then the app continues even if the server is still waking. Opening the app from an SOS-request
+    // notification skips it and goes straight to the request.
+    var startupDone by rememberSaveable { mutableStateOf(`in`.maitri.app.startup.StartupGate.done || pendingInvitationId != null) }
+    if (!startupDone) {
+        LaunchedEffect(Unit) {
+            val t0 = android.os.SystemClock.elapsedRealtime()
+            kotlinx.coroutines.withTimeoutOrNull(2_500) {
+                androidx.compose.runtime.snapshotFlow { account.gate != Gate.LOADING }.first { ready: Boolean -> ready }
+                `in`.maitri.app.startup.Preloader.essentialsReady.first { ready: Boolean -> ready }
+            }
+            val left = 700 - (android.os.SystemClock.elapsedRealtime() - t0)
+            if (left > 0) kotlinx.coroutines.delay(left)
+            if (vm.state.value.incident?.status == IncidentStatus.ACTIVE) `in`.maitri.app.startup.Preloader.requestOpenActiveSos()
+            `in`.maitri.app.startup.StartupGate.done = true
+            startupDone = true
+        }
+        `in`.maitri.app.ui.MaitriStartupScreen()
+        return
     }
     if (account.gate == Gate.LOADING) {
         Splash()
@@ -339,13 +360,22 @@ internal fun MainGraph(
                     val onContactsClick = remember { { tab("Contacts") } }
                     val active = state.incident?.status == IncidentStatus.ACTIVE
 
-                    // Unread inbox count for the bell, refreshed while Home is visible.
-                    var unread by remember { mutableIntStateOf(0) }
+                    // An open SOS found at start-up (server or this phone) goes straight to screen 08, once.
+                    LaunchedEffect(state.incident?.status) {
+                        if (state.incident?.status == IncidentStatus.ACTIVE && `in`.maitri.app.startup.Preloader.consumeOpenActiveSos())
+                            onStartIncident(false)
+                    }
+                    LaunchedEffect(Unit) { `in`.maitri.app.startup.StartupGate.reportFullyDrawn(context as? android.app.Activity) }
+                    // Unread inbox count for the bell: cached value at once, refreshed while Home is visible.
+                    var unread by remember { mutableIntStateOf(`in`.maitri.app.startup.StartupCache.get<Int>(uid, `in`.maitri.app.startup.StartupCache.UNREAD) ?: 0) }
                     val homeLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
                     LaunchedEffect(uid) {
                         homeLifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
                             while (true) {
-                                try { unread = `in`.maitri.app.network.BackendClient.circle.inbox(ExpectedAccount(uid)).unreadCount }
+                                try {
+                                    unread = `in`.maitri.app.network.BackendClient.circle.inbox(ExpectedAccount(uid)).unreadCount
+                                    `in`.maitri.app.startup.StartupCache.put(uid, `in`.maitri.app.startup.StartupCache.UNREAD, unread)
+                                }
                                 catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
                                 kotlinx.coroutines.delay(60_000)
                             }

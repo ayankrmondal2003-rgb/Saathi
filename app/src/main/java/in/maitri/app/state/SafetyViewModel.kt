@@ -80,6 +80,7 @@ class SafetyViewModel(app: Application) : AndroidViewModel(app) {
         val stored = tracking.session.value
         if (stored.owner.isNotEmpty() && (stored.owner != identity?.uid || !identity.verified)) tracking.close()
         if (identity == null || !identity.verified) {
+            `in`.maitri.app.startup.StartupCache.clear(getApplication())
             tracking.sync.wake(null)
             mutable.value = DemoState()
             return

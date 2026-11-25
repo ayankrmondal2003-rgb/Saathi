@@ -39,13 +39,14 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val scope = rememberCoroutineScope()
     val account = remember(uid) { ExpectedAccount(uid) }
-    var profile by remember(uid) { mutableStateOf<ProfileDto?>(null) }
+    var profile by remember(uid) { mutableStateOf(`in`.maitri.app.startup.StartupCache.get<ProfileDto>(uid, `in`.maitri.app.startup.StartupCache.PROFILE)) }
     var inbox by remember(uid) { mutableStateOf(emptyList<InvitationDto>()) }
     var preferenceMessage by remember { mutableStateOf("") }
     var locationStatusMessage by remember { mutableStateOf<String?>(null) }
     var inboxLoaded by remember(uid) { mutableStateOf(false) }
-    var volunteer by remember(uid) { mutableStateOf<VolunteerStatusDto?>(null) }
+    var volunteer by remember(uid) { mutableStateOf(`in`.maitri.app.startup.StartupCache.get<VolunteerStatusDto>(uid, `in`.maitri.app.startup.StartupCache.VOLUNTEER)) }
     var refreshing by remember { mutableStateOf(false) }
+    var profileFresh by remember(uid) { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var permitted by remember { mutableStateOf(context.locationAllowed()) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -81,11 +82,17 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
     // pull-to-refresh (which also re-reads the profile).
     suspend fun load(fullProfile: Boolean) {
         try {
-            if (profile == null || fullProfile) profile = BackendClient.api.profile(account)
+            // The cached profile shows at once; the first load of this visit always refreshes it.
+            if (profile == null || fullProfile || !profileFresh) {
+                profile = BackendClient.api.profile(account)
+                profileFresh = true
+                `in`.maitri.app.startup.StartupCache.put(uid, `in`.maitri.app.startup.StartupCache.PROFILE, profile)
+            }
             profile?.let { `in`.maitri.app.network.ResponderLocation.setAvailable(context, uid, it.optedIn && it.available) }
             inbox = BackendClient.api.invitations(account).filter { it.canOpenIncoming() || it.status == "ACCEPTED" }
             inboxLoaded = true
             volunteer = BackendClient.api.volunteerStatus(account)
+            `in`.maitri.app.startup.StartupCache.put(uid, `in`.maitri.app.startup.StartupCache.VOLUNTEER, volunteer)
             if (preferenceMessage == tr("Could not refresh responder information")) preferenceMessage = ""
         } catch (e: CancellationException) {
             throw e
@@ -229,6 +236,7 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
         scope.launch {
             try {
                 profile = BackendClient.api.profile(ProfileRequest(current.name, optIn, available), account)
+                `in`.maitri.app.startup.StartupCache.put(uid, `in`.maitri.app.startup.StartupCache.PROFILE, profile)
                 profile?.let { `in`.maitri.app.network.ResponderLocation.setAvailable(context, uid, it.optedIn && it.available) }
                 preferenceMessage = tr("Preferences saved")
             } catch (e: CancellationException) {
