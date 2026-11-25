@@ -5,7 +5,6 @@ import `in`.maitri.app.tr
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -118,9 +117,10 @@ internal fun MaitriCircleContent(
     // Multi-number picker dialog state when importing from phone
     var multiNumberOptions by remember { mutableStateOf<Pair<String, List<ContactPhoneEntry>>?>(null) }
 
-    // Pick contact from system contacts provider (does not require broad READ_CONTACTS)
+    // Android's phone-number picker: the user picks one number, and Maitri may read just that row (no READ_CONTACTS).
+    // The plain contact picker (PickContact) only grants the contact itself, so its numbers can't be read.
     val contactPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickContact()
+        contract = ContactPickerHelper.PickPhoneNumber
     ) { uri: Uri? ->
         if (uri != null) {
             val resolved = ContactPickerHelper.resolvePickedContact(context, uri)
