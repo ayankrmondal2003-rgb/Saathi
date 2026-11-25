@@ -76,6 +76,12 @@
             android:taskAffinity="in.maitri.app.sosrequest"
             android:theme="@style/Theme.Maitri" />
         <receiver android:name=".notification.SosRequestActionReceiver" android:exported="false" />
+        <!-- After an update: remind volunteers if Android switched lock-screen SOS alerts off (FullScreenReminder). -->
+        <receiver android:name=".notification.AppUpdatedReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
