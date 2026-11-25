@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Light-theme Maitri tokens shared by the board artwork (maitri_light_*.xml) and MaitriPalette in MaitriHome.kt.
+         Change them here and in MaitriPalette together; MaitriPaletteTokensTest checks they match. -->
+    <!-- Blush cards: one clear step darker than the page (#FFF9FA) so cards read as separate. -->
+    <color name="maitri_blush">#F9DCE6</color>
+    <!-- Subtle blush fills (chips, soft backgrounds). -->
+    <color name="maitri_blush_subtle">#FBE7EE</color>
+    <!-- Secondary text and icons: 4.77:1 on maitri_blush, 6.1:1 on white. -->
+    <color name="maitri_secondary">#725C66</color>
+</resources>

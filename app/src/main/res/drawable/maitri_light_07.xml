@@ -19,9 +19,9 @@
         <path android:pathData="M2834,200 h110 a18,18 0,0 1 18,18 v40 a18,18 0,0 1 -18,18 h-110 a18,18 0,0 1 -18,-18 v-40 a18,18 0,0 1 18,-18 Z" android:fillColor="#DFEBE1"/>
         <path android:pathData="M2636 318H2978M2636 438H2978M2776 188V508M2666 188V508" android:strokeColor="#FFFFFF" android:strokeWidth="15" android:strokeLineCap="round" android:strokeLineJoin="round"/>
         <path android:pathData="M2879,486 h86 a5,5 0,0 1 5,5 v6 a5,5 0,0 1 -5,5 h-86 a5,5 0,0 1 -5,-5 v-6 a5,5 0,0 1 5,-5 Z" android:fillColor="#F5EDF1"/>
-        <path android:pathData="M2658,524 h298 a22,22 0,0 1 22,22 v60 a22,22 0,0 1 -22,22 h-298 a22,22 0,0 1 -22,-22 v-60 a22,22 0,0 1 22,-22 Z" android:fillColor="#FCE8ED"/>
+        <path android:pathData="M2658,524 h298 a22,22 0,0 1 22,22 v60 a22,22 0,0 1 -22,22 h-298 a22,22 0,0 1 -22,-22 v-60 a22,22 0,0 1 22,-22 Z" android:fillColor="@color/maitri_blush"/>
         <path android:pathData="M2660,702 h178 a24,24 0,0 1 24,24 v0 a24,24 0,0 1 -24,24 h-178 a24,24 0,0 1 -24,-24 v-0 a24,24 0,0 1 24,-24 Z" android:fillColor="#B82055"/>
-        <path android:pathData="M2898,702 h56 a24,24 0,0 1 24,24 v0 a24,24 0,0 1 -24,24 h-56 a24,24 0,0 1 -24,-24 v-0 a24,24 0,0 1 24,-24 Z" android:fillColor="#FCE8ED"/>
+        <path android:pathData="M2898,702 h56 a24,24 0,0 1 24,24 v0 a24,24 0,0 1 -24,24 h-56 a24,24 0,0 1 -24,-24 v-0 a24,24 0,0 1 24,-24 Z" android:fillColor="@color/maitri_blush"/>
         <path android:pathData="M2893.33 718.5L2896.67 719.333L2897.5 723.5L2895.83 725.167C2896.98 727.28 2898.72 729.016 2900.83 730.167L2902.5 728.5L2906.67 729.333L2907.5 732.667C2906.67 736 2900.83 734.333 2896.67 730.167C2892.5 726 2890.83 719.333 2893.33 718.5Z" android:strokeColor="#B82055" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round"/>
     </group>
 </vector>

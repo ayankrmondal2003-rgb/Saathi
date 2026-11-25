@@ -41,9 +41,11 @@ import kotlinx.coroutines.launch
 internal data class MaitriPalette(val dark: Boolean) {
     val background = Color(if (dark) 0xFF19151B else 0xFFFFF9FA)
     val primary = Color(if (dark) 0xFFFAEFF5 else 0xFF40303A)
-    val secondary = Color(if (dark) 0xFFC3ADBA else 0xFF7D6771)
+    val secondary = Color(if (dark) 0xFFC3ADBA else 0xFF725C66)  // light = @color/maitri_secondary
     val accent = Color(if (dark) 0xFFFF9CBE else 0xFFB82055)
-    val card = Color(if (dark) 0xFF36232F else 0xFFFCE8ED)
+    val card = Color(if (dark) 0xFF36232F else 0xFFF9DCE6)  // light = @color/maitri_blush
+    /** Soft fills (chips, subtle backgrounds); light = @color/maitri_blush_subtle. */
+    val subtle = Color(if (dark) 0xFF241B25 else 0xFFFBE7EE)
     val surface = Color(if (dark) 0xFF28212A else 0xFFFFFFFF)
     val divider = Color(if (dark) 0xFF48323F else 0xFFF2DCE3)
     /** Text and icons on an accent fill: white on raspberry (6.2:1), dark on pink (9.2:1). White on pink is 1.9:1. */

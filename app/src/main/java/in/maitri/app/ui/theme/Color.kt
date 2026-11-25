@@ -181,7 +181,7 @@ val LightMaitriColors = MaitriColors(
     onInfoContainer = Color(0xFF0369A1),
 
     cardBackground = Color(0xFFFFFFFF),
-    cardBackgroundSecondary = Color(0xFFFCE8ED),
+    cardBackgroundSecondary = Color(0xFFF9DCE6),
     cardBorder = Color(0xFFF2DCE3),
 
     mapBackground = Color(0xFFE8EEF5),
@@ -189,8 +189,8 @@ val LightMaitriColors = MaitriColors(
     radarOverlay = Color(0x1FE11D48),
 
     textPrimary = Color(0xFF40303A),
-    textSecondary = Color(0xFF7D6771),
-    textTertiary = Color(0xFF7D6771),
+    textSecondary = Color(0xFF725C66),
+    textTertiary = Color(0xFF725C66),
 
     isDark = false,
 
