@@ -1,12 +1,12 @@
-Maitri 0.9.2-beta.3 - design fixes and mutual circles
+Maitri 0.9.3-beta.4 - faster start, clearer screens, SOS requests you can't miss
 
 What's new:
-- Circle: "Circles you're in" shows whose SOS alerts reach you. Tap "Add ... to my circle too" to send them a request; once they accept, you're in each other's circles.
-- Circle: "Import from phone contacts" now picks a phone number correctly.
-- Responder: a live map of where you are, with the 1 km area requests come from while you're Available.
-- Responder: your volunteer status at the top (Verified volunteer, under review, or not approved with the reviewer's note).
-- Dark mode: all text is readable; switches and buttons use Maitri's pink instead of purple.
-- New Themes dialog (Profile > Themes), a branded loading animation, and a cleaner bottom bar.
+- A new "Getting things ready" screen while Maitri prepares everything at once. Screens now open instantly with your last data, even offline.
+- If you have an SOS open, Maitri goes straight to it when you open the app.
+- Light mode: cards are easier to see.
+- Responder tab: everything in clear cards, with a "Request alerts" check that shows what to fix so SOS requests reach you.
+- Volunteers: an SOS request now pops up over any app, and over the lock screen if you allow it, with Accept and Decline right there. It keeps vibrating until you answer (turn this off in Profile > Keep vibrating for SOS requests). If the SOS ends, it tells you.
+- Smoother, faster animations.
 
 Reminders:
 - SOS here is REAL: your circle gets an alert and your live location. Don't hold the SOS button for fun.
