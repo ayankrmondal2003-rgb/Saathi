@@ -337,7 +337,7 @@ fun ResponderUnavailable() {
 }
 
 @Composable
-private fun SwitchRow(label: String, checked: Boolean, enabled: Boolean, p: MaitriPalette, onChange: (Boolean) -> Unit) {
+internal fun SwitchRow(label: String, checked: Boolean, enabled: Boolean, p: MaitriPalette, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
         .toggleable(value = checked, enabled = enabled, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onChange),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {

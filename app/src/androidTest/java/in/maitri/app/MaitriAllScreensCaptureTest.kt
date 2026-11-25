@@ -95,8 +95,12 @@ class MaitriAllScreensCaptureTest {
                             CompositionLocalProvider(LocalThemeController provides controller,
                                 androidx.compose.ui.platform.LocalDensity provides
                                     androidx.compose.ui.unit.Density(density.density, fontScale ?: density.fontScale)) {
-                                androidx.compose.material3.MaterialTheme(typography = `in`.maitri.app.ui.theme.Typography) {
-                                    key(screen, dark) { content() }
+                                androidx.compose.material3.MaterialTheme(colorScheme = `in`.maitri.app.ui.theme.maitriColorScheme(dark),
+                                    typography = `in`.maitri.app.ui.theme.Typography) {
+                                    CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides
+                                        `in`.maitri.app.ui.theme.maitriColorScheme(dark).onBackground) {
+                                        key(screen, dark) { content() }
+                                    }
                                 }
                             }
                         }

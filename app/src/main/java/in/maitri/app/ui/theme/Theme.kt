@@ -124,6 +124,9 @@ private val LightColorScheme = lightColorScheme(
     onErrorContainer = EmergencyDeep
 )
 
+/** The Material colour scheme for a theme, for screenshot tests that render screens outside MainActivity. */
+fun maitriColorScheme(dark: Boolean): ColorScheme = if (dark) DarkColorScheme else LightColorScheme
+
 @Composable
 fun MaitriTheme(
     content: @Composable () -> Unit
