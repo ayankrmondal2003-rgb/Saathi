@@ -70,4 +70,8 @@ def init_sentry(settings) -> bool:
         before_breadcrumb=lambda crumb, hint: {**crumb, "message": scrub_text(crumb.get("message")), "data": None},
     )
     log.info("Sentry error reporting on (%s)", settings.environment)
+    if getattr(settings, "sentry_test", False):
+        sentry_sdk.capture_message("Sentry test from Maitri server (SENTRY_TEST=1)", level="warning")
+        sentry_sdk.flush(timeout=5)
+        log.info("Sentry test message sent; remove SENTRY_TEST from the environment")
     return True
