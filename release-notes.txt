@@ -1,12 +1,8 @@
-Maitri 0.9.3-beta.4 - faster start, clearer screens, SOS requests you can't miss
+Maitri 0.9.4-beta.5 - small polish
 
 What's new:
-- A new "Getting things ready" screen while Maitri prepares everything at once. Screens now open instantly with your last data, even offline.
-- If you have an SOS open, Maitri goes straight to it when you open the app.
-- Light mode: cards are easier to see.
-- Responder tab: everything in clear cards, with a "Request alerts" check that shows what to fix so SOS requests reach you.
-- Volunteers: an SOS request now pops up over any app, and over the lock screen if you allow it, with Accept and Decline right there. It keeps vibrating until you answer (turn this off in Profile > Keep vibrating for SOS requests). If the SOS ends, it tells you.
-- Smoother, faster animations.
+- Opening your profile or your notifications now shows the page softly blurred with the Maitri logo beating while it loads.
+- Volunteers: if an update turns off "SOS requests on the lock screen", Maitri reminds you with a notification. Tap it to turn it back on, so a nearby SOS request can still wake your screen.
 
 Reminders:
 - SOS here is REAL: your circle gets an alert and your live location. Don't hold the SOS button for fun.
