@@ -12,6 +12,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -51,6 +55,7 @@ fun MaitriBetaInfo(onBack: () -> Unit) {
         }
         Spacer(Modifier.height(8.dp))
         Text(tr("Version {0}", `in`.maitri.app.BuildConfig.VERSION_NAME), color = p.secondary, fontSize = 12.sp)
+        if (`in`.maitri.app.BuildConfig.CRASH_TEST) CrashTestButton()
         Spacer(Modifier.height(12.dp))
         betaSections().forEachIndexed { index, (title, body) ->
             Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)
@@ -67,4 +72,24 @@ fun MaitriBetaInfo(onBack: () -> Unit) {
         }
         Spacer(Modifier.height(LocalFloatingNavBarPadding.current))
     }
+}
+
+/** Developer builds only (-PmaitriCrashTest=true): closes the app with a crash, so Crashlytics gets a report. */
+@Composable
+private fun CrashTestButton() {
+    val context = LocalContext.current
+    var confirm by rememberSaveable { mutableStateOf(false) }
+    TextButton(onClick = { confirm = true }) { Text("Send test crash report") }
+    if (confirm) AlertDialog(
+        onDismissRequest = { confirm = false },
+        title = { Text("Send test crash report?") },
+        text = {
+            Text(if (`in`.maitri.app.CrashReports.enabled(context))
+                "Maitri will close with a test crash. Open it again and the report reaches Crashlytics within a few minutes."
+            else "Crash reports are off in Privacy & data, so this report won't be sent.")
+        },
+        confirmButton = {
+            TextButton(onClick = { throw RuntimeException("Maitri test crash (developer build)") }) { Text("Crash now") }
+        },
+        dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } })
 }

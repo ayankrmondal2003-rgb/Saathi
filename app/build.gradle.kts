@@ -42,6 +42,13 @@ fun backendUrl(property: String, legacy: String): String {
     return "\"" + baseUrl + "\""
 }
 
+val crashTest = (project.findProperty("maitriCrashTest") as String?) == "true"
+tasks.matching { it.name.startsWith("appDistributionUpload") }.configureEach {
+    doFirst {
+        if (crashTest) throw GradleException("This build has the test crash button (-PmaitriCrashTest=true); don't send it to testers.")
+    }
+}
+
 android {
     namespace = "in.maitri.app"
     compileSdk {
@@ -85,6 +92,7 @@ android {
     buildTypes {
         debug {
             buildConfigField("String", "API_BASE_URL", backendUrl("maitriDevApiUrl", "surakshaDevApiUrl"))
+            buildConfigField("boolean", "CRASH_TEST", "false")
             // Opt-in (-PsignDebugWithUpload=true): sign debug and androidTest APKs with the upload key, so device
             // tests can install over a phone's release build without uninstalling it (and signing the user out).
             if (canSignRelease && (project.findProperty("signDebugWithUpload") as String?) == "true")
@@ -94,6 +102,9 @@ android {
         }
         release {
             buildConfigField("String", "API_BASE_URL", backendUrl("maitriProdApiUrl", "surakshaProdApiUrl"))
+            // Opt-in (-PmaitriCrashTest=true): adds "Send test crash report" to Beta info, to check Crashlytics on a
+            // developer phone. Never in a tester build: the App Distribution upload refuses such a build (below).
+            buildConfigField("boolean", "CRASH_TEST", crashTest.toString())
             if (canSignRelease) signingConfig = signingConfigs.getByName("upload")
             // Firebase App Distribution (free): ./gradlew assembleRelease appDistributionUploadRelease
             // sends this build to the "friends" tester group. Credentials and testers stay in local.properties.
