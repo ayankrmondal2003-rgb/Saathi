@@ -233,8 +233,10 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
 
     Column(Modifier.fillMaxSize().background(palette.background).statusBarsPadding()
         .verticalScroll(rememberScrollState()).padding(bottom = LocalFloatingNavBarPadding.current)) {
-        Image(painterResource(if (palette.dark) R.drawable.maitri_dark_responder else R.drawable.maitri_light_responder),
-            tr("Nearby support. Responder. Illustrative map."), Modifier.fillMaxWidth().aspectRatio(390f / 466f))
+        ResponderHeader(palette)
+        ResponderMapCard(palette, available = profile?.available == true, requestPermission = {
+            permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        })
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)
             .background(palette.surface, RoundedCornerShape(22.dp)).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -299,14 +301,17 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
     }
 }
 
-/** Responder tab without a server-backed session: same artwork, no invented invitations or availability. */
+/** Responder tab without a server-backed session: the same header and map, no invented invitations or availability. */
 @Composable
 fun ResponderUnavailable() {
     val palette = maitriPalette()
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
     Column(Modifier.fillMaxSize().background(palette.background).statusBarsPadding()
         .verticalScroll(rememberScrollState()).padding(bottom = LocalFloatingNavBarPadding.current)) {
-        Image(painterResource(if (palette.dark) R.drawable.maitri_dark_responder else R.drawable.maitri_light_responder),
-            tr("Nearby support. Responder. Illustrative map."), Modifier.fillMaxWidth().aspectRatio(390f / 466f))
+        ResponderHeader(palette)
+        ResponderMapCard(palette, available = false, requestPermission = {
+            permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        })
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)
             .background(palette.surface, RoundedCornerShape(22.dp)).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -113,10 +113,10 @@ internal fun liveMapSupported(context: Context): Boolean {
 
 @Composable
 internal fun MaitriMap(markers: List<MapMarker>, emptyLabel: String, modifier: Modifier = Modifier,
-                       accuracyMeters: Double? = null) {
+                       accuracyMeters: Double? = null, rangeMeters: Double? = null, alwaysShowAccuracy: Boolean = false) {
     val context = LocalContext.current
     val live = remember(context) { liveMapSupported(context) }
-    if (live) MaitriLiveMap(markers, emptyLabel, modifier, accuracyMeters)
+    if (live) MaitriLiveMap(markers, emptyLabel, modifier, accuracyMeters, rangeMeters, alwaysShowAccuracy)
     else MaitriMapFallback(markers, emptyLabel, modifier, accuracyMeters)
 }
 
@@ -145,7 +145,7 @@ private fun MaitriMapFallback(markers: List<MapMarker>, emptyLabel: String, modi
 
 @Composable
 private fun MaitriLiveMap(markers: List<MapMarker>, emptyLabel: String, modifier: Modifier = Modifier,
-                          accuracyMeters: Double? = null) {
+                          accuracyMeters: Double? = null, rangeMeters: Double? = null, alwaysShowAccuracy: Boolean = false) {
     val p = maitriPalette()
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -173,7 +173,7 @@ private fun MaitriLiveMap(markers: List<MapMarker>, emptyLabel: String, modifier
             view.onDestroy()
         }
     }
-    val data = MapData(markers, accuracyMeters, p.dark)
+    val data = MapData(markers, accuracyMeters, p.dark, rangeMeters, alwaysShowAccuracy)
     Box(modifier.clip(RoundedCornerShape(24.dp)).background(p.card)) {
         AndroidView({ holder.view }, Modifier.fillMaxSize()) { holder.show(data) }
         if (markers.isEmpty()) Text(emptyLabel, Modifier.align(Alignment.Center)
@@ -201,7 +201,9 @@ private fun MaitriLiveMap(markers: List<MapMarker>, emptyLabel: String, modifier
         confirmButton = { TextButton(onClick = { showCredits = false }) { Text(tr("Close")) } })
 }
 
-private data class MapData(val markers: List<MapMarker>, val accuracyMeters: Double?, val dark: Boolean)
+/** [rangeMeters]: a faint circle around the first marker (a volunteer's request area), kept in view. */
+private data class MapData(val markers: List<MapMarker>, val accuracyMeters: Double?, val dark: Boolean,
+                           val rangeMeters: Double? = null, val alwaysShowAccuracy: Boolean = false)
 
 /** Owns the MapView and redraws when the style is ready or the data changes. */
 private class MapHolder(val view: MapView) {
@@ -247,6 +249,12 @@ private class MapHolder(val view: MapView) {
         image(MarkerKind.PERSON_IN_NEED.image, if (dark) R.drawable.maitri_map_pin_dark else R.drawable.maitri_map_pin_light)
         image(MarkerKind.YOU.image, R.drawable.maitri_map_you)
         image(MarkerKind.RESPONDER.image, R.drawable.maitri_map_responder)
+        style.addSource(GeoJsonSource(RANGE))
+        style.addLayer(FillLayer(RANGE, RANGE).withProperties(
+            PropertyFactory.fillColor(if (dark) "#FF9CBE" else "#B82055"), PropertyFactory.fillOpacity(0.06f)))
+        style.addLayer(LineLayer(RANGE + "-edge", RANGE).withProperties(
+            PropertyFactory.lineColor(if (dark) "#FF9CBE" else "#B82055"), PropertyFactory.lineOpacity(0.45f),
+            PropertyFactory.lineWidth(1.5f), PropertyFactory.lineDasharray(arrayOf(2f, 2f))))
         style.addSource(GeoJsonSource(ACCURACY))
         style.addLayer(FillLayer(ACCURACY, ACCURACY).withProperties(
             PropertyFactory.fillColor("#B82055"), PropertyFactory.fillOpacity(0.18f)))
@@ -263,8 +271,11 @@ private class MapHolder(val view: MapView) {
             Feature.fromGeometry(Point.fromLngLat(it.longitude, it.latitude)).apply { addStringProperty("icon", it.kind.image) }
         }))
         val anchor = data.markers.firstOrNull { it.kind != MarkerKind.RESPONDER }
-        val ring = anchor?.takeIf { (data.accuracyMeters ?: 0.0) > TrackingConfig.PRECISE_METRES }
+        val ring = anchor?.takeIf { (data.accuracyMeters ?: 0.0) > (if (data.alwaysShowAccuracy) 0.0 else TrackingConfig.PRECISE_METRES.toDouble()) }
             ?.let { circleRing(it.latitude, it.longitude, data.accuracyMeters!!) }
+        val range = anchor?.let { a -> data.rangeMeters?.let { circleRing(a.latitude, a.longitude, it) } }
+        style.getSourceAs<GeoJsonSource>(RANGE)?.setGeoJson(FeatureCollection.fromFeatures(
+            listOfNotNull(range?.let { r -> Feature.fromGeometry(Polygon.fromLngLats(listOf(r.map { Point.fromLngLat(it.first, it.second) }))) })))
         style.getSourceAs<GeoJsonSource>(ACCURACY)?.setGeoJson(FeatureCollection.fromFeatures(
             listOfNotNull(ring?.let { r -> Feature.fromGeometry(Polygon.fromLngLats(listOf(r.map { Point.fromLngLat(it.first, it.second) }))) })))
         frame(m, data)
@@ -273,8 +284,10 @@ private class MapHolder(val view: MapView) {
     /** Moves the camera only when what must be visible changes, so a user's pan isn't undone on every update. */
     private fun frame(m: MapLibreMap, data: MapData) {
         val points = data.markers.map { LatLng(it.latitude, it.longitude) }
+        val range = data.rangeMeters
         val key: Any = when {
             points.isEmpty() -> "region"
+            points.size == 1 && range != null -> "range" to (points[0].latitude * 1e3).roundToInt() to (points[0].longitude * 1e3).roundToInt()
             points.size == 1 -> points[0] to data.accuracyMeters?.let { zoomForAccuracy(it) }
             else -> points.toSet()
         }
@@ -282,6 +295,15 @@ private class MapHolder(val view: MapView) {
         framing = key
         when {
             points.isEmpty() -> m.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(22.5, 79.0), 3.5))
+            // The whole request area in view; re-framed only after moving about 100 m, so panning isn't undone.
+            points.size == 1 && range != null -> view.post {
+                runCatching {
+                    val ring = circleRing(points[0].latitude, points[0].longitude, range)
+                    val pad = (24 * view.resources.displayMetrics.density).toInt()
+                    m.moveCamera(CameraUpdateFactory.newLatLngBounds(
+                        LatLngBounds.Builder().includes(ring.map { LatLng(it.second, it.first) }).build(), pad))
+                }
+            }
             points.size == 1 -> m.moveCamera(CameraUpdateFactory.newLatLngZoom(points[0], zoomForAccuracy(data.accuracyMeters)))
             else -> view.post {
                 runCatching {
@@ -298,5 +320,6 @@ private class MapHolder(val view: MapView) {
     companion object {
         const val MARKERS = "maitri-markers"
         const val ACCURACY = "maitri-accuracy"
+        const val RANGE = "maitri-range"
     }
 }
