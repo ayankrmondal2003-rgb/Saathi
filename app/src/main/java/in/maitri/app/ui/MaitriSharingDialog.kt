@@ -147,7 +147,7 @@ fun MaitriSharingDialog(kind: String, dismiss: () -> Unit) {
         }
     }
 
-    AlertDialog(onDismissRequest = dismiss, containerColor = p.surface,
+    AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = dismiss, containerColor = p.surface,
         titleContentColor = p.primary, textContentColor = p.primary,
         title = { Text(if (trip) tr("Share my trip") else tr("Check in")) },
         text = {

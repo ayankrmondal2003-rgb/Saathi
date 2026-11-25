@@ -95,7 +95,7 @@ internal fun CircleSosViewer(uid: String, incidentId: String, liveUrl: String?, 
         }.onFailure { stopPlayback(); error = tr("Couldn't play this voice note.") }
     }
 
-    AlertDialog(onDismissRequest = dismiss, containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
+    AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = dismiss, containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
         title = { Text(if (liveUrl != null) tr("SOS from your circle") else tr("Their SOS")) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {

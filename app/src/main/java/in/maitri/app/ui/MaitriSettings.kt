@@ -92,7 +92,7 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
 
     if (dialog == S.settings_themes) ThemeDialog(themeNames.mapValues { strings.getString(it.value) }) { dialog = null }
     else dialog?.let { id ->
-        AlertDialog(onDismissRequest = { dialog = null }, containerColor = p.surface,
+        AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { dialog = null }, containerColor = p.surface,
             titleContentColor = p.primary, textContentColor = p.secondary,
             title = { Text(strings.getString(id)) },
             text = { Text(strings.getString(if (id == S.settings_help) S.settings_help_body else S.settings_privacy_body)) },

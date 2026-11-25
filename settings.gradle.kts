@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "SurakshaNet"
 include(":app")
+include(":baselineprofile")

@@ -288,8 +288,8 @@ internal fun MaitriCircleContent(
                     }
                 }
             } else {
-                contacts.forEach { contact ->
-                    ContactCardItem(
+                contacts.forEachIndexed { index, contact ->
+                    Box(Modifier.fadeInOnFirstLoad(index)) { ContactCardItem(
                         contact = contact,
                         palette = p,
                         onEdit = { editingContact = contact },
@@ -297,7 +297,7 @@ internal fun MaitriCircleContent(
                         onToggleSos = { enabled -> onToggleSosAlert(contact.id, enabled) },
                         onMaitri = if (uid == null) null else contact.id in linkedContactIds,
                         onInvite = { inviting = contact }
-                    )
+                    ) }
                     Spacer(modifier = Modifier.height(12.dp))
                 }
             }
@@ -355,6 +355,7 @@ internal fun MaitriCircleContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
+                    .pressScale()
                     .clip(RoundedCornerShape(26.dp))
                     .background(p.accent)
                     .clickable { showAddDialog = true },
@@ -451,7 +452,7 @@ internal fun MaitriCircleContent(
 
     // Remove Confirmation Dialog
     deletingContact?.let { contact ->
-        AlertDialog(
+        AlertDialog(modifier = Modifier.dialogEnter(), 
             onDismissRequest = { deletingContact = null },
             title = {
                 Text(
@@ -492,7 +493,7 @@ internal fun MaitriCircleContent(
 
     // Multi-number Selection Dialog (for phone import)
     multiNumberOptions?.let { (contactName, numbers) ->
-        AlertDialog(
+        AlertDialog(modifier = Modifier.dialogEnter(), 
             onDismissRequest = { multiNumberOptions = null },
             title = {
                 Text(
@@ -718,7 +719,7 @@ private fun ContactFormDialog(
 
     val relationships = listOf(tr("Sister"), tr("Mother"), tr("Father"), tr("Brother"), tr("Spouse"), tr("Friend"), tr("Neighbor"), tr("Other"))
 
-    AlertDialog(
+    AlertDialog(modifier = Modifier.dialogEnter(), 
         onDismissRequest = onDismiss,
         title = {
             Text(
@@ -928,7 +929,7 @@ private fun CircleInviteDialog(uid: String, contact: EmergencyContact, p: Maitri
         catch (e: kotlinx.coroutines.CancellationException) { throw e }
         catch (_: Exception) { error = tr("Couldn't create a code. Check your connection and that {0} is saved.", contact.displayName) }
     }
-    AlertDialog(onDismissRequest = dismiss, containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
+    AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = dismiss, containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
         title = { Text(tr("Invite {0}", contact.displayName)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -957,7 +958,7 @@ private fun EnterCircleCodeDialog(uid: String, p: MaitriPalette, dismiss: () -> 
     var code by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    AlertDialog(onDismissRequest = dismiss, containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
+    AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = dismiss, containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
         title = { Text(tr("Enter a code")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

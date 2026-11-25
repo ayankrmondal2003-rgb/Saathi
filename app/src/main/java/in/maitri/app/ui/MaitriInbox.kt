@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import androidx.compose.foundation.lazy.itemsIndexed
+
 import `in`.maitri.app.tr
 
 import android.content.Intent
@@ -157,13 +159,15 @@ fun MaitriInbox(uid: String, onBack: () -> Unit, onInvitation: (String) -> Unit)
                 Modifier.fillMaxWidth().padding(top = 48.dp), color = p.secondary, fontSize = 13.sp, textAlign = TextAlign.Center)
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(bottom = LocalFloatingNavBarPadding.current)) {
-                items(list, key = { it.kind + it.id }) { item -> InboxRow(item, p) { open(item) } }
+                itemsIndexed(list, key = { _, it -> it.kind + it.id }) { index, item ->
+                    Box(Modifier.fadeInOnFirstLoad(index)) { InboxRow(item, p) { open(item) } }
+                }
             }
         }
     }
 
     request?.let { id ->
-        AlertDialog(onDismissRequest = { request = null }, containerColor = p.surface,
+        AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { request = null }, containerColor = p.surface,
             titleContentColor = p.primary, textContentColor = p.secondary,
             title = { Text(tr("Join their circle?")) },
             text = { Text(tr("You'll get their SOS alerts and their live location while an SOS is active. You can leave at any time.")) },
@@ -216,7 +220,7 @@ internal fun CircleSessionViewer(uid: String, sessionId: String, dismiss: () -> 
             }
         }
     }
-    AlertDialog(onDismissRequest = dismiss, containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
+    AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = dismiss, containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
         title = { Text(if (session?.kind == "CHECK_IN") tr("Check-in") else tr("Shared trip")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

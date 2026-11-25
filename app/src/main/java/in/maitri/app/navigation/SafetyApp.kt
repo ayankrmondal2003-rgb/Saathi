@@ -282,18 +282,11 @@ internal fun MainGraph(
                 navController = nav,
                 startDestination = "Home",
                 modifier = Modifier.fillMaxSize(),
-                enterTransition = {
-                    fadeIn(animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing))
-                },
-                exitTransition = {
-                    fadeOut(animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing))
-                },
-                popEnterTransition = {
-                    fadeIn(animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing))
-                },
-                popExitTransition = {
-                    fadeOut(animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing))
-                }
+                // Shared motion: tabs crossfade (200 ms); other screens slide + fade (250 ms, emphasized).
+                enterTransition = `in`.maitri.app.ui.MaitriMotion.enter,
+                exitTransition = `in`.maitri.app.ui.MaitriMotion.exit,
+                popEnterTransition = `in`.maitri.app.ui.MaitriMotion.popEnter,
+                popExitTransition = `in`.maitri.app.ui.MaitriMotion.popExit
             ) {
                 composable("Home") {
                     var requested by rememberSaveable { mutableStateOf(false) }

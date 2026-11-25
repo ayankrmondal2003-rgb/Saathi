@@ -216,7 +216,7 @@ fun MaitriVolunteer(
     )
 
     choosingSource?.let { type ->
-        AlertDialog(onDismissRequest = { choosingSource = null }, containerColor = p.surface,
+        AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { choosingSource = null }, containerColor = p.surface,
             titleContentColor = p.primary, textContentColor = p.secondary,
             title = { Text(type.title) },
             text = { Text(tr("PDF, JPG or PNG, up to 10 MB. Only Maitri reviewers can open it.")) },
@@ -228,7 +228,7 @@ fun MaitriVolunteer(
             }) { Text(tr("Choose file"), color = p.accent) } })
     }
     managing?.let { type ->
-        AlertDialog(onDismissRequest = { managing = null }, containerColor = p.surface,
+        AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { managing = null }, containerColor = p.surface,
             titleContentColor = p.primary, textContentColor = p.secondary,
             title = { Text(type.title) },
             text = { Text(tr("Uploaded. Replace it with a new file, or remove it.")) },

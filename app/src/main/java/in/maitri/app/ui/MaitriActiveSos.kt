@@ -438,7 +438,7 @@ fun MaitriActiveSos(
 
     // Safety PIN Resolution Modal
     if (showPinDialog) {
-        AlertDialog(
+        AlertDialog(modifier = Modifier.dialogEnter(), 
             onDismissRequest = { if (!isVerifyingPin) showPinDialog = false },
             title = {
                 Text(

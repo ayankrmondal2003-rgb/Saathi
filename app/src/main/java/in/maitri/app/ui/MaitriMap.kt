@@ -187,7 +187,7 @@ private fun MaitriLiveMap(markers: List<MapMarker>, emptyLabel: String, modifier
             color = if (p.dark) Color(0xFFE8D9E1) else Color(0xFF40303A), fontSize = 8.sp, lineHeight = 10.sp,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
-    if (showCredits) AlertDialog(onDismissRequest = { showCredits = false }, title = { Text(tr("Map data")) },
+    if (showCredits) AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { showCredits = false }, title = { Text(tr("Map data")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(tr("Map tiles from OpenFreeMap, built with OpenMapTiles. Map data © OpenStreetMap contributors."))

@@ -105,14 +105,14 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
             if (!dirty) notes = local
         }
         photo = withContext(Dispatchers.IO) {
-            store.photo(uid)?.let { file -> runCatching { BitmapFactory.decodeFile(file.path)?.asImageBitmap() }.getOrNull() }
+            store.photo(uid)?.let { file -> runCatching { decodeForSize(file.path, 160)?.asImageBitmap() }.getOrNull() }
         }
         // No copy on this phone yet: fetch the account's photo, if one was set (e.g. on another phone).
         if (photo == null) try {
             BackendClient.files.profilePhoto(ExpectedAccount(uid)).downloadUrl?.let { url ->
                 val bytes = `in`.maitri.app.network.Uploads.download(url)
                 photo = withContext(Dispatchers.IO) {
-                    BitmapFactory.decodeFile(store.savePhotoBytes(uid, bytes).path)?.asImageBitmap()
+                    decodeForSize(store.savePhotoBytes(uid, bytes).path, 160)?.asImageBitmap()
                 }
             }
         } catch (e: CancellationException) { throw e } catch (_: Exception) { }
@@ -135,7 +135,7 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
         if (uid.isBlank()) return
         scope.launch {
             val file = withContext(Dispatchers.IO) { runCatching { store.savePhoto(context, uid, uri) }.getOrNull() }
-            val image = file?.let { withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(it.path)?.asImageBitmap() }.getOrNull() } }
+            val image = file?.let { withContext(Dispatchers.IO) { runCatching { decodeForSize(it.path, 160)?.asImageBitmap() }.getOrNull() } }
             if (image == null || file == null) { message = S.edit_photo_failed; return@launch }
             photo = image
             photoNote = tr("Uploading photo…")
@@ -351,4 +351,13 @@ private fun ChangeEmailDialog(p: MaitriPalette, dismiss: () -> Unit) {
                 }) { Text(tr("Send link"), color = p.accent) }
         },
         dismissButton = { androidx.compose.material3.TextButton(onClick = dismiss) { Text(tr("Close"), color = p.secondary) } })
+}
+
+/** Decodes an image file at about [targetPx] on its longer side (the profile photo shows at 40 dp), not full size. */
+internal fun decodeForSize(path: String, targetPx: Int): android.graphics.Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, bounds)
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= targetPx) sample *= 2
+    return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
 }

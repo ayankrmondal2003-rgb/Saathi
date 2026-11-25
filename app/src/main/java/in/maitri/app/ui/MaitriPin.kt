@@ -271,7 +271,7 @@ fun MaitriPin(uid: String?, onBack: () -> Unit, modifier: Modifier = Modifier, o
     }
 
     if (askPassword) {
-        AlertDialog(onDismissRequest = { if (!busy) { askPassword = false; password = "" } },
+        AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { if (!busy) { askPassword = false; password = "" } },
             title = { Text(strings.getString(S.pin_password_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

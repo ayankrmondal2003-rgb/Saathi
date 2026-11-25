@@ -52,6 +52,7 @@ object Preloader {
         fun done(what: String) = Log.i(TAG, "$what +${android.os.SystemClock.elapsedRealtime() - t0} ms")
 
         scope.launch { StartupCache.load(app); done("cache loaded") }                        // disk -> memory first
+        scope.launch(Dispatchers.Default) { `in`.maitri.app.I18n.preload(); done("translations parsed") }
         scope.launch(Dispatchers.Default) { CrashReports.apply(app); done("crash reports") }  // g
         scope.launch { wakeServer(); done("server awake") }                                   // b
         scope.launch { MapWarmup.run(app); done("map warmed") }                               // f

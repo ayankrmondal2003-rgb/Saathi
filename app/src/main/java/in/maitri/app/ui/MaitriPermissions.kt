@@ -212,7 +212,7 @@ fun MaitriPermissions(onBack: () -> Unit, modifier: Modifier = Modifier) {
 
     if (battery) {
         val restricted = !preview && batteryRestricted(context)
-        AlertDialog(onDismissRequest = { battery = false },
+        AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { battery = false },
             title = { Text(tr("Keep Maitri alerts on time")) },
             text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (restricted) tr("Battery optimisation is on for Maitri, so your phone may delay SOS requests and circle alerts.")
@@ -234,7 +234,7 @@ fun MaitriPermissions(onBack: () -> Unit, modifier: Modifier = Modifier) {
             dismissButton = { TextButton(onClick = { battery = false }) { Text(strings.getString(S.settings_close)) } })
     }
     info?.let { id ->
-        AlertDialog(onDismissRequest = { info = null }, text = { Text(strings.getString(id)) },
+        AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { info = null }, text = { Text(strings.getString(id)) },
             confirmButton = { TextButton(onClick = { info = null }) { Text(strings.getString(S.settings_close)) } })
     }
 }

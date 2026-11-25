@@ -64,12 +64,14 @@ internal fun CirclesYouAreIn(memberships: List<MembershipDto>, uid: String?, p: 
     Column(Modifier.fillMaxWidth().padding(top = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(tr("Circles you're in"), Modifier.semantics { heading() }, color = p.primary, fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold)
-        memberships.forEach { m -> MembershipCard(m, p, busy == m.linkId) { addBack(m, null) } }
+        memberships.forEachIndexed { index, m ->
+            Box(Modifier.fadeInOnFirstLoad(index)) { MembershipCard(m, p, busy == m.linkId) { addBack(m, null) } }
+        }
     }
 
     askPhone?.let { m ->
         var phone by remember(m.linkId) { mutableStateOf("") }
-        AlertDialog(onDismissRequest = { askPhone = null }, containerColor = p.surface,
+        AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { askPhone = null }, containerColor = p.surface,
             titleContentColor = p.primary, textContentColor = p.secondary,
             title = { Text(tr("Add {0}", m.ownerName)) },
             text = {
