@@ -252,6 +252,7 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
     // "Request alerts" checks, re-read when the user returns from a settings page.
     var notificationsOn by remember { mutableStateOf(androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()) }
     var batteryOk by remember { mutableStateOf(batteryUnrestricted(context)) }
+    var channelOk by remember { mutableStateOf(`in`.maitri.app.notification.SosRequestAlerts.channelOk(context)) }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         notificationsOn = androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
@@ -259,6 +260,7 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             notificationsOn = androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
             batteryOk = batteryUnrestricted(context)
+            channelOk = `in`.maitri.app.notification.SosRequestAlerts.channelOk(context)
         }
     }
     val bold = androidx.compose.ui.text.font.FontWeight.SemiBold
@@ -314,6 +316,11 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
                         notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                     else openAppNotificationSettings(context)
                 },
+                AlertCheck(tr("SOS request alerts"), channelOk,
+                    if (channelOk) tr("Requests pop up over other apps with sound.")
+                    else tr("The SOS requests notifications are silenced or minimised."), tr("Fix")) {
+                    `in`.maitri.app.notification.SosRequestAlerts.openChannelSettings(context)
+                },
                 AlertCheck(tr("Lock-screen alert"), fullScreenAllowed,
                     if (fullScreenAllowed) tr("Requests can wake your screen.")
                     else tr("Requests wait in the notification shade while the screen is off."), tr("Fix")) {
@@ -329,7 +336,7 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
                     else tr("Allow location all the time to get requests when Maitri is closed."), tr("Fix")) {
                     explainBackground = true
                 },
-            ))
+            )) { PhoneTips(palette) }
             // Recent requests, if any.
             if (inbox.isNotEmpty()) ResponderCard(palette, title = tr("Recent requests")) {
                 for (invitation in inbox) {

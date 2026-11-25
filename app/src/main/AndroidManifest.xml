@@ -65,6 +65,17 @@
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
+        <!-- Nearby SOS request over the lock screen (full-screen intent); its own task so Back returns to what was open. -->
+        <activity
+            android:name=".ui.SosRequestActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:taskAffinity="in.maitri.app.sosrequest"
+            android:theme="@style/Theme.Maitri" />
+        <receiver android:name=".notification.SosRequestActionReceiver" android:exported="false" />
     </application>
 
 </manifest>

@@ -11,6 +11,8 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.PriorityHigh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -101,6 +103,48 @@ internal fun HowRespondingWorksCard(p: MaitriPalette) {
             Row {
                 Text("•", color = p.accent, fontSize = 13.sp, modifier = Modifier.padding(end = 8.dp))
                 Text(line, color = p.secondary, fontSize = 13.sp, lineHeight = 18.sp)
+            }
+        }
+    }
+}
+
+/**
+ * Phone-maker settings that hold back alerts, under "Request alerts": a link to let requests ring during Do Not
+ * Disturb, and tips for this phone's maker (pop-up style and battery on Samsung; autostart and battery saver on Xiaomi,
+ * Oppo/OnePlus and Vivo), with deep links where Android has them.
+ */
+@Composable
+internal fun PhoneTips(p: MaitriPalette) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var open by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    val maker = android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
+    HorizontalDivider(color = p.divider, thickness = 1.dp)
+    TextButton(onClick = { `in`.maitri.app.notification.SosRequestAlerts.openChannelSettings(context) },
+        contentPadding = PaddingValues(0.dp)) {
+        Text(tr("Ring during Do Not Disturb"), color = p.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    }
+    TextButton(onClick = { open = !open }, contentPadding = PaddingValues(0.dp)) {
+        Text(if (open) tr("Hide tips for your {0} phone", maker) else tr("Tips for your {0} phone", maker),
+            color = p.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    }
+    if (open) {
+        val tips = buildList {
+            if (android.os.Build.MANUFACTURER.equals("samsung", ignoreCase = true))
+                add(tr("Settings › Notifications › Notification pop-up style: choose Brief or Detailed, and include Maitri."))
+            addAll(batteryTips(android.os.Build.MANUFACTURER))
+        }
+        tips.forEach { tip ->
+            Row {
+                Text("•", color = p.accent, fontSize = 13.sp, modifier = Modifier.padding(end = 8.dp))
+                Text(tip, color = p.secondary, fontSize = 13.sp, lineHeight = 18.sp)
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { openAppNotificationSettings(context) }, border = BorderStroke(1.dp, p.accent)) {
+                Text(tr("Notifications"), color = p.accent, fontSize = 13.sp)
+            }
+            OutlinedButton(onClick = { openAppDetails(context) }, border = BorderStroke(1.dp, p.accent)) {
+                Text(tr("Battery"), color = p.accent, fontSize = 13.sp)
             }
         }
     }

@@ -78,9 +78,18 @@ fun MaitriIncoming(
                     BackendClient.api.respond(invitation.id, DecisionDto(decision), ExpectedAccount(uid))
                 }
                 when {
-                    status == "EXPIRED" -> errorMessage = tr("This emergency invitation has expired.")
-                    decision == "ACCEPTED" -> onAccepted(invitation.incidentId)
-                    else -> onDeclined()
+                    status == "EXPIRED" -> {
+                        `in`.maitri.app.notification.SosRequestAlerts.remove(context, invitation.id)
+                        errorMessage = tr("This emergency invitation has expired.")
+                    }
+                    decision == "ACCEPTED" -> {
+                        `in`.maitri.app.notification.SosRequestAlerts.answered(context, invitation.id, accepted = true)
+                        onAccepted(invitation.incidentId)
+                    }
+                    else -> {
+                        `in`.maitri.app.notification.SosRequestAlerts.answered(context, invitation.id, accepted = false)
+                        onDeclined()
+                    }
                 }
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: Exception) {
@@ -92,6 +101,11 @@ fun MaitriIncoming(
         }
     }
 
+    // The person is looking at the request: the alert stops ringing. Accept tapped outside the app: accept now.
+    LaunchedEffect(invitation.id) {
+        `in`.maitri.app.notification.SosRequestAlerts.silence(context, invitation.id)
+        if (`in`.maitri.app.notification.SosRequestAlerts.consumeAutoAccept(invitation.id)) submitDecision("ACCEPTED")
+    }
     // Expiry countdown; the server sends only a distance band before acceptance, never a place or coordinates.
     val expiresAt = remember(invitation.expiresAt) { runCatching { java.time.Instant.parse(invitation.expiresAt) }.getOrNull() }
     var secondsLeft by remember { mutableLongStateOf(Long.MAX_VALUE) }

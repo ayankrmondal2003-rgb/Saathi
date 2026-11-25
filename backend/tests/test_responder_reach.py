@@ -53,3 +53,51 @@ async def test_invitations_say_whether_the_sos_is_a_practice_one(world):
     assert item["is_test"] is True
     assert item["distance_band"] == "Under 500 m"
     assert "latitude" not in item and "longitude" not in item
+
+
+async def closed_pushes(sessions, name):
+    async with sessions.begin() as db:
+        return (await db.execute(text("""SELECT i.title, i.data->>'reason', i.push_status, i.read_at IS NOT NULL
+            FROM inbox_items i JOIN users u ON u.id = i.user_id WHERE u.display_name=:n AND i.kind='SOS_REQUEST_CLOSED'"""),
+            {"n": name})).all()
+
+
+async def test_open_requests_are_told_when_the_sos_ends_and_it_stays_out_of_the_inbox(world):
+    from datetime import datetime, timezone
+    from app.services.incidents import revoke_incident_access
+    call, sessions, _ = world
+    await enable(call, "volunteer", 300)
+    incident = (await create(call, str(uuid4()), {"is_test": True, "location": fix(0)})).json()["id"]
+    assert len(await invitations(call, "volunteer")) == 1
+    async with sessions.begin() as db:
+        await revoke_incident_access(db, incident, datetime.now(timezone.utc))
+    assert await closed_pushes(sessions, "volunteer") == [("SOS ended", "ENDED", "PENDING", True)]
+    inbox = (await call("volunteer", "GET", "/inbox")).json()
+    assert all(item["kind"] != "SOS_REQUEST_CLOSED" for item in inbox["items"]) and inbox["unread_count"] == 0
+
+
+async def test_with_responders_needed_the_other_requests_close_once_filled(world):
+    call, sessions, settings = world
+    settings.responders_needed = 1
+    await enable(call, "first", 300)
+    await enable(call, "second", 400)
+    await create(call, str(uuid4()), {"is_test": True, "location": fix(0)})
+    invitation = (await invitations(call, "first"))[0]["id"]
+    assert (await call("first", "POST", f"/responders/invitations/{invitation}/response",
+                       json={"decision": "ACCEPTED"})).is_success
+    assert await closed_pushes(sessions, "second") == [("Help is already on the way", "FILLED", "PENDING", True)]
+    assert await closed_pushes(sessions, "first") == []
+    assert [i["status"] for i in await invitations(call, "second")] == ["EXPIRED"]
+
+
+async def test_without_responders_needed_everyone_may_still_accept(world):
+    call, sessions, settings = world
+    assert settings.responders_needed == 0
+    await enable(call, "first", 300)
+    await enable(call, "second", 400)
+    await create(call, str(uuid4()), {"is_test": True, "location": fix(0)})
+    invitation = (await invitations(call, "first"))[0]["id"]
+    assert (await call("first", "POST", f"/responders/invitations/{invitation}/response",
+                       json={"decision": "ACCEPTED"})).is_success
+    assert await closed_pushes(sessions, "second") == []
+    assert len(await invitations(call, "second")) == 1

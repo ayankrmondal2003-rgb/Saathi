@@ -6,6 +6,8 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.*
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,6 +55,7 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
         Uri.fromParts("package", context.packageName, null)))
 
     SettingsBoard(if (p.dark) R.drawable.maitri_dark_09 else R.drawable.maitri_light_09, 729, modifier,
+        gapAt = KEEP_VIBRATING_Y, gapHeight = KEEP_VIBRATING_HEIGHT,
         footer = {
             TextButton(onClick = onLogout, modifier = Modifier.padding(horizontal = 24.dp)) {
                 Text(strings.getString(S.settings_logout), color = p.accent)
@@ -70,20 +73,21 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
         SettingsText(strings.getString(S.settings_edit), 299, 166, 50, 38, 12, p.accent, true, true) { onNavigate("EditProfile") }
         BoardAction(24, 144, 275, 82, strings.getString(S.settings_your_profile)) { onNavigate("EditProfile") }
         SettingsText(strings.getString(S.settings_safety), 24, 249, 342, 28, 18, p.primary, true)
-        SettingsText(strings.getString(S.settings_comfort), 24, 478, 342, 28, 18, p.primary, true)
+        SettingsText(strings.getString(S.settings_comfort), 24, 478 + KEEP_VIBRATING_HEIGHT, 342, 28, 18, p.primary, true)
         ProfileRow(285, 58, S.settings_permissions, S.settings_permissions_sub) { onNavigate("Permissions") }
         ProfileRow(343, 58, S.settings_vibrations, S.settings_vibrations_sub, strings.getString(S.settings_test)) { onNavigate("TestVibration") }
-        ProfileRow(401, 58, S.settings_pins, S.settings_pins_sub) { onNavigate("SafetyPin") }
-        ProfileRow(510, 52, S.settings_language, S.settings_language_sub, language.getDisplayLanguage(language).replaceFirstChar { it.titlecase(language) }) { onNavigate("Language") }
-        ProfileRow(562, 52, S.settings_themes, S.settings_themes_sub, strings.getString(themeNames.getValue(theme.themeMode))) { dialog = S.settings_themes }
-        ProfileRow(614, 52, S.settings_notifications, S.settings_notifications_sub) {
+        KeepVibratingRow(p)
+        ProfileRow(401 + KEEP_VIBRATING_HEIGHT, 58, S.settings_pins, S.settings_pins_sub) { onNavigate("SafetyPin") }
+        ProfileRow(510 + KEEP_VIBRATING_HEIGHT, 52, S.settings_language, S.settings_language_sub, language.getDisplayLanguage(language).replaceFirstChar { it.titlecase(language) }) { onNavigate("Language") }
+        ProfileRow(562 + KEEP_VIBRATING_HEIGHT, 52, S.settings_themes, S.settings_themes_sub, strings.getString(themeNames.getValue(theme.themeMode))) { dialog = S.settings_themes }
+        ProfileRow(614 + KEEP_VIBRATING_HEIGHT, 52, S.settings_notifications, S.settings_notifications_sub) {
             try {
                 context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
             } catch (_: android.content.ActivityNotFoundException) { appSettings() }
         }
-        ProfileRow(666, 52, S.settings_privacy, S.settings_privacy_sub) { onNavigate("PrivacyData") }
-        SettingsText(strings.getString(S.settings_help), 74, 721, 290, 36, 13, p.secondary, action = { dialog = S.settings_help })
-        BoardAction(24, 721, 50, 36, strings.getString(S.settings_help)) { dialog = S.settings_help }
+        ProfileRow(666 + KEEP_VIBRATING_HEIGHT, 52, S.settings_privacy, S.settings_privacy_sub) { onNavigate("PrivacyData") }
+        SettingsText(strings.getString(S.settings_help), 74, 721 + KEEP_VIBRATING_HEIGHT, 290, 36, 13, p.secondary, action = { dialog = S.settings_help })
+        BoardAction(24, 721 + KEEP_VIBRATING_HEIGHT, 50, 36, strings.getString(S.settings_help)) { dialog = S.settings_help }
     }
 
     if (dialog == S.settings_themes) ThemeDialog(themeNames.mapValues { strings.getString(it.value) }) { dialog = null }
@@ -121,6 +125,39 @@ internal fun ThemeDialog(names: Map<ThemeMode, String>, onDone: () -> Unit) {
             MaitriRadioRow(selected = theme.themeMode == mode, label = name, description = descriptions.getValue(mode)) {
                 theme.setMode(mode)
             }
+        }
+    }
+}
+
+internal const val KEEP_VIBRATING_Y = 401
+internal const val KEEP_VIBRATING_HEIGHT = 72
+
+/**
+ * "Keep vibrating for SOS requests" (default on): a native row in the "Safety, your way" card, styled like the
+ * artwork's rows. The link under it opens the SOS requests channel, where the user may let it through Do Not Disturb.
+ */
+@Composable
+private fun KeepVibratingRow(p: MaitriPalette) {
+    val context = LocalContext.current
+    var on by remember { mutableStateOf(`in`.maitri.app.notification.SosRequestAlerts.keepVibrating(context)) }
+    Box(settingsSlot(24, KEEP_VIBRATING_Y, 342, KEEP_VIBRATING_HEIGHT).background(p.surface)) {
+        Box(Modifier.padding(start = 56.dp, end = 16.dp).fillMaxWidth().height(1.dp).background(p.divider))
+        Box(Modifier.padding(start = 16.dp, top = 14.dp).size(32.dp).background(p.background, RoundedCornerShape(9.dp)),
+            contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Vibration, null, Modifier.size(18.dp), tint = p.accent)
+        }
+        Row(Modifier.fillMaxSize().toggleable(value = on, role = Role.Switch, onValueChange = {
+                on = it; `in`.maitri.app.notification.SosRequestAlerts.setKeepVibrating(context, it) })
+            .padding(start = 56.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                FitText(tr("Keep vibrating for SOS requests"), Modifier, p.primary, 14f, 16f, FontWeight.SemiBold)
+                Spacer(Modifier.height(2.dp))
+                FitText(tr("Vibrates until you accept or decline"), Modifier, p.secondary, 10f, 12f)
+                Text(tr("Ring during Do Not Disturb"), color = p.accent, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 2.dp).clickable(role = Role.Button) {
+                        `in`.maitri.app.notification.SosRequestAlerts.openChannelSettings(context) })
+            }
+            Switch(checked = on, onCheckedChange = null, modifier = Modifier.scale(0.8f))
         }
     }
 }

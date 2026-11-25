@@ -66,7 +66,19 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if ((keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP) &&
+            `in`.maitri.app.notification.SosRequestAlerts.anyAlerting(this)) {
+            `in`.maitri.app.notification.SosRequestAlerts.silenceAll(this)
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     private fun handleIntent(intent: Intent?) {
+        // "Accept" on the notification or the full-screen alert: screen 06 opens and accepts at once.
+        if (intent?.action == `in`.maitri.app.notification.SosRequestAlerts.ACTION_ACCEPT)
+            `in`.maitri.app.notification.SosRequestAlerts.autoAccept = intent.getStringExtra(NotificationHelper.EXTRA_INVITATION_ID)
         pendingInvitationId.value = `in`.maitri.app.network.invitationFromAlert(
             intent?.getStringExtra(NotificationHelper.EXTRA_EVENT_TYPE),
             intent?.getStringExtra(NotificationHelper.EXTRA_INVITATION_ID),

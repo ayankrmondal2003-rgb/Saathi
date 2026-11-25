@@ -16,6 +16,8 @@ from sqlalchemy import text
 from app.core import account, database
 
 router = APIRouter(prefix="/api/inbox")
+# Push-only rows: they use the push queue (retries, delivery) but never appear in the inbox or its unread count.
+HIDDEN_KINDS = ("SOS_REQUEST_CLOSED",)
 log = logging.getLogger("surakshanet.inbox")
 MAX_PUSH_ATTEMPTS = 6
 
@@ -36,8 +38,8 @@ def _item(row) -> dict:
 
 @router.get("")
 async def inbox(limit: int = Query(default=50, ge=1, le=100), user=Depends(account), db=Depends(database)):
-    rows = (await db.execute(text("""SELECT * FROM inbox_items WHERE user_id=:user
-        ORDER BY created_at DESC LIMIT :limit"""), {"user": user.id, "limit": limit})).mappings().all()
+    rows = (await db.execute(text("""SELECT * FROM inbox_items WHERE user_id=:user AND kind <> ALL(:hidden)
+        ORDER BY created_at DESC LIMIT :limit"""), {"user": user.id, "limit": limit, "hidden": list(HIDDEN_KINDS)})).mappings().all()
     invitations = (await db.execute(text("""SELECT v.id, v.incident_id, v.invited_at, v.expires_at
         FROM incident_invitations v JOIN incidents i ON i.id = v.incident_id
         WHERE v.recipient_user_id=:user AND v.status='PENDING' AND v.expires_at > now() AND i.status='ACTIVE'
@@ -47,8 +49,8 @@ async def inbox(limit: int = Query(default=50, ge=1, le=100), user=Depends(accou
                  "data": {"invitation_id": str(v["id"]), "incident_id": str(v["incident_id"])},
                  "created_at": v["invited_at"], "read": False} for v in invitations]
     items = requests + [_item(r) for r in rows]
-    unread = await db.scalar(text("SELECT count(*) FROM inbox_items WHERE user_id=:user AND read_at IS NULL"),
-                             {"user": user.id})
+    unread = await db.scalar(text("SELECT count(*) FROM inbox_items WHERE user_id=:user AND read_at IS NULL "
+                                  "AND kind <> ALL(:hidden)"), {"user": user.id, "hidden": list(HIDDEN_KINDS)})
     return {"items": items, "unread_count": unread + len(requests)}
 
 

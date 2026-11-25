@@ -111,8 +111,26 @@ async def create(db, user, body, key, settings):
     return result
 
 
+async def close_requests(db, incident_id, reason: str, keep_user=None):
+    """Volunteers whose request is still open learn it closed (reason ENDED or FILLED): their phone stops alerting and
+    shows "SOS ended" / "Help is already on the way". A push-only inbox row (hidden from the inbox) carries it."""
+    from app.inbox import add_item
+    rows = (await db.execute(text("""SELECT id, recipient_user_id FROM incident_invitations WHERE incident_id=:id
+        AND status='PENDING' AND expires_at > now() AND (CAST(:keep AS uuid) IS NULL OR recipient_user_id <> :keep)"""),
+        {"id": incident_id, "keep": keep_user})).all()
+    for invitation_id, recipient in rows:
+        item = await add_item(db, recipient, "SOS_REQUEST_CLOSED",
+                              "Help is already on the way" if reason == "FILLED" else "SOS ended",
+                              "You don't need to respond.",
+                              data={"invitation_id": str(invitation_id), "incident_id": str(incident_id), "reason": reason},
+                              incident_id=incident_id)
+        await db.execute(text("UPDATE inbox_items SET read_at=now() WHERE id=:id"), {"id": item})
+    return [invitation_id for invitation_id, _ in rows]
+
+
 async def revoke_incident_access(db, incident_id, now):
     """Side effects shared by every way an incident closes: pending alerts stop and nobody keeps access."""
+    await close_requests(db, incident_id, "ENDED")
     await db.execute(text("UPDATE notification_outbox SET delivery_status='CANCELLED' WHERE incident_id=:id "
                           "AND delivery_status IN ('PENDING','RETRY_SCHEDULED','SENDING')"), {"id": incident_id})
     await db.execute(text("UPDATE incident_invitations SET status='EXPIRED' WHERE incident_id=:id AND status='PENDING'"),
