@@ -76,6 +76,12 @@ android {
         }
     }
 
+    lint {
+        // androidx.navigation's WrongNavigateRouteDetector crashes while analysing SafetyApp.kt (a bug in that lint
+        // check). It validates type-safe routes; Maitri uses plain string routes, so nothing is lost.
+        disable += "WrongNavigateRouteType"
+    }
+
     buildTypes {
         debug {
             buildConfigField("String", "API_BASE_URL", backendUrl("maitriDevApiUrl", "surakshaDevApiUrl"))

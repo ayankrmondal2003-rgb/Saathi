@@ -170,7 +170,18 @@ object NotificationHelper {
     }
 
     /** Circle alerts, check-ins and circle requests (server inbox items). Tapping opens the item in the app. */
-    fun showInboxNotification(context: Context, inboxId: String, kind: String, title: String, body: String, url: String?): Boolean {
+    /** Tag shared by every notification about one SOS (circle alert and volunteer request), so they clear together. */
+    internal fun incidentTag(incidentId: String?) = incidentId?.takeIf { it.isNotBlank() }?.let { "sos:$it" }
+
+    /** The SOS ended: remove its circle alert and volunteer request from the shade. */
+    fun clearIncident(context: Context, incidentId: String?) {
+        val tag = incidentTag(incidentId) ?: return
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        runCatching { manager.activeNotifications.filter { it.tag == tag }.forEach { manager.cancel(it.tag, it.id) } }
+    }
+
+    fun showInboxNotification(context: Context, inboxId: String, kind: String, title: String, body: String, url: String?,
+                              incidentId: String? = null): Boolean {
         val urgent = kind in URGENT_INBOX_KINDS
         createEmergencyNotificationChannel(context)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -203,7 +214,9 @@ object NotificationHelper {
             androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED) return false
         return try {
-            NotificationManagerCompat.from(context).notify(3000 + (inboxId.hashCode() and 0x7FFF), builder.build())
+            // Only the live alert carries the SOS tag; "ended" must survive the clean-up it triggers.
+            val tag = if (kind == "CIRCLE_SOS") incidentTag(incidentId) else null
+            NotificationManagerCompat.from(context).notify(tag, 3000 + (inboxId.hashCode() and 0x7FFF), builder.build())
             true
         } catch (_: SecurityException) { false }
     }
@@ -214,7 +227,8 @@ object NotificationHelper {
         incidentId: String?,
         title: String,
         body: String,
-        eventType: String
+        eventType: String,
+        timeoutMillis: Long? = null
     ): Boolean {
         createEmergencyNotificationChannel(context)
 
@@ -261,6 +275,8 @@ object NotificationHelper {
         // A nearby SOS request opens full screen where Android allows it (Android 14+ asks the user to allow
         // "full-screen notifications"); otherwise it is a heads-up notification with sound and vibration.
         if (eventType == "RESPONDER_INVITATION_CREATED" && canUseFullScreen(context)) builder.setFullScreenIntent(pendingIntent, true)
+        // A request can't be answered after it expires, so it leaves the shade by itself then.
+        timeoutMillis?.takeIf { it > 0 }?.let { builder.setTimeoutAfter(it) }
         val notification = builder.build()
 
         val notificationId = 1000 + (alertId.hashCode() and 0x7FFF)
@@ -269,7 +285,7 @@ object NotificationHelper {
             androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED) return false
         return try {
-            NotificationManagerCompat.from(context).notify(notificationId, notification)
+            NotificationManagerCompat.from(context).notify(incidentTag(incidentId), notificationId, notification)
             true
         } catch (_: SecurityException) { false }
     }
@@ -297,6 +313,18 @@ object NotificationHelper {
         } catch (_: Exception) {
             return false
         }
+    }
+
+    /** Android 14+ settings page where the user allows Maitri's full-screen notifications. */
+    fun openFullScreenSettings(context: Context) {
+        val intent = if (Build.VERSION.SDK_INT >= 34)
+            Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                android.net.Uri.fromParts("package", context.packageName, null))
+        else Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+        runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.fromParts("package", context.packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
     }
 
     fun canUseFullScreen(context: Context): Boolean =

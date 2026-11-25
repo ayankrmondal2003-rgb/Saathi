@@ -68,8 +68,12 @@ class SosFirebaseMessagingService : FirebaseMessagingService() {
             in NotificationHelper.INBOX_KINDS -> {
                 val inboxId = data["inbox_id"]?.takeIf { runCatching { UUID.fromString(it) }.isSuccess } ?: return
                 val url = data["url"]?.takeIf { it.startsWith("https://") }
+                // "SOS ended": the circle alert and any volunteer request for that SOS leave the shade first.
+                if (eventType == "CIRCLE_SOS_ENDED") NotificationHelper.clearIncident(applicationContext,
+                    data["incident_id"]?.takeIf { runCatching { UUID.fromString(it) }.isSuccess })
                 val shown = NotificationHelper.showInboxNotification(applicationContext, inboxId, eventType,
-                    data["title"].orEmpty().ifBlank { tr("Maitri") }.take(120), data["body"].orEmpty().take(500), url)
+                    data["title"].orEmpty().ifBlank { tr("Maitri") }.take(120), data["body"].orEmpty().take(500), url,
+                    data["incident_id"]?.takeIf { runCatching { UUID.fromString(it) }.isSuccess })
                 // Tell the server the push reached this phone: the only basis for "Push delivered" on the sender's screen.
                 val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
                 if (shown && uid != null) scope.launch {
