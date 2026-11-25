@@ -188,6 +188,12 @@ fun MaitriPermissions(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     else tr("Battery optimisation is off for Maitri. Good."), fontWeight = FontWeight.SemiBold)
                 Text(tr("On your {0} phone:", Build.MANUFACTURER.replaceFirstChar { it.uppercase() }))
                 batteryTips(Build.MANUFACTURER).forEach { Text("• $it") }
+                if (!preview && !`in`.maitri.app.notification.NotificationHelper.canUseFullScreen(context)) {
+                    Text(tr("Full-screen alerts are off, so an SOS request can't wake your screen."), fontWeight = FontWeight.SemiBold)
+                    TextButton(onClick = { `in`.maitri.app.notification.NotificationHelper.openFullScreenSettings(context) }) {
+                        Text(tr("Allow full-screen alerts"))
+                    }
+                }
                 Text(strings.getString(S.perm_hint), color = p.secondary)
             } },
             confirmButton = { TextButton(onClick = {

@@ -48,6 +48,7 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
         permitted = context.locationAllowed()
     }
     var backgroundAllowed by remember { mutableStateOf(`in`.maitri.app.network.ResponderLocation.backgroundAllowed(context)) }
+    var fullScreenAllowed by remember { mutableStateOf(`in`.maitri.app.notification.NotificationHelper.canUseFullScreen(context)) }
     var explainBackground by remember { mutableStateOf(false) }
     val backgroundPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         backgroundAllowed = `in`.maitri.app.network.ResponderLocation.backgroundAllowed(context)
@@ -57,6 +58,7 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             backgroundAllowed = `in`.maitri.app.network.ResponderLocation.backgroundAllowed(context)
+            fullScreenAllowed = `in`.maitri.app.notification.NotificationHelper.canUseFullScreen(context)
         }
     }
     if (explainBackground) androidx.compose.material3.AlertDialog(onDismissRequest = { explainBackground = false },
@@ -255,6 +257,14 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
             OutlinedButton(onClick = { explainBackground = true }) { Text(tr("Get requests when Maitri is closed")) }
         } else if (profile?.available == true && backgroundAllowed) {
             Text(tr("You'll get nearby SOS requests even when Maitri is closed. Turn Available off to stop sharing your location."))
+        }
+        // Android 14+: without this, a request on a sleeping phone only waits in the notification shade.
+        if (profile?.available == true && !fullScreenAllowed) {
+            Text(tr("Let SOS requests wake your screen"), fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+            Text(tr("Your phone currently keeps requests in the notification shade while the screen is off. Allow full-screen notifications for Maitri so a request lights up your screen."))
+            OutlinedButton(onClick = { `in`.maitri.app.notification.NotificationHelper.openFullScreenSettings(context) }) {
+                Text(tr("Allow full-screen alerts"))
+            }
         }
         if (preferenceMessage.isNotEmpty()) Text(preferenceMessage)
         locationStatusMessage?.let { Text(it) }

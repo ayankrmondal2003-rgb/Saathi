@@ -288,6 +288,8 @@ private class MapHolder(val view: MapView) {
                     // 56 dp around the markers so neither sits on the edge or under the attribution line.
                     val pad = (56 * view.resources.displayMetrics.density).toInt()
                     m.moveCamera(CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().includes(points).build(), pad))
+                    // People a few metres apart would zoom to the maximum, where there's nothing to see: keep streets in view.
+                    if (m.cameraPosition.zoom > 16.5) m.moveCamera(CameraUpdateFactory.zoomTo(16.5))
                 }
             }
         }

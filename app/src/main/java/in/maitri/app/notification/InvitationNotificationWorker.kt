@@ -31,7 +31,7 @@ class InvitationNotificationWorker(context: Context, params: WorkerParameters) :
             val body = item?.distanceBand?.let { tr("{0} away · Tap to respond if you can do so safely.", tr(it)) }
                 ?: tr("Nearby · Tap to respond if you can do so safely.")
             if (item != null && eligible() && NotificationHelper.showSosNotification(applicationContext, invitation,
-                    incident, title, body, "RESPONDER_INVITATION_CREATED")) {
+                    incident, title, body, "RESPONDER_INVITATION_CREATED", timeoutMillis = expires - System.currentTimeMillis())) {
                 SosFirebaseMessagingService.saveLastAlertTimestamp(applicationContext, System.currentTimeMillis())
             }
             return Result.success()

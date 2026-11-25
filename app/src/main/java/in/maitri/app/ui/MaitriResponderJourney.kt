@@ -211,10 +211,11 @@ internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: Str
         MaitriMap(listOfNotNull(coordinates?.let { MapMarker(it.first, it.second, MarkerKind.PERSON_IN_NEED) },
             self?.let { MapMarker(it.first, it.second, MarkerKind.YOU) }),
             tr("Awaiting location"), Modifier.offset(24.dp, (140 - 28).dp).size(342.dp, 320.dp))
-        BoardLabel(40, 489, 308, tr("Person in need"), p.primary, 16)
+        // With medical notes the title stops short of the link, so neither runs into the other at large text sizes.
+        BoardLabel(40, 489, if (onMedicalNotes != null) 190 else 308, tr("Person in need"), p.primary, 16, height = 22, maxLines = 1)
         // Shared by the person in need for this SOS only; gone when it ends.
         if (onMedicalNotes != null) {
-            BoardLabel(236, 491, 120, tr("Medical notes ›"), p.accent, 12)
+            BoardLabel(236, 491, 120, tr("Medical notes ›"), p.accent, 12, height = 20, maxLines = 1)
             BoardAction(228, 480, 130, 32, tr("Read their medical notes"), onClick = onMedicalNotes)
         }
         BoardLabel(40, 515, 308, coordinates?.let { "${it.first}, ${it.second}" } ?: tr("Awaiting location"), p.secondary)

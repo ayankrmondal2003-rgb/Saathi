@@ -1,6 +1,12 @@
-Maitri 0.9.0-beta.1 - first friends beta
+Maitri 0.9.1-beta.2 - fixes from two-phone testing
 
-Thank you for testing! Please read TESTER_GUIDE (link in the invite email) first.
+What's new:
+- An SOS never gets stuck on "Connecting…": if Maitri was closed during an SOS (update, restart, battery), it now reconnects within seconds. If it still can't reach Maitri, it tells you to call 112.
+- Volunteers: requests can now wake your screen. Allow it from the Responder tab ("Let SOS requests wake your screen").
+- Volunteers: requests clear themselves when the SOS ends or expires.
+- Volunteers can be reached while Maitri is closed (optional background location, every 15 minutes).
+
+Reminders:
 - SOS here is REAL: your circle gets an alert and your live location. Don't hold the SOS button for fun.
 - In a real emergency, call 112.
 - Report problems from Profile > Help & support, or reply to the invite email.

@@ -306,12 +306,28 @@ internal fun MainGraph(
                     val problem = if (ownStatus) syncState.problem else null
                     // A session the sync layer ended can no longer be confirmed; stop waiting for it.
                     LaunchedEffect(problem) { if (problem == SyncProblem.ENDED) { requested = false; endRequested = false } }
+                    // Watchdog: while an SOS waits for its server incident, keep the sync and tracking going. Covers a
+                    // session restored after the app was stopped mid-SOS (update, reboot, battery), where nothing else
+                    // would restart them, and a server that was asleep.
+                    var stillTrying by remember { mutableStateOf(false) }
+                    LaunchedEffect(requested, id, uid) {
+                        stillTrying = false
+                        var waited = 0
+                        while (requested && id == null) {
+                            sync.wake(uid)
+                            startDemoTracking(context, uid)
+                            kotlinx.coroutines.delay(5000)
+                            waited += 5
+                            if (waited >= 20) stillTrying = true
+                        }
+                    }
                     val connecting by BackendLatency.connecting.collectAsStateWithLifecycle()
                     val sessionMessage = when {
                         problem == SyncProblem.ENDED -> syncState.message
                         connecting && (requested || state.incident?.status == IncidentStatus.ACTIVE) ->
                             tr("Connecting to Maitri… Your SOS keeps retrying in the background.")
                         problem != null -> syncState.message
+                        requested && id == null && stillTrying -> tr("Still trying to reach Maitri… If you need help now, call 112.")
                         requested && id == null -> tr("Connecting your SOS to Maitri…")
                         else -> null
                     }
