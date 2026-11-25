@@ -3,6 +3,8 @@ package `in`.maitri.app.ui
 import `in`.maitri.app.tr
 
 import androidx.compose.foundation.*
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
@@ -256,12 +258,11 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
             MaitriLoader(Modifier.fillMaxWidth().padding(vertical = 16.dp), message = tr("Checking your responder settings…"),
                 logoSize = 48.dp)
         } else {
-        Text(tr("Community responder"), color = palette.primary)
-        Switch(checked = profile?.optedIn == true, enabled = profile != null && !busy,
-            onCheckedChange = { update(it, false) })
-        Text(tr("Available for nearby requests"), color = palette.primary)
-        Switch(checked = profile?.available == true, enabled = profile?.optedIn == true && !busy,
-            onCheckedChange = { update(true, it) })
+        // Label and switch on one row (as on the Circle tab); the row is the touch target.
+        SwitchRow(tr("Community responder"), profile?.optedIn == true, profile != null && !busy, palette) { update(it, false) }
+        SwitchRow(tr("Available for nearby requests"), profile?.available == true, profile?.optedIn == true && !busy, palette) {
+            update(true, it)
+        }
         if (profile?.available == true && !permitted) {
             Button(onClick = { permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
                 Manifest.permission.ACCESS_COARSE_LOCATION)) },
@@ -332,5 +333,15 @@ fun ResponderUnavailable() {
             Text(tr("Responder availability and invitations need a signed-in account connected to the Maitri server. ") +
                 tr("Nothing is shared and no requests are received on this screen."), color = palette.secondary)
         }
+    }
+}
+
+@Composable
+private fun SwitchRow(label: String, checked: Boolean, enabled: Boolean, p: MaitriPalette, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        .toggleable(value = checked, enabled = enabled, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onChange),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), color = if (enabled) p.primary else p.secondary, fontSize = 15.sp)
+        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }
