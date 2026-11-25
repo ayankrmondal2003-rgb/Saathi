@@ -41,6 +41,13 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
     val theme = LocalThemeController.current
     val themeNames = mapOf(ThemeMode.SYSTEM to S.settings_system, ThemeMode.LIGHT to S.settings_light, ThemeMode.DARK to S.settings_dark)
     var dialog by remember { mutableStateOf<Int?>(null) }
+    var verified by remember(user?.uid) { mutableStateOf(false) }
+    LaunchedEffect(user?.uid) {
+        val uid = user?.uid?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        verified = runCatching {
+            `in`.maitri.app.network.BackendClient.api.volunteerStatus(`in`.maitri.app.network.ExpectedAccount(uid)).status == "APPROVED"
+        }.getOrDefault(false)
+    }
     val language = java.util.Locale.forLanguageTag(settingsLanguageCode())
     fun appSettings() = context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
         Uri.fromParts("package", context.packageName, null)))
@@ -54,7 +61,11 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
         }) {
         SettingsText(strings.getString(S.settings_eyebrow), 84, 58, 282, 22, 10, p.accent, true)
         SettingsText(strings.getString(S.settings_profile), 84, 80, 284, 36, 25, p.primary, true)
-        SettingsText(strings.getString(S.settings_your_profile), 40, 156, 222, 28, 18, p.primary, true)
+        Row(settingsSlot(40, 156, 222, 28), verticalAlignment = Alignment.CenterVertically) {
+            Text(strings.getString(S.settings_your_profile), color = p.primary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            if (verified) { Spacer(Modifier.width(6.dp)); VerifiedCheck(p, 18.dp) }
+        }
         SettingsText(strings.getString(S.settings_details), 40, 186, 222, 23, 11, p.secondary)
         SettingsText(strings.getString(S.settings_edit), 299, 166, 50, 38, 12, p.accent, true, true) { onNavigate("EditProfile") }
         BoardAction(24, 144, 275, 82, strings.getString(S.settings_your_profile)) { onNavigate("EditProfile") }

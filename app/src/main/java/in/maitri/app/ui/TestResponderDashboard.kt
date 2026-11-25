@@ -13,6 +13,7 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -41,7 +42,8 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
     var preferenceMessage by remember { mutableStateOf("") }
     var locationStatusMessage by remember { mutableStateOf<String?>(null) }
     var inboxLoaded by remember(uid) { mutableStateOf(false) }
-    var applicationStatus by remember(uid) { mutableStateOf<String?>(null) }
+    var volunteer by remember(uid) { mutableStateOf<VolunteerStatusDto?>(null) }
+    var refreshing by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var permitted by remember { mutableStateOf(context.locationAllowed()) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -73,20 +75,26 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
         }) { Text(tr("Continue"), color = palette.accent, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold) } },
         dismissButton = { androidx.compose.material3.TextButton(onClick = { explainBackground = false }) { Text(tr("Not now"), color = palette.accent) } })
 
+    // Profile, invitations and volunteer status. Runs when the tab opens, every 10 s while it's visible, and on
+    // pull-to-refresh (which also re-reads the profile).
+    suspend fun load(fullProfile: Boolean) {
+        try {
+            if (profile == null || fullProfile) profile = BackendClient.api.profile(account)
+            profile?.let { `in`.maitri.app.network.ResponderLocation.setAvailable(context, uid, it.optedIn && it.available) }
+            inbox = BackendClient.api.invitations(account).filter { it.canOpenIncoming() || it.status == "ACCEPTED" }
+            inboxLoaded = true
+            volunteer = BackendClient.api.volunteerStatus(account)
+            if (preferenceMessage == tr("Could not refresh responder information")) preferenceMessage = ""
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            preferenceMessage = tr("Could not refresh responder information")
+        }
+    }
     LaunchedEffect(uid, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
-                try {
-                    if (profile == null) profile = BackendClient.api.profile(account)
-                    profile?.let { `in`.maitri.app.network.ResponderLocation.setAvailable(context, uid, it.optedIn && it.available) }
-                    inbox = BackendClient.api.invitations(account).filter { it.canOpenIncoming() || it.status == "ACCEPTED" }
-                    inboxLoaded = true
-                    applicationStatus = BackendClient.api.volunteerStatus(account).status
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    preferenceMessage = tr("Could not refresh responder information")
-                }
+                load(fullProfile = false)
                 delay(10000)
             }
         }
@@ -231,20 +239,23 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
         }
     }
 
-    Column(Modifier.fillMaxSize().background(palette.background).statusBarsPadding()
+    PullToRefreshBox(isRefreshing = refreshing, modifier = Modifier.fillMaxSize().background(palette.background),
+        onRefresh = { scope.launch { refreshing = true; try { load(fullProfile = true) } finally { refreshing = false } } }) {
+    Column(Modifier.fillMaxSize().statusBarsPadding()
         .verticalScroll(rememberScrollState()).padding(bottom = LocalFloatingNavBarPadding.current)) {
         ResponderHeader(palette)
+        VolunteerStatusBadge(palette, volunteer?.status, volunteer?.reviewedAt, volunteer?.reviewerNotes, onApply,
+            Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp))
         ResponderMapCard(palette, available = profile?.available == true, requestPermission = {
             permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         })
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)
             .background(palette.surface, RoundedCornerShape(22.dp)).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (applicationStatus in setOf("NOT_STARTED", "DRAFT", "REJECTED")) {
-            OutlinedButton(onClick = onApply, border = BorderStroke(1.dp, palette.accent)) {
-                Text(tr("Volunteer application"), color = palette.accent)
-            }
-        }
+        if (profile == null && preferenceMessage.isEmpty()) {
+            MaitriLoader(Modifier.fillMaxWidth().padding(vertical = 16.dp), message = tr("Checking your responder settings…"),
+                logoSize = 48.dp)
+        } else {
         Text(tr("Community responder"), color = palette.primary)
         Switch(checked = profile?.optedIn == true, enabled = profile != null && !busy,
             onCheckedChange = { update(it, false) })
@@ -298,6 +309,8 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
             }
         }
         }
+        }
+    }
     }
 }
 
