@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.sp
 internal fun MaitriRadioRow(selected: Boolean, label: String, description: String? = null, enabled: Boolean = true,
                             onClick: () -> Unit) {
     val p = maitriPalette()
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(14.dp))
+    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).pressScale().clip(RoundedCornerShape(14.dp))
         .background(if (selected) p.card else androidx.compose.ui.graphics.Color.Transparent)
         .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
         .padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -59,7 +59,7 @@ internal fun MaitriChoiceDialog(title: String, confirmLabel: String, onConfirm: 
                                 intro: String? = null, footer: @Composable ColumnScope.() -> Unit = {},
                                 options: @Composable ColumnScope.() -> Unit) {
     val p = maitriPalette()
-    AlertDialog(onDismissRequest = onDismiss, containerColor = p.surface, shape = RoundedCornerShape(28.dp),
+    AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = onDismiss, containerColor = p.surface, shape = RoundedCornerShape(28.dp),
         titleContentColor = p.primary, textContentColor = p.secondary,
         title = { Text(title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold) },
         text = {

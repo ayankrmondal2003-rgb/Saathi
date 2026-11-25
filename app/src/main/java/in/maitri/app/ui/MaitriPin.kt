@@ -93,12 +93,15 @@ fun MaitriPin(uid: String?, onBack: () -> Unit, modifier: Modifier = Modifier, o
     LaunchedEffect(uid, load) {
         if (preview) return@LaunchedEffect
         if (uid.isNullOrBlank()) { error = strings.getString(S.edit_session); mode = PinMode.LOAD_FAILED; return@LaunchedEffect }
-        mode = PinMode.LOADING
+        val cached = `in`.maitri.app.startup.StartupCache.get<SafetyPinStatusDto>(uid, `in`.maitri.app.startup.StartupCache.PIN)
+        if (cached != null) { status = cached; reset(pinModeFor(cached)) } else mode = PinMode.LOADING
         try {
             val loaded = BackendClient.api.safetyPinStatus(ExpectedAccount(uid))
+            `in`.maitri.app.startup.StartupCache.put(uid, `in`.maitri.app.startup.StartupCache.PIN, loaded)
             status = loaded
             error = null
-            reset(pinModeFor(loaded))
+            // Don't wipe digits already typed when the fresh answer agrees with the cached one.
+            if (cached == null || pinModeFor(cached) != pinModeFor(loaded)) reset(pinModeFor(loaded))
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             error = null
             mode = PinMode.LOAD_FAILED
@@ -268,7 +271,7 @@ fun MaitriPin(uid: String?, onBack: () -> Unit, modifier: Modifier = Modifier, o
     }
 
     if (askPassword) {
-        AlertDialog(onDismissRequest = { if (!busy) { askPassword = false; password = "" } },
+        AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { if (!busy) { askPassword = false; password = "" } },
             title = { Text(strings.getString(S.pin_password_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

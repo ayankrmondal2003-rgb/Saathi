@@ -169,7 +169,7 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
     if (reporting) {
         var reason by remember { mutableStateOf("FALSE_ALARM") }
         var note by remember { mutableStateOf("") }
-        AlertDialog(onDismissRequest = { reporting = false }, containerColor = p.surface,
+        AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { reporting = false }, containerColor = p.surface,
             titleContentColor = p.primary, textContentColor = p.secondary, title = { Text(tr("Report this SOS")) },
             text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(tr("Maitri reviews reports. The person in need isn't told."))
@@ -194,7 +194,7 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
             }) { Text(tr("Send report"), color = p.accent, fontWeight = FontWeight.SemiBold) } },
             dismissButton = { TextButton(onClick = { reporting = false }) { Text(tr("Cancel"), color = p.accent) } })
     }
-    message?.let { AlertDialog(onDismissRequest = { message = null }, containerColor = p.surface,
+    message?.let { AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { message = null }, containerColor = p.surface,
         textContentColor = p.primary, text = { Text(it) },
         confirmButton = { TextButton(onClick = { message = null }) { Text(tr("Close"), color = p.accent) } }) }
 }

@@ -27,6 +27,14 @@
         android:roundIcon="@mipmap/maitri_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.Maitri">
+        <!-- WorkManager starts on demand (MaitriApp is its Configuration.Provider), not during app start-up. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data android:name="androidx.work.WorkManagerInitializer" android:value="androidx.startup" tools:node="remove" />
+        </provider>
         <service android:name=".location.SosLocationService" android:exported="false" android:foregroundServiceType="location" />
         <service
             android:name=".notification.SosFirebaseMessagingService"
@@ -57,6 +65,17 @@
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
+        <!-- Nearby SOS request over the lock screen (full-screen intent); its own task so Back returns to what was open. -->
+        <activity
+            android:name=".ui.SosRequestActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:taskAffinity="in.maitri.app.sosrequest"
+            android:theme="@style/Theme.Maitri" />
+        <receiver android:name=".notification.SosRequestActionReceiver" android:exported="false" />
     </application>
 
 </manifest>

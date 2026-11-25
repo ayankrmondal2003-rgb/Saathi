@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # Maitri opens and every ~15 min in the background (if allowed); accepting still needs a fix under
     # max_location_age_seconds, which the app sends right before accepting.
     responder_location_max_age_seconds: int = Field(1800, ge=60, le=7200)
+    # Volunteers needed per SOS. 0 = no limit (every invited volunteer may accept). With N > 0, once N have accepted,
+    # the other open requests close and their phones show "Help is already on the way".
+    responders_needed: int = Field(0, ge=0, le=20)
     # Victim SOS fixes: kept even when coarse ("Approximate" is 1-3 km); geofence matching still needs
     # max_accuracy_meters. The first SOS fix may be a last-known fix up to max_last_known_age_seconds old.
     max_sos_accuracy_meters: float = Field(5000, gt=0, le=10000)

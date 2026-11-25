@@ -318,6 +318,15 @@ async def respond(invitation_id: UUID, body: Decision, request: Request, user=De
         })
     await db.execute(update(invitations).where(match).values(status=body.decision, responded_at=now))
     await service.audit(db, incident_id, user.id, body.decision)
+    # Enough volunteers accepted: the other open requests close ("Help is already on the way").
+    needed = request.app.state.settings.responders_needed
+    if body.decision == "ACCEPTED" and needed and await db.scalar(text(
+            "SELECT count(*) FROM incident_responders WHERE incident_id=:id AND revoked_at IS NULL"), {"id": incident_id}) >= needed:
+        closed = await service.close_requests(db, incident_id, "FILLED", keep_user=user.id)
+        if closed:
+            await db.execute(text("UPDATE incident_invitations SET status='EXPIRED' WHERE id = ANY(:ids)"), {"ids": closed})
+            await db.execute(text("UPDATE notification_outbox SET delivery_status='CANCELLED' WHERE invitation_id = ANY(:ids) "
+                                  "AND delivery_status IN ('PENDING','RETRY_SCHEDULED','SENDING')"), {"ids": closed})
     return {"status": body.decision}
 
 

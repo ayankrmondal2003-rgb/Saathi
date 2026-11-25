@@ -100,7 +100,7 @@ fun MaitriLogin(
     )
 
     if (showForgotDialog) {
-        AlertDialog(
+        AlertDialog(modifier = Modifier.dialogEnter(), 
             onDismissRequest = { showForgotDialog = false },
             containerColor = p.surface,
             titleContentColor = p.primary,

@@ -11,6 +11,7 @@ plugins {
     id("com.google.firebase.appdistribution")
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    id("androidx.baselineprofile")
 }
 
 
@@ -144,6 +145,10 @@ dependencies {
     implementation("org.maplibre.gl:android-sdk-opengl:13.7.1")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
+    // Installs the shipped Baseline Profile (src/release/generated/baselineProfiles) on devices without Play.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
+    baselineProfile(project(":baselineprofile"))
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
@@ -227,6 +232,23 @@ tasks.register("importMaitriLogo") {
             require(image.width == 1536 && image.height == 1536)
             output.parentFile.mkdirs()
             zip.getInputStream(entry).use { input -> output.outputStream().use { input.copyTo(it) } }
+        }
+    }
+}
+
+// Baseline Profile: generated on a real phone (BaselineProfileGenerator) and kept in src/release/generated, so release
+// builds ship it. Generation runs only on request. The variants it builds (nonMinifiedRelease, benchmarkRelease) keep
+// the release package and are signed with the upload key, so they install over the phone's app (no sign-out) and are
+// never uploaded to App Distribution.
+baselineProfile {
+    automaticGenerationDuringBuild = false
+    saveInSrc = true
+    dexLayoutOptimization = true
+}
+androidComponents {
+    finalizeDsl { android ->
+        android.buildTypes.matching { it.name == "nonMinifiedRelease" || it.name == "benchmarkRelease" }.configureEach {
+            android.signingConfigs.findByName("upload")?.let { signingConfig = it }
         }
     }
 }

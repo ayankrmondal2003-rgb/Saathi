@@ -26,8 +26,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // The system splash shows the Maitri logo until the first frame; a longer account check shows MaitriLoader.
-        installSplashScreen()
+        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Cold start: everything the first screens need starts loading now, in parallel (see Preloader).
+        `in`.maitri.app.startup.Preloader.start(this)
+        // Hand-off: the system splash fades into "Getting things ready" instead of cutting to it.
+        splash.setOnExitAnimationListener { view ->
+            view.view.animate().alpha(0f).setDuration(200L).withEndAction { view.remove() }.start()
+        }
         NotificationHelper.createEmergencyNotificationChannel(this)
         handleIntent(intent)
         enableEdgeToEdge()
@@ -60,7 +66,19 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if ((keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP) &&
+            `in`.maitri.app.notification.SosRequestAlerts.anyAlerting(this)) {
+            `in`.maitri.app.notification.SosRequestAlerts.silenceAll(this)
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     private fun handleIntent(intent: Intent?) {
+        // "Accept" on the notification or the full-screen alert: screen 06 opens and accepts at once.
+        if (intent?.action == `in`.maitri.app.notification.SosRequestAlerts.ACTION_ACCEPT)
+            `in`.maitri.app.notification.SosRequestAlerts.autoAccept = intent.getStringExtra(NotificationHelper.EXTRA_INVITATION_ID)
         pendingInvitationId.value = `in`.maitri.app.network.invitationFromAlert(
             intent?.getStringExtra(NotificationHelper.EXTRA_EVENT_TYPE),
             intent?.getStringExtra(NotificationHelper.EXTRA_INVITATION_ID),

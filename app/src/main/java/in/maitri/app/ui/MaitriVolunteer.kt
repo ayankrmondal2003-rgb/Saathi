@@ -75,7 +75,8 @@ fun MaitriVolunteer(
     var selectedIntent by rememberSaveable { mutableStateOf("HELP") }
     var consentChecked by rememberSaveable { mutableStateOf(false) }
     var docs by remember { mutableStateOf(VolunteerDocType.entries.associateWith { DocUi() }) }
-    var status by remember { mutableStateOf<`in`.maitri.app.network.VolunteerStatusDto?>(null) }
+    var status by remember { mutableStateOf(`in`.maitri.app.startup.StartupCache.get<`in`.maitri.app.network.VolunteerStatusDto>(uid,
+        `in`.maitri.app.startup.StartupCache.VOLUNTEER)) }
     var statusMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var choosingSource by remember { mutableStateOf<VolunteerDocType?>(null) }
     var managing by remember { mutableStateOf<VolunteerDocType?>(null) }
@@ -87,6 +88,7 @@ fun MaitriVolunteer(
         val a = account ?: return
         try {
             val s = `in`.maitri.app.network.BackendClient.api.volunteerStatus(a)
+            `in`.maitri.app.startup.StartupCache.put(uid, `in`.maitri.app.startup.StartupCache.VOLUNTEER, s)
             status = s
             consentChecked = s.consentDeclared
             val uploaded = s.documents.orEmpty().associate { it.docType to it.fileId }
@@ -214,7 +216,7 @@ fun MaitriVolunteer(
     )
 
     choosingSource?.let { type ->
-        AlertDialog(onDismissRequest = { choosingSource = null }, containerColor = p.surface,
+        AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { choosingSource = null }, containerColor = p.surface,
             titleContentColor = p.primary, textContentColor = p.secondary,
             title = { Text(type.title) },
             text = { Text(tr("PDF, JPG or PNG, up to 10 MB. Only Maitri reviewers can open it.")) },
@@ -226,7 +228,7 @@ fun MaitriVolunteer(
             }) { Text(tr("Choose file"), color = p.accent) } })
     }
     managing?.let { type ->
-        AlertDialog(onDismissRequest = { managing = null }, containerColor = p.surface,
+        AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { managing = null }, containerColor = p.surface,
             titleContentColor = p.primary, textContentColor = p.secondary,
             title = { Text(type.title) },
             text = { Text(tr("Uploaded. Replace it with a new file, or remove it.")) },

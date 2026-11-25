@@ -26,13 +26,15 @@ class InvitationNotificationWorker(context: Context, params: WorkerParameters) :
             val item = BackendClient.api.invitations(ExpectedAccount(uid)).firstOrNull {
                 it.id == invitation && it.incidentId == incident && it.status == "PENDING"
             }
-            // Only a distance band before accepting, never coordinates. "Practice" only for real test SOS.
-            val title = if (item?.isTest == true) tr("Practice SOS nearby") else tr("Someone needs help")
-            val body = item?.distanceBand?.let { tr("{0} away · Tap to respond if you can do so safely.", tr(it)) }
-                ?: tr("Nearby · Tap to respond if you can do so safely.")
-            if (item != null && eligible() && NotificationHelper.showSosNotification(applicationContext, invitation,
-                    incident, title, body, "RESPONDER_INVITATION_CREATED", timeoutMillis = expires - System.currentTimeMillis())) {
-                SosFirebaseMessagingService.saveLastAlertTimestamp(applicationContext, System.currentTimeMillis())
+            // Only a distance band before accepting, never coordinates. "Practice" only for a test SOS.
+            if (item == null) { SosRequestAlerts.remove(applicationContext, invitation); return Result.success() }
+            val (title, body) = SosRequestAlerts.texts(item.isTest, item.distanceBand)
+            val shown = SosRequestAlerts.get(applicationContext, invitation)
+            if (eligible()) {
+                // Already alerting: update the text without a second alert. Not shown yet: show it now.
+                if (shown != null) SosRequestAlerts.show(applicationContext, shown.copy(title = title, body = body), alert = false)
+                else if (SosRequestAlerts.show(applicationContext, SosRequestAlerts.Request(invitation, incident, uid, expires, title, body)))
+                    SosFirebaseMessagingService.saveLastAlertTimestamp(applicationContext, System.currentTimeMillis())
             }
             return Result.success()
         } catch (e: HttpException) {

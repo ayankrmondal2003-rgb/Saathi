@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
@@ -76,8 +77,11 @@ internal fun VolunteerStatusBadge(p: MaitriPalette, status: String?, reviewedAt:
             reviewerNote?.takeIf { it.isNotBlank() }?.let { tr("Reviewer's note: {0}", it) }) {
             OutlinedButton(onClick = onApply, border = BorderStroke(1.dp, p.accent)) { Text(tr("Reapply"), color = p.accent) }
         }
-        VolunteerState.NOT_APPLIED -> OutlinedButton(onClick = onApply, modifier = modifier,
-            border = BorderStroke(1.dp, p.accent)) { Text(tr("Volunteer application"), color = p.accent) }
+        VolunteerState.NOT_APPLIED -> BadgeCard(p, modifier, { StatusCircle(p.accent, Icons.Rounded.PersonAdd, p) },
+            tr("Become a verified volunteer"), p.primary,
+            tr("Send your documents so Maitri can ask you to help people nearby.")) {
+            OutlinedButton(onClick = onApply, border = BorderStroke(1.dp, p.accent)) { Text(tr("Volunteer application"), color = p.accent) }
+        }
     }
 }
 

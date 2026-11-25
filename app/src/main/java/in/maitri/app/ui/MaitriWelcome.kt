@@ -50,8 +50,8 @@ internal fun MaitriWelcomeContent(dark: Boolean, onGetStarted: () -> Unit) {
         ) {
             Spacer(Modifier.height(119.dp))
             Box(Modifier.size(292.dp), contentAlignment = Alignment.Center) {
-                Box(Modifier.fillMaxSize().background(Color(if (dark) 0xFF241B25 else 0xFFFFF0F5), CircleShape))
-                Box(Modifier.offset(y = 1.dp).size(242.dp).background(Color(if (dark) 0xFF36232F else 0xFFFCE8ED), CircleShape))
+                Box(Modifier.fillMaxSize().background(MaitriPalette(dark).subtle, CircleShape))
+                Box(Modifier.offset(y = 1.dp).size(242.dp).background(MaitriPalette(dark).card, CircleShape))
                 Image(painterResource(R.drawable.maitri_logo), null, Modifier.offset(y = 1.dp).size(147.dp))
             }
             Spacer(Modifier.height(3.5.dp))

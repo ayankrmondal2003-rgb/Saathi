@@ -183,7 +183,7 @@ fun MaitriPrivacyData(onBack: () -> Unit, onDeleted: () -> Unit) {
         Spacer(Modifier.height(LocalFloatingNavBarPadding.current))
     }
 
-    if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false },
+    if (confirmDelete) AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { confirmDelete = false },
         containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
         title = { Text(tr("Delete your account?")) },
         text = { Text(tr("This deletes your profile, circle, contacts, SOS history, photos, voice notes, volunteer documents and ") +
@@ -194,7 +194,7 @@ fun MaitriPrivacyData(onBack: () -> Unit, onDeleted: () -> Unit) {
             if (google) delete() else askPassword = true
         }) { Text(tr("Delete"), color = p.accent, fontWeight = FontWeight.SemiBold) } },
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(tr("Cancel"), color = p.secondary) } })
-    if (askPassword) AlertDialog(onDismissRequest = { askPassword = false },
+    if (askPassword) AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { askPassword = false },
         containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
         title = { Text(tr("Confirm it's you")) },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

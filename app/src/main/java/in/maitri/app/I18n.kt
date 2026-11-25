@@ -25,6 +25,9 @@ object I18n {
 
     fun language(): String = code
 
+    /** Reads and parses the current language's table off the main thread (start-up), so the first tr() is cheap. */
+    fun preload() { table(code) }
+
     internal fun table(code: String): Map<String, String> = tables.getOrPut(code) {
         val context = app ?: return@getOrPut emptyMap()
         runCatching {

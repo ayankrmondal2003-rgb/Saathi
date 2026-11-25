@@ -5,12 +5,17 @@ import android.content.Context
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 
 /** Sets up app-wide text translation and crash reporting before any screen, worker or notification runs. */
-class MaitriApp : Application() {
+class MaitriApp : Application(), androidx.work.Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         I18n.init(this)
-        CrashReports.apply(this)
+        // Off the main thread: collection stays off (manifest default) until this applies the user's choice.
+        Thread({ CrashReports.apply(this) }, "crash-reports").start()
     }
+
+    /** WorkManager starts on first use (a worker scheduled or run), not at process start: its initializer is removed. */
+    override val workManagerConfiguration: androidx.work.Configuration
+        get() = androidx.work.Configuration.Builder().build()
 }
 
 /**

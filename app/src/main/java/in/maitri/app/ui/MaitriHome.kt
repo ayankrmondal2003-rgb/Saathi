@@ -1,5 +1,7 @@
 package `in`.maitri.app.ui
 
+import androidx.compose.runtime.withFrameNanos
+
 import `in`.maitri.app.tr
 
 import android.content.Intent
@@ -41,9 +43,11 @@ import kotlinx.coroutines.launch
 internal data class MaitriPalette(val dark: Boolean) {
     val background = Color(if (dark) 0xFF19151B else 0xFFFFF9FA)
     val primary = Color(if (dark) 0xFFFAEFF5 else 0xFF40303A)
-    val secondary = Color(if (dark) 0xFFC3ADBA else 0xFF7D6771)
+    val secondary = Color(if (dark) 0xFFC3ADBA else 0xFF725C66)  // light = @color/maitri_secondary
     val accent = Color(if (dark) 0xFFFF9CBE else 0xFFB82055)
-    val card = Color(if (dark) 0xFF36232F else 0xFFFCE8ED)
+    val card = Color(if (dark) 0xFF36232F else 0xFFF9DCE6)  // light = @color/maitri_blush
+    /** Soft fills (chips, subtle backgrounds); light = @color/maitri_blush_subtle. */
+    val subtle = Color(if (dark) 0xFF241B25 else 0xFFFBE7EE)
     val surface = Color(if (dark) 0xFF28212A else 0xFFFFFFFF)
     val divider = Color(if (dark) 0xFF48323F else 0xFFF2DCE3)
     /** Text and icons on an accent fill: white on raspberry (6.2:1), dark on pink (9.2:1). White on pink is 1.9:1. */
@@ -86,7 +90,7 @@ fun MaitriHome(state: DemoState, start: (Boolean) -> Unit, contacts: () -> Unit,
         beta = `in`.maitri.app.BuildConfig.VERSION_NAME.contains("beta"))
     if (confirm) {
         // Reached by a quick tap or a screen reader, where a 3-second hold isn't practical.
-        AlertDialog(onDismissRequest = { confirm = false },
+        AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { confirm = false },
             containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
             title = { Text(tr("Send SOS now?")) },
             text = { Text(tr("Your circle and approved volunteers nearby get your live location. Maitri doesn't call 112 for you.")) },
@@ -163,7 +167,7 @@ internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Bool
                 .padding(horizontal = 8.dp, vertical = 4.dp), color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.Medium)
         }
         Spacer(Modifier.height(14.dp))
-        Row(Modifier.fillMaxWidth().background(p.card, RoundedCornerShape(20.dp))
+        Row(Modifier.fillMaxWidth().pressScale().background(p.card, RoundedCornerShape(20.dp))
             .clickable(onClick = contacts).padding(14.dp).heightIn(min = 57.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(48.dp).background(Color(if(p.dark) 0xFF2D222B else 0xFFFFF5F8), RoundedCornerShape(16.dp)),
@@ -187,7 +191,7 @@ internal fun MaitriHomeContent(p: MaitriPalette, contactCount: Int, active: Bool
 
 @Composable
 private fun MaitriQuickAction(title: String, subtitle: String, icon: Int, p: MaitriPalette, modifier: Modifier, click: () -> Unit) {
-    Column(modifier.background(p.surface, RoundedCornerShape(20.dp)).clickable(onClick = click)
+    Column(modifier.pressScale().background(p.surface, RoundedCornerShape(20.dp)).clickable(onClick = click)
         .heightIn(min = 114.dp).padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Icon(painterResource(icon), null, tint = p.accent, modifier = Modifier.size(23.dp))
@@ -216,18 +220,23 @@ internal fun MaitriHoldButton(p: MaitriPalette, onComplete: () -> Unit, onTap: (
         detectTapGestures(onPress = {
             coroutineScope {
                 completed = false
-                val started = SystemClock.elapsedRealtime()
                 val hold = launch {
+                    var startNanos = -1L
+                    var ticks = 0
                     while (true) {
-                        val elapsed = SystemClock.elapsedRealtime() - started
+                        // One update per displayed frame (60 or 120 Hz), instead of a fixed 16 ms timer.
+                        val elapsed = withFrameNanos { now -> if (startNanos < 0) startNanos = now; (now - startNanos) / 1_000_000 }
                         progress = (elapsed / 3000f).coerceIn(0f, 1f)
+                        if (elapsed >= (ticks + 1) * 1000L && ticks < 2) {
+                            ticks++
+                            haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                        }
                         if (elapsed >= 3000L) {
                             completed = true
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptic.performHapticFeedback(HapticFeedbackType.Confirm)
                             callback()
                             break
                         }
-                        delay(16)
                     }
                 }
                 try { tryAwaitRelease() } finally { hold.cancel(); progress = 0f }

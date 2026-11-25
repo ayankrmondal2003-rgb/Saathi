@@ -1,5 +1,9 @@
 package `in`.maitri.app.ui
 
+import androidx.compose.ui.graphics.drawscope.clipRect
+
+import androidx.compose.ui.draw.drawWithContent
+
 import `in`.maitri.app.tr
 
 import android.app.LocaleManager
@@ -65,7 +69,7 @@ internal fun settingsResources(): android.content.res.Resources {
 
 /** The reference boards are 390 units wide and reserve 28 units for the system status bar. */
 @Composable
-internal fun SettingsBoard(art: Int, height: Int, modifier: Modifier = Modifier,
+internal fun SettingsBoard(art: Int, height: Int, modifier: Modifier = Modifier, gapAt: Int? = null, gapHeight: Int = 0,
                            footer: @Composable () -> Unit = {}, content: @Composable () -> Unit) {
     val p = maitriPalette()
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding().coerceAtLeast(28.dp)
@@ -75,8 +79,17 @@ internal fun SettingsBoard(art: Int, height: Int, modifier: Modifier = Modifier,
         val density = LocalDensity.current
         Column(Modifier.width(width).verticalScroll(rememberScrollState())) {
             CompositionLocalProvider(LocalDensity provides Density(density.density * width.value / 390f, density.fontScale)) {
-                Box(Modifier.fillMaxWidth().height(height.dp)) {
-                    Image(painterResource(art), null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
+                Box(Modifier.fillMaxWidth().height((height + if (gapAt != null) gapHeight else 0).dp)) {
+                    if (gapAt == null) Image(painterResource(art), null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
+                    else {
+                        // The artwork drawn twice: above the cut as is, below it moved down by the gap.
+                        val painter = painterResource(art)
+                        val cut = (gapAt - 28).dp
+                        Image(painter, null, Modifier.fillMaxWidth().height(height.dp).drawWithContent {
+                            clipRect(bottom = cut.toPx()) { this@drawWithContent.drawContent() } }, contentScale = ContentScale.FillBounds)
+                        Image(painter, null, Modifier.offset(y = gapHeight.dp).fillMaxWidth().height(height.dp).drawWithContent {
+                            clipRect(top = cut.toPx()) { this@drawWithContent.drawContent() } }, contentScale = ContentScale.FillBounds)
+                    }
                     content()
                 }
                 footer()

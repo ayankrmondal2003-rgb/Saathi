@@ -80,7 +80,7 @@ private fun CrashTestButton() {
     val context = LocalContext.current
     var confirm by rememberSaveable { mutableStateOf(false) }
     TextButton(onClick = { confirm = true }) { Text("Send test crash report") }
-    if (confirm) AlertDialog(
+    if (confirm) AlertDialog(modifier = Modifier.dialogEnter(), 
         onDismissRequest = { confirm = false },
         title = { Text("Send test crash report?") },
         text = {

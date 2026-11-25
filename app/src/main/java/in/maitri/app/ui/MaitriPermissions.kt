@@ -1,5 +1,15 @@
 package `in`.maitri.app.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.rounded.NotificationsActive
+
+import androidx.lifecycle.repeatOnLifecycle
+
 import `in`.maitri.app.tr
 
 import android.Manifest
@@ -156,14 +166,26 @@ fun MaitriPermissions(onBack: () -> Unit, modifier: Modifier = Modifier) {
         }
     }
 
-    SettingsBoard(if (p.dark) R.drawable.maitri_dark_12 else R.drawable.maitri_light_12, 788, modifier) {
+    // Android 14+: without "full-screen notifications", an SOS request can't show on the lock screen. A row between
+    // Microphone and Camera (board y 572) appears only while it's off; it's re-checked when the user comes back.
+    var fullScreenOff by remember { mutableStateOf(!preview && Build.VERSION.SDK_INT >= 34 &&
+        !`in`.maitri.app.notification.NotificationHelper.canUseFullScreen(context)) }
+    val permissionsLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(permissionsLifecycle) {
+        permissionsLifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            fullScreenOff = !preview && Build.VERSION.SDK_INT >= 34 && !`in`.maitri.app.notification.NotificationHelper.canUseFullScreen(context)
+        }
+    }
+    val gap = if (fullScreenOff) 80 else 0
+    SettingsBoard(if (p.dark) R.drawable.maitri_dark_12 else R.drawable.maitri_light_12, 788, modifier,
+        gapAt = if (fullScreenOff) 572 else null, gapHeight = gap) {
         SettingsHeader(strings.getString(S.settings_permissions), strings.getString(S.settings_profile),
             strings.getString(S.settings_back), onBack)
         SettingsText(strings.getString(S.perm_banner), 40, 156, 310, 30, 20, p.primary, true)
         SettingsText(strings.getString(S.perm_banner_sub), 40, 189, 208, 34, 11, p.secondary, line = 15)
         PermissionRow.entries.forEachIndexed { index, row ->
             val state = states.getValue(row)
-            val top = 252 + index * 80
+            val top = 252 + index * 80 + if (index * 80 + 252 >= 572) gap else 0
             Box(settingsSlot(24, top, 342, 80).testTag("permission_${row.name.lowercase()}")
                 .clickable(role = Role.Button, onClickLabel = strings.getString(row.title)) { onRow(row, state) }) {
                 RowText(strings.getString(row.title), 11, 20, 14, p.primary, FontWeight.SemiBold)
@@ -172,16 +194,25 @@ fun MaitriPermissions(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     if (state == AccessState.ALLOWED || state == AccessState.APPROXIMATE) p.accent else p.secondary, FontWeight.SemiBold)
             }
         }
+        if (fullScreenOff) Box(settingsSlot(24, 572, 342, 80).background(p.surface).testTag("permission_full_screen")
+            .clickable(role = Role.Button) { `in`.maitri.app.notification.NotificationHelper.openFullScreenSettings(context) }) {
+            Box(Modifier.padding(start = 16.dp, end = 16.dp).fillMaxWidth().height(1.dp).background(p.divider))
+            Icon(androidx.compose.material.icons.Icons.Rounded.NotificationsActive, null,
+                Modifier.offset(16.dp, 14.dp).size(20.dp), tint = p.accent)
+            RowText(tr("Show SOS requests on the lock screen"), 11, 20, 14, p.primary, FontWeight.SemiBold)
+            RowText(tr("So a nearby request can wake your screen"), 35, 18, 11, p.secondary, FontWeight.Normal)
+            RowText(tr("Not allowed · Tap to allow"), 57, 16, 10, p.secondary, FontWeight.SemiBold)
+        }
         // In the hint's place: alerts only arrive on time if the phone doesn't put Maitri to sleep.
-        SettingsText(tr("Keep Maitri alerts on time ›"), 24, 682, 342, 22, 12, p.accent, bold = true, center = true,
+        SettingsText(tr("Keep Maitri alerts on time ›"), 24, 682 + gap, 342, 22, 12, p.accent, bold = true, center = true,
             action = { battery = true })
-        SettingsText(strings.getString(S.perm_open), 24, 724, 342, 52, 15,
+        SettingsText(strings.getString(S.perm_open), 24, 724 + gap, 342, 52, 15,
             if (p.dark) p.background else Color.White, bold = true, center = true, action = ::appSettings)
     }
 
     if (battery) {
         val restricted = !preview && batteryRestricted(context)
-        AlertDialog(onDismissRequest = { battery = false },
+        AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { battery = false },
             title = { Text(tr("Keep Maitri alerts on time")) },
             text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (restricted) tr("Battery optimisation is on for Maitri, so your phone may delay SOS requests and circle alerts.")
@@ -203,7 +234,7 @@ fun MaitriPermissions(onBack: () -> Unit, modifier: Modifier = Modifier) {
             dismissButton = { TextButton(onClick = { battery = false }) { Text(strings.getString(S.settings_close)) } })
     }
     info?.let { id ->
-        AlertDialog(onDismissRequest = { info = null }, text = { Text(strings.getString(id)) },
+        AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { info = null }, text = { Text(strings.getString(id)) },
             confirmButton = { TextButton(onClick = { info = null }) { Text(strings.getString(S.settings_close)) } })
     }
 }

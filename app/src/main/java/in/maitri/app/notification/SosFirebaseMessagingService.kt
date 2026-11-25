@@ -49,7 +49,26 @@ class SosFirebaseMessagingService : FirebaseMessagingService() {
                 val expiry = runCatching { java.time.Instant.parse(data["expires_at"]) }.getOrNull() ?: return
                 if (!expiry.isAfter(java.time.Instant.now())) return
                 val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
-                InvitationNotificationWorker.enqueue(this, uid, invitationId, incidentId, expiry.toEpochMilli())
+                if (!NotificationHelper.claimAlert(applicationContext, invitationId, System.currentTimeMillis())) return
+                // The alert goes up now (a high-priority message gives a few seconds), with the distance band if the
+                // server answers within 2.5 s; otherwise "Nearby", and the worker fills in the details.
+                val details = kotlinx.coroutines.runBlocking {
+                    kotlinx.coroutines.withTimeoutOrNull(2_500) {
+                        runCatching { `in`.maitri.app.network.BackendClient.api.invitations(`in`.maitri.app.network.ExpectedAccount(uid))
+                            .firstOrNull { it.id == invitationId } }.getOrNull()
+                    }
+                }
+                if (details != null && details.status != "PENDING") return
+                val (title, body) = SosRequestAlerts.texts(details?.isTest, details?.distanceBand)
+                if (SosRequestAlerts.show(applicationContext, SosRequestAlerts.Request(invitationId, incidentId, uid,
+                        expiry.toEpochMilli(), title, body)))
+                    saveLastAlertTimestamp(applicationContext, System.currentTimeMillis())
+                if (details == null) InvitationNotificationWorker.enqueue(this, uid, invitationId, incidentId, expiry.toEpochMilli())
+            }
+            "SOS_REQUEST_CLOSED" -> {
+                // The SOS ended or enough volunteers accepted: stop alerting and say so for a few seconds.
+                val invitation = data["invitation_id"]?.takeIf { runCatching { UUID.fromString(it) }.isSuccess } ?: return
+                SosRequestAlerts.closed(applicationContext, invitation, data["reason"].orEmpty())
             }
             "TEST_ALERT", "EMERGENCY_TEST_NOTIFICATION" -> {
                 val testId = data["notification_id"] ?: remoteMessage.messageId ?: UUID.randomUUID().toString()
