@@ -1,10 +1,12 @@
-Maitri 0.9.1-beta.2 - fixes from two-phone testing
+Maitri 0.9.2-beta.3 - design fixes and mutual circles
 
 What's new:
-- An SOS never gets stuck on "Connecting…": if Maitri was closed during an SOS (update, restart, battery), it now reconnects within seconds. If it still can't reach Maitri, it tells you to call 112.
-- Volunteers: requests can now wake your screen. Allow it from the Responder tab ("Let SOS requests wake your screen").
-- Volunteers: requests clear themselves when the SOS ends or expires.
-- Volunteers can be reached while Maitri is closed (optional background location, every 15 minutes).
+- Circle: "Circles you're in" shows whose SOS alerts reach you. Tap "Add ... to my circle too" to send them a request; once they accept, you're in each other's circles.
+- Circle: "Import from phone contacts" now picks a phone number correctly.
+- Responder: a live map of where you are, with the 1 km area requests come from while you're Available.
+- Responder: your volunteer status at the top (Verified volunteer, under review, or not approved with the reviewer's note).
+- Dark mode: all text is readable; switches and buttons use Maitri's pink instead of purple.
+- New Themes dialog (Profile > Themes), a branded loading animation, and a cleaner bottom bar.
 
 Reminders:
 - SOS here is REAL: your circle gets an alert and your live location. Don't hold the SOS button for fun.
