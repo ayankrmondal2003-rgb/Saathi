@@ -48,13 +48,13 @@ fun MaitriCircle(
     val context = LocalContext.current
     val uid = remember { runCatching { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid }.getOrNull() }
     var linked by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var memberships by remember { mutableStateOf<List<String>>(emptyList()) }
+    var memberships by remember { mutableStateOf<List<`in`.maitri.app.network.MembershipDto>>(emptyList()) }
     var refresh by remember { mutableIntStateOf(0) }
     LaunchedEffect(uid, refresh, contacts.size) {
         val account = uid?.let { `in`.maitri.app.network.ExpectedAccount(it) } ?: return@LaunchedEffect
         try {
             linked = `in`.maitri.app.network.BackendClient.api.circleLinks(account).filter { it.owner }.map { it.contactId }.toSet()
-            memberships = `in`.maitri.app.network.BackendClient.circle.memberships(account).map { it.ownerName }
+            memberships = `in`.maitri.app.network.BackendClient.circle.memberships(account)
         } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { }
     }
     LaunchedEffect(message) {
@@ -88,7 +88,8 @@ fun MaitriCircle(
         linkedContactIds = linked,
         memberships = memberships,
         uid = uid,
-        onLinked = { refresh++ }
+        // Adding someone back creates a contact on the server: reload the circle so it appears in the list.
+        onLinked = { refresh++; vm?.refreshContacts() }
     )
 }
 
@@ -100,7 +101,7 @@ internal fun MaitriCircleContent(
     onRemoveContact: (String) -> Unit,
     onToggleSosAlert: (String, Boolean) -> Unit,
     linkedContactIds: Set<String> = emptySet(),
-    memberships: List<String> = emptyList(),
+    memberships: List<`in`.maitri.app.network.MembershipDto> = emptyList(),
     uid: String? = null,
     onLinked: () -> Unit = {}
 ) {
@@ -398,11 +399,7 @@ internal fun MaitriCircleContent(
                         .clickable { enteringCode = true }
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 )
-                if (memberships.isNotEmpty()) Text(
-                    text = tr("You get SOS alerts from ") + memberships.joinToString(),
-                    fontSize = 11.sp, color = p.secondary, textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
-                )
+                if (memberships.isNotEmpty()) CirclesYouAreIn(memberships, uid, p, onLinked)
             }
         }
     }

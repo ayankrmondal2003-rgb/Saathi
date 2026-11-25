@@ -72,6 +72,16 @@ class MaitriUiFixesCaptureTest {
         Triple("themes-light", ThemeMode.LIGHT, @Composable { ThemesOver() }),
         Triple("themes-dark", ThemeMode.DARK, @Composable { ThemesOver() }),
         Triple("bottom-bar", null, @Composable { BottomBarOverContent() }),
+        // "Circles you're in" with each add-back state (not added, request waiting, mutual).
+        Triple("circles-you-are-in", null, @Composable {
+            Box(Modifier.fillMaxSize().background(maitriPalette().background).statusBarsPadding().padding(24.dp)) {
+                CirclesYouAreIn(listOf(
+                    `in`.maitri.app.network.MembershipDto("l1", "Test Owner A", "2026-11-20T10:30:00+05:30", null),
+                    `in`.maitri.app.network.MembershipDto("l2", "Test Owner B", "2026-11-21T09:00:00+05:30", "REQUESTED"),
+                    `in`.maitri.app.network.MembershipDto("l3", "Test Owner C", "2026-11-22T18:00:00+05:30", "LINKED")),
+                    null, maitriPalette()) {}
+            }
+        }),
         Triple("loader", null, @Composable {
             Box(Modifier.fillMaxSize().background(maitriPalette().background), contentAlignment = Alignment.Center) {
                 MaitriLoader(message = "Connecting to Maitri…", delayMillis = 0)

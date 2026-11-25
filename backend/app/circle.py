@@ -6,6 +6,10 @@ Two ways, both ending with the recipient's own action:
 - Phone match: when a contact's number equals a Maitri account whose phone was verified by Firebase OTP,
   that account gets a circle request in its inbox. Self-declared profile numbers are never matched, because
   anyone could type someone else's number.
+
+Links are one-way (the owner's SOS reaches the recipient). A recipient can add the owner back from "Circles you're
+in": that saves the owner as the recipient's own contact and sends the owner the usual circle request, so a mutual
+link always needs both people to choose it.
 """
 import hashlib
 import re
@@ -32,6 +36,11 @@ class InviteRequest(Input):
 
 class AcceptRequest(Input):
     code: str = Field(min_length=8, max_length=16)
+
+
+class AddBackRequest(Input):
+    # Needed only when the owner's phone isn't OTP-verified (typed profile numbers are never trusted).
+    phone_number: str | None = Field(default=None, min_length=7, max_length=32)
 
 
 def normalize_code(code: str) -> str:
@@ -120,17 +129,23 @@ async def request_phone_matches(db, owner, contact_id, normalized_phone: str):
         LIMIT 1""", owner=owner.id, last10=digits[-10:], digits=digits)
     if not target:
         return
+    await send_request(db, owner, contact_id, target.id)
+
+
+async def send_request(db, owner, contact_id, target_id) -> bool:
+    """A circle request from `owner` (for their contact) to the account `target_id`, unless one is open or linked."""
     if await db.scalar(text("""SELECT 1 FROM circle_invites WHERE contact_id=:c AND target_user_id=:t
-        AND accepted_at IS NULL AND declined_at IS NULL AND expires_at > now()"""), {"c": contact_id, "t": target.id}):
-        return
+        AND accepted_at IS NULL AND declined_at IS NULL AND expires_at > now()"""), {"c": contact_id, "t": target_id}):
+        return False
     if await db.scalar(text("SELECT 1 FROM circle_links WHERE contact_id=:c AND recipient_id=:t AND revoked_at IS NULL"),
-                       {"c": contact_id, "t": target.id}):
-        return
+                       {"c": contact_id, "t": target_id}):
+        return False
     invite = await one(db, """INSERT INTO circle_invites(owner_id, contact_id, target_user_id, expires_at)
         VALUES (:owner, :contact, :target, now() + interval '14 days') RETURNING id""",
-        owner=owner.id, contact=contact_id, target=target.id)
-    await add_item(db, target.id, "CIRCLE_REQUEST", f"{display(owner.display_name)} added you to their circle",
+        owner=owner.id, contact=contact_id, target=target_id)
+    await add_item(db, target_id, "CIRCLE_REQUEST", f"{display(owner.display_name)} added you to their circle",
                    "Accept to get their SOS alerts in Maitri.", data={"request_id": str(invite.id)})
+    return True
 
 
 @router.get("/requests")
@@ -158,10 +173,54 @@ async def answer(request_id: UUID, decision: str, user=Depends(account), db=Depe
     return {"status": "LINKED"}
 
 
+async def reverse_state(db, me, owner_id) -> str | None:
+    """Whether `me` has added `owner_id` back: LINKED (their SOS reaches them), REQUESTED (waiting), or None."""
+    if await db.scalar(text("""SELECT 1 FROM circle_links WHERE owner_id=:me AND recipient_id=:o AND revoked_at IS NULL"""),
+                       {"me": me, "o": owner_id}):
+        return "LINKED"
+    if await db.scalar(text("""SELECT 1 FROM circle_invites WHERE owner_id=:me AND target_user_id=:o AND accepted_at IS NULL
+        AND declined_at IS NULL AND expires_at > now()"""), {"me": me, "o": owner_id}):
+        return "REQUESTED"
+    return None
+
+
 @router.get("/memberships")
 async def memberships(user=Depends(account), db=Depends(database)):
-    """Circles this account belongs to (whose SOS alerts it receives)."""
-    rows = (await db.execute(text("""SELECT l.id, u.display_name AS owner_name, l.created_at FROM circle_links l
+    """Circles this account belongs to (whose SOS alerts it receives), and whether it has added each owner back."""
+    rows = (await db.execute(text("""SELECT l.id, l.owner_id, u.display_name AS owner_name, l.created_at FROM circle_links l
         JOIN users u ON u.id = l.owner_id WHERE l.recipient_id=:me AND l.revoked_at IS NULL
-        ORDER BY l.created_at DESC"""), {"me": user.id})).mappings()
-    return [{"link_id": r["id"], "owner_name": display(r["owner_name"]), "since": r["created_at"]} for r in rows]
+        ORDER BY l.created_at DESC"""), {"me": user.id})).mappings().all()
+    return [{"link_id": r["id"], "owner_name": display(r["owner_name"]), "since": r["created_at"],
+             "added_back": await reverse_state(db, user.id, r["owner_id"])} for r in rows]
+
+
+@router.post("/memberships/{link_id}/add-back")
+async def add_back(link_id: UUID, body: AddBackRequest, user=Depends(account), db=Depends(database)):
+    """Save the circle's owner as my contact and send them a circle request (their choice to accept)."""
+    from app.schemas import TrustedContactCreate
+    from app.services import trusted_contacts as tc_service
+    from app.services.trusted_contacts import normalize_phone
+
+    owner = await one(db, """SELECT u.id, u.display_name, u.phone_number, u.phone_verified FROM circle_links l
+        JOIN users u ON u.id = l.owner_id WHERE l.id=:id AND l.recipient_id=:me AND l.revoked_at IS NULL""",
+        id=link_id, me=user.id)
+    if not owner:
+        raise HTTPException(404, {"code": "MEMBERSHIP_NOT_FOUND", "message": "That circle is no longer linked to you."})
+    state = await reverse_state(db, user.id, owner.id)
+    if state:
+        return {"status": state}
+    phone = body.phone_number or (owner.phone_number if owner.phone_verified else None)
+    if not phone:
+        raise HTTPException(422, {"code": "PHONE_NEEDED",
+                                  "message": f"Enter {display(owner.display_name)}'s phone number to add them."})
+    # Same number written differently ("98444 44444" vs "+919844444444"): match on the last 10 digits, as phone match does.
+    digits = re.sub(r"\D", "", normalize_phone(phone))
+    contact_id = await db.scalar(text("""SELECT id FROM trusted_contacts WHERE owner_user_id=:me
+        AND right(regexp_replace(normalized_phone_number, '\\D', '', 'g'), 10) = :last10 LIMIT 1"""),
+        {"me": user.id, "last10": digits[-10:]})
+    if contact_id is None:
+        contact = await tc_service.create_contact(db, user.id, TrustedContactCreate(
+            display_name=display(owner.display_name)[:256], phone_number=phone, label="Circle"))
+        contact_id = contact["id"]
+    await send_request(db, user, contact_id, owner.id)
+    return {"status": "REQUESTED", "contact_id": contact_id}

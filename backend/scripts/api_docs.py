@@ -64,6 +64,7 @@ DESCRIPTIONS = {
     ("POST", "/api/circle/invites/accept"): "The contact enters the code: links their account to that trusted contact. Rate limited.",
     ("GET", "/api/circle/requests"): "Circle requests waiting for this account's answer (made by phone-number match).",
     ("POST", "/api/circle/requests/{request_id}/{decision}"): "Accept or decline a circle request (`decision` is accept or decline).",
+    ("POST", "/api/circle/memberships/{link_id}/add-back"): "Add the owner of a circle you're in to your own circle: saves them as your contact (their verified number, or the one you give) and sends them a circle request. Mutual only once they accept.",
     ("GET", "/api/circle-sharing/links"): "This account's linked contacts (people who receive its alerts in the app).",
     ("POST", "/api/circle-sharing/links"): "Links a contact using a pairing code.",
     ("DELETE", "/api/circle-sharing/links/{link_id}"): "Removes a link; that person stops receiving alerts and shared locations.",
