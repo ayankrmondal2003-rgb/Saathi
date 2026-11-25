@@ -54,7 +54,8 @@ class MaitriCheckpointATest {
     @Test fun emergencyArtworkKeepsOnlyStaticCopy() {
         // Screens 06-08 paint no text at all from artwork: titles, buttons and tabs are native (ArtText), so they
         // translate and scale with large text, and sample names, distances and ETAs from the design can't appear.
-        val expected = mapOf("06" to 0, "07" to 0, "08" to 0, "responder" to 3)
+        // The Responder tab no longer uses artwork: its header and live map are native (ResponderHeader, ResponderMapCard).
+        val expected = mapOf("06" to 0, "07" to 0, "08" to 0)
         for (theme in listOf("light", "dark")) for ((screen, count) in expected) {
             val xml = File("src/main/res/drawable/maitri_${theme}_$screen.xml").readText()
             val glyphs = Regex("""pathData="([^"]*)"""").findAll(xml).count { it.groupValues[1].length >= 1000 }

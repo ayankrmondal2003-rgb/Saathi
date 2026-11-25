@@ -133,17 +133,18 @@ val DarkMaitriColors = MaitriColors(
     infoContainer = Color(0xFF082F3B),
     onInfoContainer = Color(0xFFA5F3FC),
 
-    cardBackground = NeutralDarkSurface,
-    cardBackgroundSecondary = NeutralDarkSurfaceVariant,
-    cardBorder = NeutralDarkBorder,
+    // Neutrals follow the Maitri palette (MaitriPalette in MaitriHome.kt), not the old navy/slate set.
+    cardBackground = Color(0xFF28212A),
+    cardBackgroundSecondary = Color(0xFF36232F),
+    cardBorder = Color(0xFF48323F),
 
     mapBackground = Color(0xFF0A1326),
     mapGrid = Color(0x1A6366F1),
     radarOverlay = Color(0x26E11D48),
 
-    textPrimary = TextDarkPrimary,
-    textSecondary = TextDarkSecondary,
-    textTertiary = TextDarkTertiary,
+    textPrimary = Color(0xFFFAEFF5),
+    textSecondary = Color(0xFFC3ADBA),
+    textTertiary = Color(0xFFC3ADBA),
 
     isDark = true,
 
@@ -179,17 +180,17 @@ val LightMaitriColors = MaitriColors(
     infoContainer = Color(0xFFF0F9FF),
     onInfoContainer = Color(0xFF0369A1),
 
-    cardBackground = NeutralLightSurface,
-    cardBackgroundSecondary = NeutralLightSurfaceVariant,
-    cardBorder = NeutralLightBorder,
+    cardBackground = Color(0xFFFFFFFF),
+    cardBackgroundSecondary = Color(0xFFFCE8ED),
+    cardBorder = Color(0xFFF2DCE3),
 
     mapBackground = Color(0xFFE8EEF5),
     mapGrid = Color(0x1F1E293B),
     radarOverlay = Color(0x1FE11D48),
 
-    textPrimary = TextLightPrimary,
-    textSecondary = TextLightSecondary,
-    textTertiary = TextLightTertiary,
+    textPrimary = Color(0xFF40303A),
+    textSecondary = Color(0xFF7D6771),
+    textTertiary = Color(0xFF7D6771),
 
     isDark = false,
 

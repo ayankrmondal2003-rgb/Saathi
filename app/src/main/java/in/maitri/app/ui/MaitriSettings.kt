@@ -41,6 +41,13 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
     val theme = LocalThemeController.current
     val themeNames = mapOf(ThemeMode.SYSTEM to S.settings_system, ThemeMode.LIGHT to S.settings_light, ThemeMode.DARK to S.settings_dark)
     var dialog by remember { mutableStateOf<Int?>(null) }
+    var verified by remember(user?.uid) { mutableStateOf(false) }
+    LaunchedEffect(user?.uid) {
+        val uid = user?.uid?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        verified = runCatching {
+            `in`.maitri.app.network.BackendClient.api.volunteerStatus(`in`.maitri.app.network.ExpectedAccount(uid)).status == "APPROVED"
+        }.getOrDefault(false)
+    }
     val language = java.util.Locale.forLanguageTag(settingsLanguageCode())
     fun appSettings() = context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
         Uri.fromParts("package", context.packageName, null)))
@@ -54,7 +61,11 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
         }) {
         SettingsText(strings.getString(S.settings_eyebrow), 84, 58, 282, 22, 10, p.accent, true)
         SettingsText(strings.getString(S.settings_profile), 84, 80, 284, 36, 25, p.primary, true)
-        SettingsText(strings.getString(S.settings_your_profile), 40, 156, 222, 28, 18, p.primary, true)
+        Row(settingsSlot(40, 156, 222, 28), verticalAlignment = Alignment.CenterVertically) {
+            Text(strings.getString(S.settings_your_profile), color = p.primary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            if (verified) { Spacer(Modifier.width(6.dp)); VerifiedCheck(p, 18.dp) }
+        }
         SettingsText(strings.getString(S.settings_details), 40, 186, 222, 23, 11, p.secondary)
         SettingsText(strings.getString(S.settings_edit), 299, 166, 50, 38, 12, p.accent, true, true) { onNavigate("EditProfile") }
         BoardAction(24, 144, 275, 82, strings.getString(S.settings_your_profile)) { onNavigate("EditProfile") }
@@ -75,28 +86,42 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
         BoardAction(24, 721, 50, 36, strings.getString(S.settings_help)) { dialog = S.settings_help }
     }
 
-    dialog?.let { id ->
-        AlertDialog(onDismissRequest = { dialog = null }, title = { Text(strings.getString(id)) },
-            text = {
-                if (id == S.settings_themes) Column {
-                    themeNames.forEach { (mode, name) ->
-                        TextButton(onClick = { theme.setMode(mode); dialog = null }) { Text(strings.getString(name)) }
-                    }
-                } else Text(strings.getString(if (id == S.settings_help) S.settings_help_body else S.settings_privacy_body))
-            }, confirmButton = {
+    if (dialog == S.settings_themes) ThemeDialog(themeNames.mapValues { strings.getString(it.value) }) { dialog = null }
+    else dialog?.let { id ->
+        AlertDialog(onDismissRequest = { dialog = null }, containerColor = p.surface,
+            titleContentColor = p.primary, textContentColor = p.secondary,
+            title = { Text(strings.getString(id)) },
+            text = { Text(strings.getString(if (id == S.settings_help) S.settings_help_body else S.settings_privacy_body)) },
+            confirmButton = {
                 TextButton(onClick = {
                     dialog = null
                     if (id == S.settings_privacy) appSettings()
-                }) { Text(strings.getString(if (id == S.settings_privacy) S.settings_manage else S.settings_close)) }
+                }) { Text(strings.getString(if (id == S.settings_privacy) S.settings_manage else S.settings_close), color = p.accent) }
             }, dismissButton = if (id == S.settings_help) ({
                 Row {
-                    TextButton(onClick = { dialog = null; onNavigate("BetaInfo") }) { Text(tr("Beta info")) }
+                    TextButton(onClick = { dialog = null; onNavigate("BetaInfo") }) { Text(tr("Beta info"), color = p.accent) }
                     TextButton(onClick = {
                         dialog = null
                         runCatching { context.startActivity(supportEmailIntent("Maitri help")) }
-                    }) { Text(tr("Email support")) }
+                    }) { Text(tr("Email support"), color = p.accent) }
                 }
             }) else null)
+    }
+}
+
+/** Profile -> Themes: System, Light, Dark as radio rows. A choice applies at once and is saved; Done closes. */
+@Composable
+internal fun ThemeDialog(names: Map<ThemeMode, String>, onDone: () -> Unit) {
+    val theme = LocalThemeController.current
+    val descriptions = mapOf(ThemeMode.SYSTEM to tr("Follow your phone's setting"),
+        ThemeMode.LIGHT to tr("Always light (Blush)"), ThemeMode.DARK to tr("Always dark"))
+    MaitriChoiceDialog(title = settingsResources().getString(S.settings_themes), confirmLabel = tr("Done"),
+        onConfirm = onDone, onDismiss = onDone) {
+        names.forEach { (mode, name) ->
+            MaitriRadioRow(selected = theme.themeMode == mode, label = name, description = descriptions.getValue(mode)) {
+                theme.setMode(mode)
+            }
+        }
     }
 }
 

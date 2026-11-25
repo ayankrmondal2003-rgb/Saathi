@@ -25,6 +25,15 @@ data class PickedContactData(
 
 object ContactPickerHelper {
 
+    /** Opens the system picker for one phone number; returns its data-row URI, readable through the picker's grant. */
+    object PickPhoneNumber : androidx.activity.result.contract.ActivityResultContract<Unit?, Uri?>() {
+        override fun createIntent(context: Context, input: Unit?): android.content.Intent =
+            android.content.Intent(android.content.Intent.ACTION_PICK)
+                .setType(ContactsContract.CommonDataKinds.Phone.CONTENT_TYPE)
+        override fun parseResult(resultCode: Int, intent: android.content.Intent?): Uri? =
+            intent?.data?.takeIf { resultCode == android.app.Activity.RESULT_OK }
+    }
+
     /**
      * Resolves a scoped contact URI returned from the native contact or phone picker into
      * display name and list of available phone numbers without requiring broad READ_CONTACTS.

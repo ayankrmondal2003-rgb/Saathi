@@ -34,7 +34,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun Splash() {
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
-        BrandLogo(Modifier.size(96.dp))
+        MaitriLoader(logoSize = 96.dp)
     }
 }
 

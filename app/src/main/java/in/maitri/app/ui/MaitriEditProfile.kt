@@ -207,6 +207,9 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
 
     if (changeEmail) ChangeEmailDialog(p) { changeEmail = false }
     SettingsBoard(if (p.dark) R.drawable.maitri_dark_14 else R.drawable.maitri_light_14, 788, modifier) {
+        if (loading) Box(settingsSlot(24, 136, 342, 520).background(p.background), contentAlignment = Alignment.Center) {
+            MaitriLoader(message = strings.getString(S.edit_loading))
+        }
         SettingsHeader(strings.getString(S.edit_title), strings.getString(S.settings_profile), strings.getString(S.settings_back), onBack)
 
         photo?.let {

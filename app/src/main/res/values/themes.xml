@@ -2,4 +2,12 @@
 <resources>
 
     <style name="Theme.Maitri" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Launch theme (AndroidX SplashScreen, also below Android 12): the Maitri logo on the app background, then
+         Theme.Maitri. MainActivity calls installSplashScreen(); a longer wait hands off to MaitriLoader. -->
+    <style name="Theme.Maitri.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/maitri_splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/maitri_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Maitri</item>
+    </style>
 </resources>

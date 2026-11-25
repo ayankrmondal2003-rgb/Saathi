@@ -1,5 +1,6 @@
 package `in`.maitri.app
 
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -24,6 +25,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // The system splash shows the Maitri logo until the first frame; a longer account check shows MaitriLoader.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         NotificationHelper.createEmergencyNotificationChannel(this)
         handleIntent(intent)

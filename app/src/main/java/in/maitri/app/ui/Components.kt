@@ -565,7 +565,7 @@ fun Action(
         shape = RoundedCornerShape(16.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isEmergency) colors.emergency else MaterialTheme.colorScheme.primary,
-            contentColor = Color.White
+            contentColor = if (isEmergency) Color.White else MaterialTheme.colorScheme.onPrimary
         ),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp)
     ) {

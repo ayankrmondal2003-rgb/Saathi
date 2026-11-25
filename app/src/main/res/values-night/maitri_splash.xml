@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Splash background in dark mode: the app's dark background, so the hand-off to the first screen doesn't flash. -->
+    <color name="maitri_splash_background">#19151B</color>
+</resources>

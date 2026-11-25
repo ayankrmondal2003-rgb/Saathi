@@ -131,7 +131,7 @@ fun MaitriLogin(
                         showForgotDialog = false
                         auth.reset(resetEmail)
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = Color.White)
+                    colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = p.onAccent)
                 ) { Text(tr("Send reset link")) }
             },
             dismissButton = {

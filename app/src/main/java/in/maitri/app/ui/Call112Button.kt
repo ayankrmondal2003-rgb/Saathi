@@ -37,7 +37,7 @@ fun Call112Button(modifier: Modifier = Modifier) {
         modifier = modifier.heightIn(min = 56.dp).semantics { contentDescription = tr("Call 112, emergency services") },
         shape = RoundedCornerShape(28.dp),
         containerColor = p.accent,
-        contentColor = Color.White,
+        contentColor = p.onAccent,
         icon = { Icon(Icons.Rounded.Call, contentDescription = null) },
         text = { Text(tr("Call 112"), fontSize = 16.sp, fontWeight = FontWeight.Bold) }
     )

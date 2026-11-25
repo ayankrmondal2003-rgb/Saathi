@@ -152,6 +152,12 @@ fun MaitriVolunteer(
     }
     val locked = applicationLocked(status?.status)
 
+    if (status == null && statusMessage == null && account != null) {
+        Box(Modifier.fillMaxSize().background(p.background), contentAlignment = Alignment.Center) {
+            MaitriLoader(message = tr("Checking your application…"))
+        }
+        return
+    }
     MaitriVolunteerContent(
         p = p,
         selectedIntent = selectedIntent,
@@ -515,7 +521,7 @@ internal fun MaitriVolunteerContent(
                         Icon(
                             imageVector = Icons.Rounded.Check,
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = p.onAccent,
                             modifier = Modifier.size(12.dp)
                         )
                     }

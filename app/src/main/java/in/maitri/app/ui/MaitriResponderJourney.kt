@@ -5,6 +5,7 @@ import `in`.maitri.app.tr
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -142,10 +143,17 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
         busy, onStatus = { chooseStatus = true }, onMaps = ::openMaps, onHelp = ::requestHelp, onDial = { dial() },
         distanceMeters = distance, self = own, onCallPerson = victimPhone?.let { number -> { dial(number) } },
         onMedicalNotes = confirmed.medicalNotes?.takeIf { it.isNotBlank() }?.let { notes -> { message = tr("Medical notes\n\n{0}", notes) } })
-    if (chooseStatus) AlertDialog(onDismissRequest = { chooseStatus = false }, title = { Text(tr("Responder status")) },
-        text = { Column {
+    if (chooseStatus) MaitriChoiceDialog(title = tr("Responder status"), confirmLabel = tr("Done"),
+        onConfirm = { chooseStatus = false }, onDismiss = { chooseStatus = false },
+        footer = {
+            TextButton(enabled = !busy, onClick = { chooseStatus = false; reporting = true }) {
+                Text(tr("Report a false alarm or a problem"), color = p.accent)
+            }
+        }) {
+            val current = confirmed.requesterMembership?.assistanceStatus
             for (status in listOf("ON_THE_WAY", "HELPING", "UNABLE_TO_HELP", "LEFT_INCIDENT")) {
-                TextButton(enabled = !busy, onClick = {
+                MaitriRadioRow(selected = current == status, enabled = !busy,
+                    label = responderStatusLabel(status).let { if (status == "LEFT_INCIDENT") tr("Leave this SOS") else it }) {
                     busy = true
                     scope.launch {
                         try {
@@ -155,20 +163,20 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
                             } else message = tr("Status change could not be confirmed.")
                         } finally { busy = false }
                     }
-                }) { Text(responderStatusLabel(status).let { if (status == "LEFT_INCIDENT") tr("Leave this SOS") else it }) }
+                }
             }
-            TextButton(enabled = !busy, onClick = { chooseStatus = false; reporting = true }) {
-                Text(tr("Report a false alarm or a problem"), color = MaterialTheme.colorScheme.error)
-            }
-        } }, confirmButton = {})
+        }
     if (reporting) {
         var reason by remember { mutableStateOf("FALSE_ALARM") }
         var note by remember { mutableStateOf("") }
-        AlertDialog(onDismissRequest = { reporting = false }, title = { Text(tr("Report this SOS")) },
+        AlertDialog(onDismissRequest = { reporting = false }, containerColor = p.surface,
+            titleContentColor = p.primary, textContentColor = p.secondary, title = { Text(tr("Report this SOS")) },
             text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(tr("Maitri reviews reports. The person in need isn't told."))
-                listOf("FALSE_ALARM" to tr("False alarm"), "UNSAFE" to tr("I felt unsafe"), "OTHER" to tr("Something else")).forEach { (value, label) ->
-                    Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(reason == value, { reason = value }); Text(label) }
+                Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("FALSE_ALARM" to tr("False alarm"), "UNSAFE" to tr("I felt unsafe"), "OTHER" to tr("Something else")).forEach { (value, label) ->
+                        MaitriRadioRow(selected = reason == value, label = label) { reason = value }
+                    }
                 }
                 OutlinedTextField(note, { note = it.take(500) }, label = { Text(tr("What happened (optional)")) })
             } },
@@ -183,11 +191,12 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
                     catch (_: Exception) { message = tr("The report couldn't be sent. Try again.") }
                     finally { busy = false }
                 }
-            }) { Text(tr("Send report")) } },
-            dismissButton = { TextButton(onClick = { reporting = false }) { Text(tr("Cancel")) } })
+            }) { Text(tr("Send report"), color = p.accent, fontWeight = FontWeight.SemiBold) } },
+            dismissButton = { TextButton(onClick = { reporting = false }) { Text(tr("Cancel"), color = p.accent) } })
     }
-    message?.let { AlertDialog(onDismissRequest = { message = null }, text = { Text(it) },
-        confirmButton = { TextButton(onClick = { message = null }) { Text(tr("Close")) } }) }
+    message?.let { AlertDialog(onDismissRequest = { message = null }, containerColor = p.surface,
+        textContentColor = p.primary, text = { Text(it) },
+        confirmButton = { TextButton(onClick = { message = null }) { Text(tr("Close"), color = p.accent) } }) }
 }
 
 /** Screen 07 board. Stateless: shows only server-confirmed status and the last reported coordinates, if any. */

@@ -3,6 +3,8 @@ package `in`.maitri.app.ui
 import `in`.maitri.app.tr
 
 import androidx.compose.foundation.*
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
@@ -13,6 +15,7 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -41,7 +44,8 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
     var preferenceMessage by remember { mutableStateOf("") }
     var locationStatusMessage by remember { mutableStateOf<String?>(null) }
     var inboxLoaded by remember(uid) { mutableStateOf(false) }
-    var applicationStatus by remember(uid) { mutableStateOf<String?>(null) }
+    var volunteer by remember(uid) { mutableStateOf<VolunteerStatusDto?>(null) }
+    var refreshing by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var permitted by remember { mutableStateOf(context.locationAllowed()) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -61,30 +65,38 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
             fullScreenAllowed = `in`.maitri.app.notification.NotificationHelper.canUseFullScreen(context)
         }
     }
+    val palette = maitriPalette()
     if (explainBackground) androidx.compose.material3.AlertDialog(onDismissRequest = { explainBackground = false },
+        containerColor = palette.surface, titleContentColor = palette.primary, textContentColor = palette.secondary,
         title = { Text(tr("Get requests when Maitri is closed?")) },
         text = { Text(tr("While you're Available, Maitri will share your location with the server about every 15 minutes, even when the app is closed, so it can ask you to help someone nearby. ") +
             tr("Nobody sees your location unless you accept a request. On the next screen, choose \"Allow all the time\". Turn Available off at any time to stop.")) },
         confirmButton = { androidx.compose.material3.TextButton(onClick = {
             explainBackground = false
             if (android.os.Build.VERSION.SDK_INT >= 29) backgroundPermission.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-        }) { Text(tr("Continue")) } },
-        dismissButton = { androidx.compose.material3.TextButton(onClick = { explainBackground = false }) { Text(tr("Not now")) } })
+        }) { Text(tr("Continue"), color = palette.accent, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold) } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = { explainBackground = false }) { Text(tr("Not now"), color = palette.accent) } })
 
+    // Profile, invitations and volunteer status. Runs when the tab opens, every 10 s while it's visible, and on
+    // pull-to-refresh (which also re-reads the profile).
+    suspend fun load(fullProfile: Boolean) {
+        try {
+            if (profile == null || fullProfile) profile = BackendClient.api.profile(account)
+            profile?.let { `in`.maitri.app.network.ResponderLocation.setAvailable(context, uid, it.optedIn && it.available) }
+            inbox = BackendClient.api.invitations(account).filter { it.canOpenIncoming() || it.status == "ACCEPTED" }
+            inboxLoaded = true
+            volunteer = BackendClient.api.volunteerStatus(account)
+            if (preferenceMessage == tr("Could not refresh responder information")) preferenceMessage = ""
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            preferenceMessage = tr("Could not refresh responder information")
+        }
+    }
     LaunchedEffect(uid, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
-                try {
-                    if (profile == null) profile = BackendClient.api.profile(account)
-                    profile?.let { `in`.maitri.app.network.ResponderLocation.setAvailable(context, uid, it.optedIn && it.available) }
-                    inbox = BackendClient.api.invitations(account).filter { it.canOpenIncoming() || it.status == "ACCEPTED" }
-                    inboxLoaded = true
-                    applicationStatus = BackendClient.api.volunteerStatus(account).status
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    preferenceMessage = tr("Could not refresh responder information")
-                }
+                load(fullProfile = false)
                 delay(10000)
             }
         }
@@ -229,47 +241,56 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
         }
     }
 
-    val palette = maitriPalette()
-    Column(Modifier.fillMaxSize().background(palette.background).statusBarsPadding()
+    PullToRefreshBox(isRefreshing = refreshing, modifier = Modifier.fillMaxSize().background(palette.background),
+        onRefresh = { scope.launch { refreshing = true; try { load(fullProfile = true) } finally { refreshing = false } } }) {
+    Column(Modifier.fillMaxSize().statusBarsPadding()
         .verticalScroll(rememberScrollState()).padding(bottom = LocalFloatingNavBarPadding.current)) {
-        Image(painterResource(if (palette.dark) R.drawable.maitri_dark_responder else R.drawable.maitri_light_responder),
-            tr("Nearby support. Responder. Illustrative map."), Modifier.fillMaxWidth().aspectRatio(390f / 466f))
+        ResponderHeader(palette)
+        VolunteerStatusBadge(palette, volunteer?.status, volunteer?.reviewedAt, volunteer?.reviewerNotes, onApply,
+            Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp))
+        ResponderMapCard(palette, available = profile?.available == true, requestPermission = {
+            permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        })
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)
             .background(palette.surface, RoundedCornerShape(22.dp)).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (applicationStatus in setOf("NOT_STARTED", "DRAFT", "REJECTED")) {
-            OutlinedButton(onClick = onApply) { Text(tr("Volunteer application")) }
+        if (profile == null && preferenceMessage.isEmpty()) {
+            MaitriLoader(Modifier.fillMaxWidth().padding(vertical = 16.dp), message = tr("Checking your responder settings…"),
+                logoSize = 48.dp)
+        } else {
+        // Label and switch on one row (as on the Circle tab); the row is the touch target.
+        SwitchRow(tr("Community responder"), profile?.optedIn == true, profile != null && !busy, palette) { update(it, false) }
+        SwitchRow(tr("Available for nearby requests"), profile?.available == true, profile?.optedIn == true && !busy, palette) {
+            update(true, it)
         }
-        Text(tr("Community responder"))
-        Switch(checked = profile?.optedIn == true, enabled = profile != null && !busy,
-            onCheckedChange = { update(it, false) })
-        Text(tr("Available for nearby requests"))
-        Switch(checked = profile?.available == true, enabled = profile?.optedIn == true && !busy,
-            onCheckedChange = { update(true, it) })
         if (profile?.available == true && !permitted) {
             Button(onClick = { permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION)) }) { Text(tr("Allow location")) }
+                Manifest.permission.ACCESS_COARSE_LOCATION)) },
+                colors = ButtonDefaults.buttonColors(containerColor = palette.accent, contentColor = palette.onAccent)) { Text(tr("Allow location")) }
         }
         // Reachable while Maitri is closed: only with the volunteer's explicit "Allow all the time".
         if (profile?.available == true && permitted && !backgroundAllowed) {
-            Text(tr("You'll only get requests while Maitri is open."), fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-            Text(tr("To get SOS requests when Maitri is closed, allow location all the time."))
-            OutlinedButton(onClick = { explainBackground = true }) { Text(tr("Get requests when Maitri is closed")) }
+            Text(tr("You'll only get requests while Maitri is open."), color = palette.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+            Text(tr("To get SOS requests when Maitri is closed, allow location all the time."), color = palette.secondary)
+            OutlinedButton(onClick = { explainBackground = true }, border = BorderStroke(1.dp, palette.accent)) {
+                Text(tr("Get requests when Maitri is closed"), color = palette.accent)
+            }
         } else if (profile?.available == true && backgroundAllowed) {
-            Text(tr("You'll get nearby SOS requests even when Maitri is closed. Turn Available off to stop sharing your location."))
+            Text(tr("You'll get nearby SOS requests even when Maitri is closed. Turn Available off to stop sharing your location."), color = palette.secondary)
         }
         // Android 14+: without this, a request on a sleeping phone only waits in the notification shade.
         if (profile?.available == true && !fullScreenAllowed) {
-            Text(tr("Let SOS requests wake your screen"), fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-            Text(tr("Your phone currently keeps requests in the notification shade while the screen is off. Allow full-screen notifications for Maitri so a request lights up your screen."))
-            OutlinedButton(onClick = { `in`.maitri.app.notification.NotificationHelper.openFullScreenSettings(context) }) {
-                Text(tr("Allow full-screen alerts"))
+            Text(tr("Let SOS requests wake your screen"), color = palette.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+            Text(tr("Your phone currently keeps requests in the notification shade while the screen is off. Allow full-screen notifications for Maitri so a request lights up your screen."), color = palette.secondary)
+            OutlinedButton(onClick = { `in`.maitri.app.notification.NotificationHelper.openFullScreenSettings(context) },
+                border = BorderStroke(1.dp, palette.accent)) {
+                Text(tr("Allow full-screen alerts"), color = palette.accent)
             }
         }
-        if (preferenceMessage.isNotEmpty()) Text(preferenceMessage)
-        locationStatusMessage?.let { Text(it) }
-        Text(tr("Invitations"))
-        if (inbox.isEmpty()) Text(if (inboxLoaded) tr("No current invitations") else tr("Checking invitations…"))
+        if (preferenceMessage.isNotEmpty()) Text(preferenceMessage, color = palette.secondary)
+        locationStatusMessage?.let { Text(it, color = palette.secondary) }
+        Text(tr("Invitations"), color = palette.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+        if (inbox.isEmpty()) Text(if (inboxLoaded) tr("No current invitations") else tr("Checking invitations…"), color = palette.secondary)
         for (invitation in inbox) {
             if (invitation.status == "ACCEPTED") {
                 OutlinedButton(enabled = !busy, onClick = {
@@ -283,21 +304,28 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
                         catch (_: Exception) { preferenceMessage = tr("Could not confirm responder access.") }
                         finally { busy = false }
                     }
-                }) { Text(tr("Resume responder journey")) }
-            } else OutlinedButton(onClick = { openInvitation(invitation.id) }) { Text(tr("Open invitation")) }
+                }, border = BorderStroke(1.dp, palette.accent)) { Text(tr("Resume responder journey"), color = palette.accent) }
+            } else OutlinedButton(onClick = { openInvitation(invitation.id) }, border = BorderStroke(1.dp, palette.accent)) {
+                Text(tr("Open invitation"), color = palette.accent)
+            }
+        }
         }
         }
     }
+    }
 }
 
-/** Responder tab without a server-backed session: same artwork, no invented invitations or availability. */
+/** Responder tab without a server-backed session: the same header and map, no invented invitations or availability. */
 @Composable
 fun ResponderUnavailable() {
     val palette = maitriPalette()
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
     Column(Modifier.fillMaxSize().background(palette.background).statusBarsPadding()
         .verticalScroll(rememberScrollState()).padding(bottom = LocalFloatingNavBarPadding.current)) {
-        Image(painterResource(if (palette.dark) R.drawable.maitri_dark_responder else R.drawable.maitri_light_responder),
-            tr("Nearby support. Responder. Illustrative map."), Modifier.fillMaxWidth().aspectRatio(390f / 466f))
+        ResponderHeader(palette)
+        ResponderMapCard(palette, available = false, requestPermission = {
+            permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        })
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)
             .background(palette.surface, RoundedCornerShape(22.dp)).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -305,5 +333,15 @@ fun ResponderUnavailable() {
             Text(tr("Responder availability and invitations need a signed-in account connected to the Maitri server. ") +
                 tr("Nothing is shared and no requests are received on this screen."), color = palette.secondary)
         }
+    }
+}
+
+@Composable
+internal fun SwitchRow(label: String, checked: Boolean, enabled: Boolean, p: MaitriPalette, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        .toggleable(value = checked, enabled = enabled, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onChange),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), color = if (enabled) p.primary else p.secondary, fontSize = 15.sp)
+        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }

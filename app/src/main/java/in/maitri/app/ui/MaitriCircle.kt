@@ -5,7 +5,6 @@ import `in`.maitri.app.tr
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -118,9 +117,10 @@ internal fun MaitriCircleContent(
     // Multi-number picker dialog state when importing from phone
     var multiNumberOptions by remember { mutableStateOf<Pair<String, List<ContactPhoneEntry>>?>(null) }
 
-    // Pick contact from system contacts provider (does not require broad READ_CONTACTS)
+    // Android's phone-number picker: the user picks one number, and Maitri may read just that row (no READ_CONTACTS).
+    // The plain contact picker (PickContact) only grants the contact itself, so its numbers can't be read.
     val contactPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickContact()
+        contract = ContactPickerHelper.PickPhoneNumber
     ) { uri: Uri? ->
         if (uri != null) {
             val resolved = ContactPickerHelper.resolvePickedContact(context, uri)
@@ -794,7 +794,7 @@ private fun ContactFormDialog(
                                 text = rel,
                                 fontSize = 11.sp,
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selected) Color.White else palette.primary
+                                color = if (selected) palette.onAccent else palette.primary
                             )
                         }
                     }
@@ -854,7 +854,7 @@ private fun ContactFormDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Text(tr("Save"), color = Color.White, fontWeight = FontWeight.Bold)
+                Text(tr("Save"), color = palette.onAccent, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
