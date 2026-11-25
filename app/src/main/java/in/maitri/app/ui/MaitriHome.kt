@@ -257,10 +257,12 @@ fun MaitriBottomBar(currentRoute: String?, onTabSelected: (String) -> Unit, modi
         Triple("Profile", tr("Profile"), R.drawable.maitri_profile))
     // The background runs down behind the system navigation buttons, which are transparent edge-to-edge
     // (3-button navigation on Xiaomi and others); otherwise content shows through under the dock.
-    Column(modifier.fillMaxWidth().background(p.background).navigationBarsPadding().padding(horizontal = 24.dp)) {
-        HorizontalDivider(color = p.divider, thickness = 1.dp)
+    Column(modifier.fillMaxWidth().background(p.background).navigationBarsPadding()) {
+        // One continuous 1 dp line, edge to edge, directly on top of the tabs (shared by every tab). The bar's opaque
+        // background starts right under it, so scrolled content passes beneath with no gap or second line.
+        HorizontalDivider(Modifier.fillMaxWidth(), color = p.divider, thickness = 1.dp)
         // At least the design's 62 dp, taller when large text needs it (the content's bottom padding follows).
-        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).heightIn(min = 62.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp).height(IntrinsicSize.Min).heightIn(min = 62.dp)) {
             items.forEach { (route, label, icon) ->
                 val selected = currentRoute == route
                 Column(Modifier.weight(1f).fillMaxHeight().selectable(selected, onClick = { onTabSelected(route) })
