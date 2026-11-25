@@ -794,7 +794,7 @@ private fun ContactFormDialog(
                                 text = rel,
                                 fontSize = 11.sp,
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selected) Color.White else palette.primary
+                                color = if (selected) palette.onAccent else palette.primary
                             )
                         }
                     }
@@ -854,7 +854,7 @@ private fun ContactFormDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = palette.accent),
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Text(tr("Save"), color = Color.White, fontWeight = FontWeight.Bold)
+                Text(tr("Save"), color = palette.onAccent, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

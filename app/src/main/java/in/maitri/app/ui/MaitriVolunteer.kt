@@ -515,7 +515,7 @@ internal fun MaitriVolunteerContent(
                         Icon(
                             imageVector = Icons.Rounded.Check,
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = p.onAccent,
                             modifier = Modifier.size(12.dp)
                         )
                     }

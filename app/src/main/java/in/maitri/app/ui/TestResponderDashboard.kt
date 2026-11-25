@@ -61,15 +61,17 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
             fullScreenAllowed = `in`.maitri.app.notification.NotificationHelper.canUseFullScreen(context)
         }
     }
+    val palette = maitriPalette()
     if (explainBackground) androidx.compose.material3.AlertDialog(onDismissRequest = { explainBackground = false },
+        containerColor = palette.surface, titleContentColor = palette.primary, textContentColor = palette.secondary,
         title = { Text(tr("Get requests when Maitri is closed?")) },
         text = { Text(tr("While you're Available, Maitri will share your location with the server about every 15 minutes, even when the app is closed, so it can ask you to help someone nearby. ") +
             tr("Nobody sees your location unless you accept a request. On the next screen, choose \"Allow all the time\". Turn Available off at any time to stop.")) },
         confirmButton = { androidx.compose.material3.TextButton(onClick = {
             explainBackground = false
             if (android.os.Build.VERSION.SDK_INT >= 29) backgroundPermission.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-        }) { Text(tr("Continue")) } },
-        dismissButton = { androidx.compose.material3.TextButton(onClick = { explainBackground = false }) { Text(tr("Not now")) } })
+        }) { Text(tr("Continue"), color = palette.accent, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold) } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = { explainBackground = false }) { Text(tr("Not now"), color = palette.accent) } })
 
     LaunchedEffect(uid, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -229,7 +231,6 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
         }
     }
 
-    val palette = maitriPalette()
     Column(Modifier.fillMaxSize().background(palette.background).statusBarsPadding()
         .verticalScroll(rememberScrollState()).padding(bottom = LocalFloatingNavBarPadding.current)) {
         Image(painterResource(if (palette.dark) R.drawable.maitri_dark_responder else R.drawable.maitri_light_responder),
@@ -238,38 +239,44 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
             .background(palette.surface, RoundedCornerShape(22.dp)).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (applicationStatus in setOf("NOT_STARTED", "DRAFT", "REJECTED")) {
-            OutlinedButton(onClick = onApply) { Text(tr("Volunteer application")) }
+            OutlinedButton(onClick = onApply, border = BorderStroke(1.dp, palette.accent)) {
+                Text(tr("Volunteer application"), color = palette.accent)
+            }
         }
-        Text(tr("Community responder"))
+        Text(tr("Community responder"), color = palette.primary)
         Switch(checked = profile?.optedIn == true, enabled = profile != null && !busy,
             onCheckedChange = { update(it, false) })
-        Text(tr("Available for nearby requests"))
+        Text(tr("Available for nearby requests"), color = palette.primary)
         Switch(checked = profile?.available == true, enabled = profile?.optedIn == true && !busy,
             onCheckedChange = { update(true, it) })
         if (profile?.available == true && !permitted) {
             Button(onClick = { permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION)) }) { Text(tr("Allow location")) }
+                Manifest.permission.ACCESS_COARSE_LOCATION)) },
+                colors = ButtonDefaults.buttonColors(containerColor = palette.accent, contentColor = palette.onAccent)) { Text(tr("Allow location")) }
         }
         // Reachable while Maitri is closed: only with the volunteer's explicit "Allow all the time".
         if (profile?.available == true && permitted && !backgroundAllowed) {
-            Text(tr("You'll only get requests while Maitri is open."), fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-            Text(tr("To get SOS requests when Maitri is closed, allow location all the time."))
-            OutlinedButton(onClick = { explainBackground = true }) { Text(tr("Get requests when Maitri is closed")) }
+            Text(tr("You'll only get requests while Maitri is open."), color = palette.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+            Text(tr("To get SOS requests when Maitri is closed, allow location all the time."), color = palette.secondary)
+            OutlinedButton(onClick = { explainBackground = true }, border = BorderStroke(1.dp, palette.accent)) {
+                Text(tr("Get requests when Maitri is closed"), color = palette.accent)
+            }
         } else if (profile?.available == true && backgroundAllowed) {
-            Text(tr("You'll get nearby SOS requests even when Maitri is closed. Turn Available off to stop sharing your location."))
+            Text(tr("You'll get nearby SOS requests even when Maitri is closed. Turn Available off to stop sharing your location."), color = palette.secondary)
         }
         // Android 14+: without this, a request on a sleeping phone only waits in the notification shade.
         if (profile?.available == true && !fullScreenAllowed) {
-            Text(tr("Let SOS requests wake your screen"), fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-            Text(tr("Your phone currently keeps requests in the notification shade while the screen is off. Allow full-screen notifications for Maitri so a request lights up your screen."))
-            OutlinedButton(onClick = { `in`.maitri.app.notification.NotificationHelper.openFullScreenSettings(context) }) {
-                Text(tr("Allow full-screen alerts"))
+            Text(tr("Let SOS requests wake your screen"), color = palette.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+            Text(tr("Your phone currently keeps requests in the notification shade while the screen is off. Allow full-screen notifications for Maitri so a request lights up your screen."), color = palette.secondary)
+            OutlinedButton(onClick = { `in`.maitri.app.notification.NotificationHelper.openFullScreenSettings(context) },
+                border = BorderStroke(1.dp, palette.accent)) {
+                Text(tr("Allow full-screen alerts"), color = palette.accent)
             }
         }
-        if (preferenceMessage.isNotEmpty()) Text(preferenceMessage)
-        locationStatusMessage?.let { Text(it) }
-        Text(tr("Invitations"))
-        if (inbox.isEmpty()) Text(if (inboxLoaded) tr("No current invitations") else tr("Checking invitations…"))
+        if (preferenceMessage.isNotEmpty()) Text(preferenceMessage, color = palette.secondary)
+        locationStatusMessage?.let { Text(it, color = palette.secondary) }
+        Text(tr("Invitations"), color = palette.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+        if (inbox.isEmpty()) Text(if (inboxLoaded) tr("No current invitations") else tr("Checking invitations…"), color = palette.secondary)
         for (invitation in inbox) {
             if (invitation.status == "ACCEPTED") {
                 OutlinedButton(enabled = !busy, onClick = {
@@ -283,8 +290,10 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
                         catch (_: Exception) { preferenceMessage = tr("Could not confirm responder access.") }
                         finally { busy = false }
                     }
-                }) { Text(tr("Resume responder journey")) }
-            } else OutlinedButton(onClick = { openInvitation(invitation.id) }) { Text(tr("Open invitation")) }
+                }, border = BorderStroke(1.dp, palette.accent)) { Text(tr("Resume responder journey"), color = palette.accent) }
+            } else OutlinedButton(onClick = { openInvitation(invitation.id) }, border = BorderStroke(1.dp, palette.accent)) {
+                Text(tr("Open invitation"), color = palette.accent)
+            }
         }
         }
     }

@@ -147,8 +147,11 @@ fun MaitriTheme(
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,
-            shapes = Shapes,
-            content = content
-        )
+            shapes = Shapes
+        ) {
+            // Text and icons outside a Material Surface otherwise default to black, which is unreadable in dark mode
+            // (the Responder tab's labels). The theme's on-background colour is the default for every screen.
+            CompositionLocalProvider(LocalContentColor provides colorScheme.onBackground, content = content)
+        }
     }
 }

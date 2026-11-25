@@ -46,6 +46,12 @@ internal data class MaitriPalette(val dark: Boolean) {
     val card = Color(if (dark) 0xFF36232F else 0xFFFCE8ED)
     val surface = Color(if (dark) 0xFF28212A else 0xFFFFFFFF)
     val divider = Color(if (dark) 0xFF48323F else 0xFFF2DCE3)
+    /** Text and icons on an accent fill: white on raspberry (6.2:1), dark on pink (9.2:1). White on pink is 1.9:1. */
+    val onAccent = if (dark) background else Color.White
+    /** Approved-volunteer green: 0F7A4D on white is 5.4:1; 6EE7A8 on the dark surface is 10.2:1. */
+    val verified = Color(if (dark) 0xFF6EE7A8 else 0xFF0F7A4D)
+    /** Under-review amber: B45309 on white is 5.0:1; FCD34D on the dark surface is 10.9:1. */
+    val pending = Color(if (dark) 0xFFFCD34D else 0xFFB45309)
 }
 @Composable
 internal fun maitriPalette(): MaitriPalette {

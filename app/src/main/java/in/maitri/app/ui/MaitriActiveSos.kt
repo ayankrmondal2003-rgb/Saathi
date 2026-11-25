@@ -489,9 +489,9 @@ fun MaitriActiveSos(
                     colors = ButtonDefaults.buttonColors(containerColor = p.accent)
                 ) {
                     if (isVerifyingPin) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(color = p.onAccent, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                     } else {
-                        Text(tr("Confirm End SOS"), color = Color.White, fontWeight = FontWeight.Bold)
+                        Text(tr("Confirm End SOS"), color = p.onAccent, fontWeight = FontWeight.Bold)
                     }
                 }
             },
