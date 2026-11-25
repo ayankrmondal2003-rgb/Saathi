@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     environment: Literal["development", "test", "beta", "production"] = "development"
     # Sentry project DSN for server error reports; unset means no reporting.
     sentry_dsn: SecretStr | None = None
+    # SENTRY_TEST=1: send one test message to Sentry at startup, to check reports arrive. Remove it afterwards.
+    sentry_test: bool = False
     # Firebase web app config for the /admin sign-in page (public values from the Firebase console).
     firebase_web_api_key: str | None = None
     firebase_auth_domain: str | None = None

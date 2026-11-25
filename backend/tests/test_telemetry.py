@@ -48,3 +48,16 @@ def test_sentry_is_off_without_a_dsn_and_safe_with_one():
         assert options["traces_sample_rate"] == 0.0 and options["max_request_body_size"] == "never"
     finally:
         sentry_sdk.init(dsn=None)
+
+
+def test_sentry_test_switch_sends_one_message_at_startup(monkeypatch):
+    sent = []
+    monkeypatch.setattr(sentry_sdk, "capture_message", lambda message, level=None: sent.append((message, level)))
+    try:
+        dsn = SecretStr("https://public@o0.ingest.sentry.io/0")
+        init_sentry(settings(sentry_dsn=dsn, environment="test"))
+        assert sent == []
+        init_sentry(settings(sentry_dsn=dsn, environment="test", sentry_test=True))
+        assert sent == [("Sentry test from Maitri server (SENTRY_TEST=1)", "warning")]
+    finally:
+        sentry_sdk.init(dsn=None)

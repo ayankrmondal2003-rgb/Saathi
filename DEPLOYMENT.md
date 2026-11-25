@@ -137,6 +137,7 @@ The free stack runs **without Redis**. With `REDIS_URL` unset, realtime events a
 | `PUBLIC_URL` | beta | The service URL, e.g. `https://surakshanet-api.onrender.com` (no trailing slash). Used in live links |
 | `MEDICAL_NOTES_KEY` | beta | 32 random bytes, base64 (`python -c "import secrets,base64; print(base64.b64encode(secrets.token_bytes(32)).decode())"`). Encrypts medical notes. **Keep a copy**: losing or changing it makes saved notes unreadable |
 | `SENTRY_DSN` | no | Sentry project DSN (FastAPI platform). Errors only, scrubbed of personal data. Unset = no reporting |
+| `SENTRY_TEST` | no | `1` sends one test message to Sentry at startup, to check reports arrive. Remove it afterwards |
 | `FIREBASE_WEB_API_KEY` | for `/admin` | Firebase console → Project settings → Your apps → Web app → `apiKey`. Also add the Render host under Authentication → Settings → Authorized domains |
 | `TEST_ACCOUNT_UIDS` | development | JSON array of allowed test UIDs (secret). Ignored when `ENVIRONMENT=beta` |
 | `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | for uploads | From step 3 (secrets). Unset = uploads return 503 |
