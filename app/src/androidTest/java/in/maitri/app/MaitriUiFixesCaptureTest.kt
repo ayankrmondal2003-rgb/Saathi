@@ -49,15 +49,22 @@ class MaitriUiFixesCaptureTest {
                 ResponderHeader(p)
                 VolunteerStatusBadge(p, status, "2026-11-20T10:30:00+05:30",
                     "The police certificate is older than six months. Please upload a recent one.", {},
-                    Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp))
+                    Modifier.padding(horizontal = 24.dp))
+                Spacer(Modifier.height(12.dp))
                 MaitriMap(listOf(MapMarker(28.6139, 77.2090, MarkerKind.YOU)), "", Modifier.fillMaxWidth()
                     .padding(horizontal = 24.dp).height(300.dp), accuracyMeters = 35.0,
                     rangeMeters = if (available) RESPONDER_RANGE_METERS else null, alwaysShowAccuracy = true)
-                Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)
-                    .background(p.surface, RoundedCornerShape(22.dp)).padding(16.dp)) {
-                    SwitchRow("Community responder", true, true, p) {}
-                    SwitchRow("Available for nearby requests", available, true, p) {}
-                }
+                Spacer(Modifier.height(12.dp))
+                ResponderCard(p) { ToggleRow(p, "Community responder", "Let Maitri ask you to help people near you.", true, true) {} }
+                Spacer(Modifier.height(12.dp))
+                ResponderCard(p) { ToggleRow(p, "Available for nearby requests", "Get SOS requests from within 1 km of you.", available, true) {} }
+                Spacer(Modifier.height(12.dp))
+                RequestAlertsCard(p, listOf(AlertCheck("Notifications", true, "Maitri can alert you."),
+                    AlertCheck("Lock-screen alert", available, if (available) "Requests can wake your screen."
+                        else "Requests wait in the notification shade while the screen is off.", "Fix") {},
+                    AlertCheck("Battery", !available, "Battery saving can delay requests.", "Fix") {}))
+                Spacer(Modifier.height(12.dp))
+                HowRespondingWorksCard(p)
             }
             MaitriBottomBar("Responder", {}, Modifier.align(Alignment.BottomCenter))
         }

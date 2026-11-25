@@ -241,78 +241,130 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
         }
     }
 
+    // "Request alerts" checks, re-read when the user returns from a settings page.
+    var notificationsOn by remember { mutableStateOf(androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()) }
+    var batteryOk by remember { mutableStateOf(batteryUnrestricted(context)) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        notificationsOn = androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+    }
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            notificationsOn = androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+            batteryOk = batteryUnrestricted(context)
+        }
+    }
+    val bold = androidx.compose.ui.text.font.FontWeight.SemiBold
+    val available = profile?.available == true
+
     PullToRefreshBox(isRefreshing = refreshing, modifier = Modifier.fillMaxSize().background(palette.background),
         onRefresh = { scope.launch { refreshing = true; try { load(fullProfile = true) } finally { refreshing = false } } }) {
     Column(Modifier.fillMaxSize().statusBarsPadding()
-        .verticalScroll(rememberScrollState()).padding(bottom = LocalFloatingNavBarPadding.current)) {
+        .verticalScroll(rememberScrollState()).padding(bottom = LocalFloatingNavBarPadding.current),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ResponderHeader(palette)
+        // Volunteer status card (Verified / Under review / Not approved / Apply).
         VolunteerStatusBadge(palette, volunteer?.status, volunteer?.reviewedAt, volunteer?.reviewerNotes, onApply,
-            Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp))
-        ResponderMapCard(palette, available = profile?.available == true, requestPermission = {
+            Modifier.padding(horizontal = 24.dp))
+        // Live map card.
+        ResponderMapCard(palette, available = available, requestPermission = {
             permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         })
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)
-            .background(palette.surface, RoundedCornerShape(22.dp)).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (profile == null && preferenceMessage.isEmpty()) {
-            MaitriLoader(Modifier.fillMaxWidth().padding(vertical = 16.dp), message = tr("Checking your responder settings…"),
-                logoSize = 48.dp)
+            ResponderCard(palette) {
+                MaitriLoader(Modifier.fillMaxWidth().padding(vertical = 16.dp), message = tr("Checking your responder settings…"),
+                    logoSize = 48.dp)
+            }
         } else {
-        // Label and switch on one row (as on the Circle tab); the row is the touch target.
-        SwitchRow(tr("Community responder"), profile?.optedIn == true, profile != null && !busy, palette) { update(it, false) }
-        SwitchRow(tr("Available for nearby requests"), profile?.available == true, profile?.optedIn == true && !busy, palette) {
-            update(true, it)
-        }
-        if (profile?.available == true && !permitted) {
-            Button(onClick = { permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION)) },
-                colors = ButtonDefaults.buttonColors(containerColor = palette.accent, contentColor = palette.onAccent)) { Text(tr("Allow location")) }
-        }
-        // Reachable while Maitri is closed: only with the volunteer's explicit "Allow all the time".
-        if (profile?.available == true && permitted && !backgroundAllowed) {
-            Text(tr("You'll only get requests while Maitri is open."), color = palette.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-            Text(tr("To get SOS requests when Maitri is closed, allow location all the time."), color = palette.secondary)
-            OutlinedButton(onClick = { explainBackground = true }, border = BorderStroke(1.dp, palette.accent)) {
-                Text(tr("Get requests when Maitri is closed"), color = palette.accent)
+            // "Community responder" card.
+            ResponderCard(palette) {
+                ToggleRow(palette, tr("Community responder"), tr("Let Maitri ask you to help people near you."),
+                    profile?.optedIn == true, profile != null && !busy) {
+                    // Opting in on Android 13+: notifications must be allowed, or requests can't reach this phone.
+                    if (it && android.os.Build.VERSION.SDK_INT >= 33 && !notificationsOn)
+                        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    update(it, false)
+                }
             }
-        } else if (profile?.available == true && backgroundAllowed) {
-            Text(tr("You'll get nearby SOS requests even when Maitri is closed. Turn Available off to stop sharing your location."), color = palette.secondary)
-        }
-        // Android 14+: without this, a request on a sleeping phone only waits in the notification shade.
-        if (profile?.available == true && !fullScreenAllowed) {
-            Text(tr("Let SOS requests wake your screen"), color = palette.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-            Text(tr("Your phone currently keeps requests in the notification shade while the screen is off. Allow full-screen notifications for Maitri so a request lights up your screen."), color = palette.secondary)
-            OutlinedButton(onClick = { `in`.maitri.app.notification.NotificationHelper.openFullScreenSettings(context) },
-                border = BorderStroke(1.dp, palette.accent)) {
-                Text(tr("Allow full-screen alerts"), color = palette.accent)
+            // "Available for nearby requests" card.
+            ResponderCard(palette) {
+                ToggleRow(palette, tr("Available for nearby requests"), tr("Get SOS requests from within 1 km of you."),
+                    available, profile?.optedIn == true && !busy) { update(true, it) }
+                if (available && !permitted) {
+                    Button(onClick = { permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION)) },
+                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent, contentColor = palette.onAccent)) { Text(tr("Allow location")) }
+                }
+                if (preferenceMessage.isNotEmpty()) Text(preferenceMessage, color = palette.secondary, fontSize = 12.sp)
+                locationStatusMessage?.let { Text(it, color = palette.secondary, fontSize = 12.sp) }
             }
-        }
-        if (preferenceMessage.isNotEmpty()) Text(preferenceMessage, color = palette.secondary)
-        locationStatusMessage?.let { Text(it, color = palette.secondary) }
-        Text(tr("Invitations"), color = palette.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-        if (inbox.isEmpty()) Text(if (inboxLoaded) tr("No current invitations") else tr("Checking invitations…"), color = palette.secondary)
-        for (invitation in inbox) {
-            if (invitation.status == "ACCEPTED") {
-                OutlinedButton(enabled = !busy, onClick = {
-                    busy = true
-                    scope.launch {
-                        try {
-                            val snapshot = BackendClient.api.snapshot(invitation.incidentId, account)
-                            if (snapshot.authorizesJourney(invitation.incidentId)) onResumeJourney(invitation.incidentId)
-                            else preferenceMessage = tr("Responder access has ended.")
-                        } catch (e: CancellationException) { throw e }
-                        catch (_: Exception) { preferenceMessage = tr("Could not confirm responder access.") }
-                        finally { busy = false }
+            // "Request alerts" card: can a request reach this phone right now?
+            if (profile?.optedIn == true) RequestAlertsCard(palette, listOf(
+                AlertCheck(tr("Notifications"), notificationsOn,
+                    if (notificationsOn) tr("Maitri can alert you.") else tr("Maitri can't alert you about requests."), tr("Fix")) {
+                    if (android.os.Build.VERSION.SDK_INT >= 33 && androidx.core.content.ContextCompat.checkSelfPermission(context,
+                            Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    else openAppNotificationSettings(context)
+                },
+                AlertCheck(tr("Lock-screen alert"), fullScreenAllowed,
+                    if (fullScreenAllowed) tr("Requests can wake your screen.")
+                    else tr("Requests wait in the notification shade while the screen is off."), tr("Fix")) {
+                    `in`.maitri.app.notification.NotificationHelper.openFullScreenSettings(context)
+                },
+                AlertCheck(tr("Battery"), batteryOk,
+                    if (batteryOk) tr("Maitri isn't held back by battery saving.")
+                    else tr("Battery saving can delay requests. Set Maitri's battery use to Unrestricted."), tr("Fix")) {
+                    openAppDetails(context)
+                },
+                AlertCheck(tr("Requests when Maitri is closed"), backgroundAllowed,
+                    if (backgroundAllowed) tr("You get requests even when Maitri is closed.")
+                    else tr("Allow location all the time to get requests when Maitri is closed."), tr("Fix")) {
+                    explainBackground = true
+                },
+            ))
+            // Recent requests, if any.
+            if (inbox.isNotEmpty()) ResponderCard(palette, title = tr("Recent requests")) {
+                for (invitation in inbox) {
+                    if (invitation.status == "ACCEPTED") {
+                        OutlinedButton(enabled = !busy, onClick = {
+                            busy = true
+                            scope.launch {
+                                try {
+                                    val snapshot = BackendClient.api.snapshot(invitation.incidentId, account)
+                                    if (snapshot.authorizesJourney(invitation.incidentId)) onResumeJourney(invitation.incidentId)
+                                    else preferenceMessage = tr("Responder access has ended.")
+                                } catch (e: CancellationException) { throw e }
+                                catch (_: Exception) { preferenceMessage = tr("Could not confirm responder access.") }
+                                finally { busy = false }
+                            }
+                        }, border = BorderStroke(1.dp, palette.accent)) { Text(tr("Resume responder journey"), color = palette.accent) }
+                    } else OutlinedButton(onClick = { openInvitation(invitation.id) }, border = BorderStroke(1.dp, palette.accent)) {
+                        Text(tr("Open invitation"), color = palette.accent)
                     }
-                }, border = BorderStroke(1.dp, palette.accent)) { Text(tr("Resume responder journey"), color = palette.accent) }
-            } else OutlinedButton(onClick = { openInvitation(invitation.id) }, border = BorderStroke(1.dp, palette.accent)) {
-                Text(tr("Open invitation"), color = palette.accent)
+                }
             }
+            // "How responding works" info card.
+            HowRespondingWorksCard(palette)
         }
-        }
-        }
+        Spacer(Modifier.height(4.dp))
     }
     }
+}
+
+/** Battery optimisation off for Maitri (Samsung "Unrestricted", Xiaomi "No restrictions"). */
+internal fun batteryUnrestricted(context: android.content.Context): Boolean =
+    (context.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager)
+        .isIgnoringBatteryOptimizations(context.packageName)
+
+internal fun openAppNotificationSettings(context: android.content.Context) {
+    runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+        .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)) }.onFailure { openAppDetails(context) }
+}
+
+/** App info: Battery (Unrestricted) lives here on Samsung, Xiaomi, Oppo/OnePlus and Vivo. */
+internal fun openAppDetails(context: android.content.Context) {
+    runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        android.net.Uri.fromParts("package", context.packageName, null))) }
 }
 
 /** Responder tab without a server-backed session: the same header and map, no invented invitations or availability. */
@@ -326,10 +378,9 @@ fun ResponderUnavailable() {
         ResponderMapCard(palette, available = false, requestPermission = {
             permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         })
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)
-            .background(palette.surface, RoundedCornerShape(22.dp)).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(tr("Responder mode unavailable"), color = palette.primary)
+        Spacer(Modifier.height(12.dp))
+        ResponderCard(palette) {
+            Text(tr("Responder mode unavailable"), color = palette.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
             Text(tr("Responder availability and invitations need a signed-in account connected to the Maitri server. ") +
                 tr("Nothing is shared and no requests are received on this screen."), color = palette.secondary)
         }
