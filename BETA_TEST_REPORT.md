@@ -85,8 +85,6 @@ Pushes are sent with FCM `priority=high` (`outbox_worker.py`), which is why they
 - **Request vibration:** only missing when the request overlaps the circle alert's vibration (someone who is both in
   the circle and a volunteer); a pure volunteer gets sound and vibration.
 - **Stale request:** fixed; requests clear when the SOS ends (circle members) or the invitation expires (5 min).
-- **Re-holding SOS after an interrupted SOS whose incident already ended** shows "That SOS session has already
-  ended. Hold SOS again…" first, so a second hold is needed. Worth smoothing.
 - **Measurement note:** `cmd notification cancel_all` does nothing on MIUI, so detection uses `notification_alert`
   events, not the shade.
 
