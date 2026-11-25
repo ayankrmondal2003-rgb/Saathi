@@ -132,7 +132,9 @@ fun MaitriInbox(uid: String, onBack: () -> Unit, onInvitation: (String) -> Unit)
         }
     }
 
-    Column(Modifier.fillMaxSize().background(p.background).statusBarsPadding().padding(horizontal = 24.dp)) {
+    val busy = rememberDelayedBusy(items == null && error == null, delayMillis = 0)
+    Box(Modifier.fillMaxSize().background(p.background)) {
+    Column(Modifier.fillMaxSize().blurWhenBusy(busy).background(p.background).statusBarsPadding().padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(20.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack, modifier = Modifier.size(44.dp).background(p.surface, CircleShape)) {
@@ -152,9 +154,7 @@ fun MaitriInbox(uid: String, onBack: () -> Unit, onInvitation: (String) -> Unit)
         error?.let { Text(it, color = p.accent, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp)) }
         val list = items
         when {
-            list == null && error == null -> Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
-                MaitriLoader()
-            }
+            list == null && error == null -> Unit  // MaitriBusyOverlay below
             list.isNullOrEmpty() -> Text(tr("Nothing here yet. SOS requests, circle alerts and check-in reminders show up here."),
                 Modifier.fillMaxWidth().padding(top = 48.dp), color = p.secondary, fontSize = 13.sp, textAlign = TextAlign.Center)
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -164,6 +164,8 @@ fun MaitriInbox(uid: String, onBack: () -> Unit, onInvitation: (String) -> Unit)
                 }
             }
         }
+    }
+    MaitriBusyOverlay(busy)
     }
 
     request?.let { id ->

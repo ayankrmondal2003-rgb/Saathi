@@ -206,10 +206,9 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
     }
 
     if (changeEmail) ChangeEmailDialog(p) { changeEmail = false }
-    SettingsBoard(if (p.dark) R.drawable.maitri_dark_14 else R.drawable.maitri_light_14, 788, modifier) {
-        if (loading) Box(settingsSlot(24, 136, 342, 520).background(p.background), contentAlignment = Alignment.Center) {
-            MaitriLoader(message = strings.getString(S.edit_loading))
-        }
+    val busy = rememberDelayedBusy(loading, delayMillis = 0)
+    Box(modifier.fillMaxSize()) {
+    SettingsBoard(if (p.dark) R.drawable.maitri_dark_14 else R.drawable.maitri_light_14, 788, Modifier.blurWhenBusy(busy)) {
         SettingsHeader(strings.getString(S.edit_title), strings.getString(S.settings_profile), strings.getString(S.settings_back), onBack)
 
         photo?.let {
@@ -258,6 +257,8 @@ fun MaitriEditProfile(user: UserProfile?, onBack: () -> Unit, modifier: Modifier
             if (saving) CircularProgressIndicator(Modifier.size(20.dp).semantics { contentDescription = strings.getString(S.edit_saving) }, color = onAccent, strokeWidth = 2.dp)
             else Text(strings.getString(S.edit_save), color = onAccent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         }
+    }
+    MaitriBusyOverlay(busy, strings.getString(S.edit_loading))
     }
 }
 
