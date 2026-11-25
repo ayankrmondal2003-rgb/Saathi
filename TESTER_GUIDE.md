@@ -1,6 +1,6 @@
 # Maitri beta — guide for testers
 
-Thank you for helping test **Maitri** (version 0.9.0-beta.1). Maitri lets you send an SOS to the people you trust,
+Thank you for helping test **Maitri** (version 0.9.1-beta.2). Maitri lets you send an SOS to the people you trust,
 share your live location with them, and lets verified volunteers nearby offer help.
 
 > **This is a beta, and the SOS is real.** When you hold the SOS button, the people in your circle get an urgent
@@ -12,7 +12,7 @@ share your live location with them, and lets verified volunteers nearby offer he
 
 1. Open the invite email from **Firebase App Distribution** on your Android phone (Android 8 or newer) and tap
    **Get started**. Sign in with the Google account the invite was sent to.
-2. Tap **Download** next to Maitri 0.9.0-beta.1. If Android asks, allow your browser to **install unknown apps**
+2. Tap **Download** next to Maitri 0.9.1-beta.2. If Android asks, allow your browser to **install unknown apps**
    (Settings asks once; you can turn it off again afterwards).
 3. Open **Maitri** and tap **Get started**, then **Continue with Google** (or use email and password).
 

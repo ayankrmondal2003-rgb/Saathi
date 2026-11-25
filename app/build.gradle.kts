@@ -54,9 +54,9 @@ android {
         targetSdk = 37
         // versionCode = major*10000 + minor*100 + patch. A later beta of the same version must bump patch
         // (0.9.1-beta.2 -> 901), because Android rejects an update with an equal or lower versionCode.
-        val (major, minor, patch) = listOf(0, 9, 0)
+        val (major, minor, patch) = listOf(0, 9, 1)
         versionCode = major * 10000 + minor * 100 + patch
-        versionName = "$major.$minor.$patch-beta.1"
+        versionName = "$major.$minor.$patch-beta.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
