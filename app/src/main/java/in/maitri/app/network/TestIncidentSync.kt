@@ -263,10 +263,16 @@ class TestIncidentSync(private val context: Context, private val session: () -> 
         if (uid == null || !active(uid, session().id) || worker?.isActive == true) return
         val key = session().id
         worker = scope.launch {
+            var quickRetries = 0
             while (active(uid, key)) {
                 when (recover(uid, key, force = false)) {
                     UploadResult.DONE -> return@launch
-                    UploadResult.RETRY -> {
+                    // Not yet on the server (e.g. it was asleep): try again in 5 s for the first two minutes,
+                    // instead of WorkManager's doubling waits, so an SOS is never held back for minutes.
+                    UploadResult.RETRY -> if (getActiveIncidentId(uid) == null && quickRetries < 24) {
+                        quickRetries++
+                        delay(5000)
+                    } else {
                         val work = OneTimeWorkRequestBuilder<IncidentUploadWorker>()
                             .setInputData(workDataOf("uid" to uid, "session" to key))
                             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())

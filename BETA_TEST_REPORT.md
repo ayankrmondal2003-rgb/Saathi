@@ -64,14 +64,29 @@ Pushes are sent with FCM `priority=high` (`outbox_worker.py`), which is why they
 4. Close-together markers zoomed the map past street level, and "Medical notes ›" overlapped the coordinates at 150%
    text on screen 07. Fixed (in the next build).
 
+### Follow-up, 2026-11-25 morning
+
+- **Screen wake and vibration confirmed** with B as a pure volunteer (A's circle emptied): B's screen switched on and
+  Maitri opened over the lock screen 0.1 s after the request (full-screen alerts allowed in the new Responder card);
+  the request logged buzz=1, beep=1. The missing vibration earlier was the overlap with the circle alert.
+- **SOS stuck on "Connecting…" for 11 minutes (fixed).** Cause: an SOS still open when an update force-stopped
+  Maitri left a saved session marked "shared" whose server confirmation lived only in memory; `canStart()` then
+  refused to restart tracking until the server re-confirmed it, and nothing restarted the send loop. The same happens
+  after a reboot or a dead battery mid-SOS. Fix: while an SOS waits for its server incident, Home restarts the sync and
+  tracking every 5 s; the send loop retries every 5 s (not doubling waits) for two minutes before WorkManager takes
+  over; after 20 s the screen says "Still trying to reach Maitri… If you need help now, call 112."; the server now
+  logs failed `POST /api/incidents`. Verified on phone A: SOS open → update installed over it (force-stop) → SOS held
+  again → "SOS is active" in 6 s with the location service running.
+- The server was kept awake by the cron-job.org keep-alive, so the server wasn't the cause.
+
 ### Open
 
-- **Screen wake:** on Android 14 the full-screen alert permission is off unless the user allows it, so a sleeping
-  phone shows the request only in the shade (with sound). The app should ask volunteers to allow it.
-- **Request vibration:** the request beeps but doesn't vibrate when it arrives during the circle alert's ~7-second
-  vibration (B is in A's circle *and* a volunteer). A volunteer outside the circle gets only the request; not yet
-  confirmed on a phone.
-- **Stale request:** the "Someone needs help" notification stays in the shade after the SOS ends.
+- **Screen wake:** fixed by asking volunteers to allow full-screen alerts (Android 14 default is off); confirmed above.
+- **Request vibration:** only missing when the request overlaps the circle alert's vibration (someone who is both in
+  the circle and a volunteer); a pure volunteer gets sound and vibration.
+- **Stale request:** fixed; requests clear when the SOS ends (circle members) or the invitation expires (5 min).
+- **Re-holding SOS after an interrupted SOS whose incident already ended** shows "That SOS session has already
+  ended. Hold SOS again…" first, so a second hold is needed. Worth smoothing.
 - **Measurement note:** `cmd notification cancel_all` does nothing on MIUI, so detection uses `notification_alert`
   events, not the shade.
 

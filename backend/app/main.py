@@ -139,7 +139,7 @@ def create_app(settings=None, *, initialize_firebase=True):
         response = await call_next(request)
         route = getattr(request.scope.get("route"), "path", "")
         if response.status_code >= 400 and route in {
-            "/api/incidents/{incident_id}/resolve", "/api/incidents/{incident_id}/location",
+            "/api/incidents", "/api/incidents/{incident_id}/resolve", "/api/incidents/{incident_id}/location",
             "/api/responders/location", "/api/devices/{device_id}/test-alert",
         }:
             logging.getLogger("surakshanet").warning("Request failed %s %s %d",

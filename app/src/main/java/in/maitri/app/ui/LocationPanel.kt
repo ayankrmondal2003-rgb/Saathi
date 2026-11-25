@@ -46,7 +46,13 @@ fun startDemoTracking(context: Context, uid: String) {
     val session = repo.session.value
     if (session.owner != uid || session.id.isEmpty() || session.running ||
         session.status == TrackingState.STARTING) return
-    if (!repo.sync.canStart(uid, session.id)) return
+    if (!repo.sync.canStart(uid, session.id)) {
+        // A session already shared with the server must be re-confirmed first (e.g. after the app was stopped
+        // mid-SOS): run the sync, and the caller's watchdog starts tracking once it's confirmed.
+        android.util.Log.i("MaitriSosSync", "Tracking waits for the server to confirm this SOS")
+        repo.sync.wake(uid)
+        return
+    }
     val next = when {
         !context.locationAllowed() -> TrackingState.PERMISSION_REQUIRED
         !context.locationEnabled() -> TrackingState.LOCATION_UNAVAILABLE
