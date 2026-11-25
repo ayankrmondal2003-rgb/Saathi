@@ -151,7 +151,7 @@ fun MaitriInbox(uid: String, onBack: () -> Unit, onInvitation: (String) -> Unit)
         val list = items
         when {
             list == null && error == null -> Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = p.accent)
+                MaitriLoader()
             }
             list.isNullOrEmpty() -> Text(tr("Nothing here yet. SOS requests, circle alerts and check-in reminders show up here."),
                 Modifier.fillMaxWidth().padding(top = 48.dp), color = p.secondary, fontSize = 13.sp, textAlign = TextAlign.Center)
@@ -223,7 +223,7 @@ internal fun CircleSessionViewer(uid: String, sessionId: String, dismiss: () -> 
                 error?.let { Text(it, color = p.accent) }
                 val s = session
                 when {
-                    s == null && error == null -> CircularProgressIndicator(color = p.accent)
+                    s == null && error == null -> MaitriLoader(Modifier.fillMaxWidth(), logoSize = 48.dp)
                     s == null -> Unit
                     s.kind == "CHECK_IN" -> Text(when {
                         s.status == "STOPPED" -> tr("They checked in. They're safe.")

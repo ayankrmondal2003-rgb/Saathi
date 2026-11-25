@@ -143,6 +143,7 @@ dependencies {
     // on phones without Vulkan, which includes the Android 8 emulator and many budget phones.
     implementation("org.maplibre.gl:android-sdk-opengl:13.7.1")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

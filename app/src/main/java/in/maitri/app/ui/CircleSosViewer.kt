@@ -108,7 +108,7 @@ internal fun CircleSosViewer(uid: String, incidentId: String, liveUrl: String?, 
                 error?.let { Text(it, color = p.accent, fontSize = 12.sp) }
                 val list = media
                 when {
-                    list == null && error == null -> CircularProgressIndicator(color = p.accent, modifier = Modifier.size(24.dp))
+                    list == null && error == null -> MaitriLoader(Modifier.fillMaxWidth(), logoSize = 40.dp)
                     list.isNullOrEmpty() -> Text(tr("Nothing yet. Anything they record during the SOS appears here."), fontSize = 12.sp)
                     else -> list.forEachIndexed { index, item ->
                         if (item.kind == "SOS_PHOTO") SosPhoto(account, item, p)

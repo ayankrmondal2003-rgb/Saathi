@@ -153,11 +153,16 @@ private fun SafetyNavigation(vm: SafetyViewModel, pendingInvitationId: String?, 
                                 onInvitationHandled = onInvitationHandled
                             )
                         } else {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                            // Loading the account (a cold server can take a minute): the loader with the existing message,
+                            // and Call 112 always reachable underneath, never behind the loader.
+                            Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                MaitriLoader(message = if (connecting) tr("Connecting to Maitri…") else null)
+                                Spacer(Modifier.height(32.dp))
+                                `in`.maitri.app.ui.Call112Button()
                             }
                         }
-                        AccountBanner(failure ?: if (connecting) tr("Connecting to Maitri…") else null,
+                        AccountBanner(failure ?: if (connecting && state.user?.uid == identity.uid) tr("Connecting to Maitri…") else null,
                             retry = if (failure != null) ({ attempt++ }) else null, signOut = if (failure != null) auth::logout else null,
                             modifier = Modifier.align(Alignment.TopCenter))
                     }
@@ -438,7 +443,9 @@ internal fun MainGraph(
                         }
                     }
                     val invitation = match
-                    if (invitation == null) CircularProgressIndicator() else MaitriIncoming(
+                    if (invitation == null) Box(Modifier.fillMaxSize().background(maitriPalette().background), contentAlignment = Alignment.Center) {
+                        MaitriLoader()
+                    } else MaitriIncoming(
                         invitation = invitation,
                         uid = uid,
                         onAccepted = { incId ->
