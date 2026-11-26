@@ -38,7 +38,7 @@ import java.io.File
  * (navigation/SafetyApp.kt): the Responder tab, the Inbox, a notification tap, the lock-screen Accept, the Responder
  * history, and an app restart during an active journey. Each one is captured in Light and Dark, and the map must sit
  * exactly on its card: corners rounded (page background outside the curve, not map) and nothing of the design's
- * illustrative map showing around its edges. Network only for map tiles; no account, no incident.
+ * illustrative map showing around its edges (its roads' round caps used to stick out past the card). Network only for map tiles; no account, no incident.
  * Files land in the app's external files dir under journey-entry/.
  */
 class JourneyEntryPointsScreenshotTest {
@@ -162,6 +162,19 @@ class JourneyEntryPointsScreenshotTest {
                         r.left + inset to r.bottom - 1 - inset, r.right - 1 - inset to r.bottom - 1 - inset)) {
                     val px = shot.getPixel(x.coerceIn(0, shot.width - 1), y.coerceIn(0, shot.height - 1))
                     if (!near(px, background)) problems += "$name: corner ($x,$y) is ${Integer.toHexString(px)}, not the page"
+                }
+                // Just outside the card, where the artwork's illustrative roads used to end in round caps (the "grey
+                // dots"): roads at x = 54 / 164 and y = 270 / 390 design units, the card at 24,140 and 342 wide.
+                val unit = r.width() / 342f
+                val outside = (4 * unit).toInt()
+                fun at(dx: Float) = r.left + (dx * unit).toInt()
+                fun atY(dy: Float) = r.top + (dy * unit).toInt()
+                for ((x, y) in listOf(at(30f) to r.top - outside, at(140f) to r.top - outside,
+                        at(30f) to r.bottom + outside, at(140f) to r.bottom + outside,
+                        r.left - outside to atY(130f), r.left - outside to atY(250f),
+                        r.right + outside to atY(130f), r.right + outside to atY(250f))) {
+                    val px = shot.getPixel(x.coerceIn(0, shot.width - 1), y.coerceIn(0, shot.height - 1))
+                    if (!near(px, background)) problems += "$name: outside the card ($x,$y) is ${Integer.toHexString(px)}, not the page"
                 }
             }
         }
