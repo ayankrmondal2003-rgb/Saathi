@@ -141,8 +141,6 @@ fun MaitriIncoming(
 
 @Composable
 internal fun MaitriIncomingContent(
-    self: OwnFix? = null,
-    areaMeters: Double? = null,
     p: MaitriPalette,
     approxLocality: String,
     approxDistance: String,
@@ -151,7 +149,10 @@ internal fun MaitriIncomingContent(
     errorMessage: String?,
     onAccept: () -> Unit,
     onDecline: () -> Unit,
-    dismissError: () -> Unit = {}
+    dismissError: () -> Unit = {},
+    // Before accepting: your position and the band's outer edge, for the approximate-area map. Never theirs.
+    self: OwnFix? = null,
+    areaMeters: Double? = null
 ) {
     EmergencyBoard(if (p.dark) R.drawable.maitri_dark_06 else R.drawable.maitri_light_06,
         tr("Someone needs help. Only accept if you can respond safely."), 816) {
