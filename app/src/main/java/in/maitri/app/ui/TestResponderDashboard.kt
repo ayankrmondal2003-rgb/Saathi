@@ -346,7 +346,7 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
             )) { PhoneTips(palette) }
             // Recent requests: open ones first, then the 3 latest finished (last 7 days), and a link to all of them.
             if (profile?.optedIn == true || !history?.items.isNullOrEmpty())
-                RecentRequestsCard(palette, history?.items, history?.summary?.total ?: 0, openRequest, onViewHistory)
+                RecentRequestsSection(palette, history?.items, history?.summary?.total ?: 0, openRequest, onViewHistory)
             // "How responding works" info card.
             HowRespondingWorksCard(palette)
         }

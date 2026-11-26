@@ -11,6 +11,8 @@ import `in`.maitri.app.ui.areaLabel
 import `in`.maitri.app.ui.historyGroup
 import `in`.maitri.app.ui.requestWhen
 import `in`.maitri.app.ui.responseLine
+import `in`.maitri.app.ui.summaryLine
+import `in`.maitri.app.network.ResponderHistorySummaryDto
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -75,7 +77,8 @@ class ResponderHistoryTest {
     @Test fun whereItWasIsApproximateAndNeverAPlace() {
         assertEquals("~450 m north-east of you", areaLabel(item("a", 1, area = ResponderAreaDto(450, "NE"))))
         assertEquals("~1.2 km west of you", areaLabel(item("b", 1, area = ResponderAreaDto(1200, "W"))))
-        assertEquals("~0 m from you", areaLabel(item("c", 1, area = ResponderAreaDto(0, null))))
+        assertEquals("Under 50 m from you", areaLabel(item("c", 1, area = ResponderAreaDto(0, null))))
+        assertEquals("Under 50 m from you", areaLabel(item("c2", 1, area = ResponderAreaDto(0, "S"))))
         // Declined or missed: only the band seen before answering.
         assertEquals("500 m – 1 km away", areaLabel(item("d", 1, "DECLINED", "ACTIVE", band = "500 m – 1 km")))
         assertEquals("Nearby", areaLabel(item("e", 1, "EXPIRED", band = null)))
@@ -94,5 +97,10 @@ class ResponderHistoryTest {
         assertEquals("You declined", responseLine(item("b", 1, "DECLINED", "ACTIVE"), now))
         assertEquals("Not answered in time", responseLine(item("c", 1, "EXPIRED"), now))
         assertFalse(responseLine(item("d", 1, "LEFT"), now).isBlank())
+    }
+
+    @Test fun practiceSosesAreShownApartFromHelpGiven() {
+        assertEquals("You've helped 4 times · Resolved 3", summaryLine(ResponderHistorySummaryDto(9, 4, 3, 0)))
+        assertEquals("You've helped 0 times · Resolved 0 · + 5 practice", summaryLine(ResponderHistorySummaryDto(7, 0, 0, 5)))
     }
 }

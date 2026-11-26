@@ -89,7 +89,7 @@ async def test_resolved_sos_shows_area_and_timeline_but_no_coordinates_or_identi
     assert item["area"] == {"distance_m": 450, "direction": "W"}
     assert item["distance_band"] == "Under 500 m"
     assert [entry["type"] for entry in item["timeline"]] == ["INVITED", "ACCEPTED", "ON_THE_WAY", "RESOLVED"]
-    assert page["summary"] == {"total": 1, "helped": 1, "resolved": 1}
+    assert page["summary"] == {"total": 1, "helped": 0, "resolved": 0, "practice": 1}
 
     # The helper's phone was told at once ("Incident resolved"), with ids only.
     async with sessions.begin() as db:
@@ -117,7 +117,7 @@ async def test_declined_and_missed_keep_only_the_distance_band(world):
         assert item["area"] is None and item["distance_band"] == "500 m – 1 km"
         assert item["accepted_at"] is None and item["duration_seconds"] is None
     assert [e["type"] for e in by_id[missed]["timeline"]] == ["INVITED", "MISSED", "RESOLVED"]
-    assert page["summary"] == {"total": 2, "helped": 0, "resolved": 0}
+    assert page["summary"] == {"total": 2, "helped": 0, "resolved": 0, "practice": 0}
 
 
 async def test_paging_filters_and_outcomes_over_many_requests(world):
@@ -194,7 +194,7 @@ async def test_paging_filters_and_outcomes_over_many_requests(world):
     assert kinds(await history(call, "helper", filter="resolved")) == ["resolved"]
     assert kinds(await history(call, "helper", filter="declined_missed")) == ["declined", "missed"]
     summary = (await history(call, "helper"))["summary"]
-    assert summary == {"total": 7, "helped": 5, "resolved": 1}
+    assert summary == {"total": 7, "helped": 0, "resolved": 0, "practice": 5}
     # One request by id (the app asks for this when an SOS ends).
     one = next(i for i, kind in expected.items() if kind == "resolved")
     only = (await history(call, "helper", incident_id=one))["items"]
@@ -232,3 +232,21 @@ async def test_active_requests_are_kept_by_retention(world):
         await cleanup(db, settings)
         # The SOS is still open: its requests stay (they prevent inviting the same volunteer twice).
         assert await db.scalar(text("SELECT count(*) FROM incident_invitations")) == 1
+
+
+async def test_practice_sos_is_not_counted_as_help(world):
+    call, sessions, _ = world
+    await enable(call, "helper", 300)
+    practice = await sos(call, "owner-practice")
+    await answer(call, "helper", practice, "ACCEPTED")
+    await resolve(call, "owner-practice", practice)
+    real = await sos(call, "owner-real")
+    async with sessions.begin() as db:  # the test server only accepts practice SOSes; make this one real
+        await db.execute(text("UPDATE incidents SET is_test = false WHERE id = :id"), {"id": real})
+    await answer(call, "helper", real, "ACCEPTED")
+    await resolve(call, "owner-real", real)
+    page = await history(call, "helper")
+    assert page["summary"] == {"total": 2, "helped": 1, "resolved": 1, "practice": 1}
+    assert {item["incident_id"]: item["is_test"] for item in page["items"]} == {practice: True, real: False}
+    # The filters still list practice SOSes (with their Practice tag); only the summary leaves them out.
+    assert len((await history(call, "helper", filter="resolved"))["items"]) == 2

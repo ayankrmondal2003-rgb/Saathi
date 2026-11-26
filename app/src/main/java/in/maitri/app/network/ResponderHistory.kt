@@ -18,7 +18,9 @@ data class ResponderHistoryPageDto(
 
 data class ResponderHistorySummaryDto(@SerializedName("total") val total: Int = 0,
                                       @SerializedName("helped") val helped: Int = 0,
-                                      @SerializedName("resolved") val resolved: Int = 0)
+                                      @SerializedName("resolved") val resolved: Int = 0,
+                                      /** Practice SOSes accepted: shown apart, never counted as help given. */
+                                      @SerializedName("practice") val practice: Int = 0)
 
 data class ResponderHistoryItemDto(
     @SerializedName("invitation_id") val invitationId: String,

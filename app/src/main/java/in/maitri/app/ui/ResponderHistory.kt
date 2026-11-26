@@ -27,6 +27,13 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,6 +84,7 @@ internal fun directionName(code: String?): String? = when (code) {
 /** "~450 m north-east of you" (accepted) or "Under 500 m away" (the band shown before answering). Never a place. */
 internal fun areaLabel(item: ResponderHistoryItemDto): String {
     val area = item.area
+    if (area != null && area.distanceMeters < 50) return tr("Under 50 m from you")
     if (area != null) {
         val distance = if (area.distanceMeters < 1000) "${area.distanceMeters} m"
             else "%.1f km".format(Locale.ROOT, area.distanceMeters / 1000.0)
@@ -136,8 +144,9 @@ internal fun RequestStatusPill(p: MaitriPalette, item: ResponderHistoryItemDto, 
     val (fill, ink) = when (status) {
         RequestStatus.ACTIVE, RequestStatus.NEW -> p.card to p.accent
         RequestStatus.RESOLVED -> green.copy(alpha = if (p.dark) 0.18f else 0.12f) to green
-        RequestStatus.DECLINED, RequestStatus.MISSED -> p.subtle to p.secondary
-        else -> p.divider.copy(alpha = 0.7f) to p.secondary
+        // Neutral greys, not the palette's blush: finished states shouldn't look like the pink "Active".
+        RequestStatus.DECLINED, RequestStatus.MISSED -> (if (p.dark) Color(0x14FFFFFF) else Color(0x0D000000)) to p.secondary
+        else -> (if (p.dark) Color(0x24FFFFFF) else Color(0x17000000)) to p.secondary
     }
     val text = when (status) {
         RequestStatus.ACTIVE -> {
@@ -152,15 +161,25 @@ internal fun RequestStatusPill(p: MaitriPalette, item: ResponderHistoryItemDto, 
         RequestStatus.DECLINED -> tr("Declined")
         RequestStatus.MISSED -> tr("Missed")
     }
-    Row(Modifier.background(fill, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        when (status) {
-            RequestStatus.ACTIVE, RequestStatus.NEW -> PulseDot(ink)
-            RequestStatus.RESOLVED -> Icon(Icons.Rounded.Check, null, Modifier.size(14.dp), tint = ink)
-            else -> Unit
+    val short = if (status == RequestStatus.RESOLVED) tr("Resolved · marked safe") else null
+    val hasIcon = status in setOf(RequestStatus.ACTIVE, RequestStatus.NEW, RequestStatus.RESOLVED)
+    val style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, lineHeight = 14.sp)
+    val measurer = rememberTextMeasurer()
+    // One line, never two: the shorter wording if the full one doesn't fit, then a slightly smaller font, then "…".
+    BoxWithConstraints {
+        val room = constraints.maxWidth - with(LocalDensity.current) { (20 + if (hasIcon) 18 else 0).dp.roundToPx() }
+        val label = if (short != null && measurer.measure(text, style, maxLines = 1).size.width > room) short else text
+        Row(Modifier.background(fill, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            when (status) {
+                RequestStatus.ACTIVE, RequestStatus.NEW -> PulseDot(ink)
+                RequestStatus.RESOLVED -> Icon(Icons.Rounded.Check, null, Modifier.size(14.dp), tint = ink)
+                else -> Unit
+            }
+            if (hasIcon) Spacer(Modifier.width(6.dp))
+            Text(label, color = ink, style = style, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+                autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 11.sp, stepSize = 0.25.sp))
         }
-        if (status in setOf(RequestStatus.ACTIVE, RequestStatus.NEW, RequestStatus.RESOLVED)) Spacer(Modifier.width(6.dp))
-        Text(text, color = ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, lineHeight = 14.sp)
     }
 }
 
@@ -188,33 +207,31 @@ internal fun IncidentCard(p: MaitriPalette, item: ResponderHistoryItemDto, now: 
         RequestStatus.NEW -> tr("Open request")
         else -> tr("View summary")
     }
-    Column(modifier.fillMaxWidth().background(p.surface, RoundedCornerShape(20.dp))
-        .clickable(role = Role.Button, onClickLabel = hint, onClick = onClick).padding(16.dp),
+    // Press feedback only while the finger is down (scale); no ripple or focus highlight that can stay behind.
+    Column(modifier.fillMaxWidth().pressScale().background(p.surface, RoundedCornerShape(20.dp))
+        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
+            role = Role.Button, onClickLabel = hint, onClick = onClick).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Stacked, not side by side, so nothing gets squeezed at large text sizes.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(tr("SOS request"), Modifier.weight(1f, fill = false), color = p.primary, fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold)
+            Text(tr("SOS request"), color = p.primary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             if (item.isTest) {
                 Spacer(Modifier.width(8.dp))
                 Text(tr("Practice"), Modifier.background(p.subtle, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 1.dp),
-                    color = p.secondary, fontSize = 10.sp)
+                    color = p.secondary, fontSize = 10.sp, maxLines = 1)
             }
-            Spacer(Modifier.weight(1f))
-            Text(requestWhen(item.invitedAt, now), color = p.secondary, fontSize = 11.sp)
         }
+        Text(requestWhen(item.invitedAt, now), color = p.secondary, fontSize = 12.sp)
         Text(areaLabel(item), color = p.secondary, fontSize = 12.sp)
         Text(responseLine(item, now), color = p.primary, fontSize = 12.sp)
         Spacer(Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            RequestStatusPill(p, item, now)
-            val ended = item.closedAt?.takeIf { status == RequestStatus.RESOLVED || status == RequestStatus.ENDED }
-            if (ended != null) {
-                Spacer(Modifier.width(8.dp))
-                Text(tr("Ended {0}", clockTime(ended)), color = p.secondary, fontSize = 11.sp)
-            }
-            Spacer(Modifier.weight(1f))
-            if (status == RequestStatus.ACTIVE || status == RequestStatus.NEW)
-                Text(hint + " ›", color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        RequestStatusPill(p, item, now)
+        val ended = item.closedAt?.takeIf { status == RequestStatus.RESOLVED || status == RequestStatus.ENDED }
+        val open = status == RequestStatus.ACTIVE || status == RequestStatus.NEW
+        if (ended != null || open) Row(verticalAlignment = Alignment.CenterVertically) {
+            if (ended != null) Text(tr("Ended {0}", clockTime(ended)), Modifier.weight(1f), color = p.secondary, fontSize = 11.sp)
+            else Spacer(Modifier.weight(1f))
+            if (open) Text(hint + " ›", color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -229,26 +246,32 @@ internal fun rememberTicker(periodMillis: Long = 30_000): Instant {
 
 // ---------- Responder tab: Recent requests ----------
 
+/**
+ * Responder tab "Recent requests": a section title, then one IncidentCard per request on the page background (the
+ * same cards, width and spacing as the History screen), then "View all history (N) ›".
+ */
 @Composable
-internal fun RecentRequestsCard(p: MaitriPalette, items: List<ResponderHistoryItemDto>?, total: Int,
-                                onOpen: (ResponderHistoryItemDto) -> Unit, onViewAll: () -> Unit) {
-    val now = rememberTicker()
-    ResponderCard(p, title = tr("Recent requests")) {
+internal fun RecentRequestsSection(p: MaitriPalette, items: List<ResponderHistoryItemDto>?, total: Int,
+                                   onOpen: (ResponderHistoryItemDto) -> Unit, onViewAll: () -> Unit,
+                                   now: Instant = rememberTicker()) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(CARD_GAP)) {
+        Text(tr("Recent requests"), Modifier.padding(top = 8.dp).semantics { heading() }, color = p.primary,
+            fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         val shown = items?.let { recentRequests(it, now) }
         when {
             shown == null -> MaitriLoader(Modifier.fillMaxWidth().padding(vertical = 8.dp), logoSize = 40.dp)
-            shown.isEmpty() -> Text(tr("No recent requests"), color = p.secondary, fontSize = 13.sp)
-            else -> shown.forEach { item ->
-                // Inside the white card: the incident cards sit on the page background.
-                IncidentCard(p, item, now, { onOpen(item) },
-                    Modifier.background(p.background, RoundedCornerShape(20.dp)))
-            }
+            shown.isEmpty() -> Text(tr("No recent requests"), Modifier.fillMaxWidth()
+                .background(p.surface, RoundedCornerShape(20.dp)).padding(16.dp), color = p.secondary, fontSize = 13.sp)
+            else -> shown.forEach { item -> key(item.invitationId) { IncidentCard(p, item, now, { onOpen(item) }) } }
         }
-        if (total > 0 || !shown.isNullOrEmpty()) TextButton(onClick = onViewAll, contentPadding = PaddingValues(0.dp)) {
-            Text(tr("View all history ({0}) ›", total), color = p.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        }
+        if (total > 0 || !shown.isNullOrEmpty()) Text(tr("View all history ({0}) ›", total),
+            Modifier.clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = onViewAll).padding(vertical = 6.dp),
+            color = p.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
 }
+
+/** The gap between incident cards, on the Responder tab and the History screen alike. */
+internal val CARD_GAP = 10.dp
 
 // ---------- Summary of a finished request ----------
 
@@ -434,6 +457,22 @@ fun MaitriResponderHistory(uid: String, onBack: () -> Unit, onResumeJourney: (St
     } }
     LaunchedEffect(nearEnd, state.cursor) { if (nearEnd && state.cursor != null) more() }
 
+    ResponderHistoryBody(p, state.summary, filter, { filter = it }, error, refreshing,
+        { scope.launch { refreshing = true; try { firstPage() } finally { refreshing = false } } },
+        state.loaded, state.items, state.days, state.cursor != null, list, now, open, onBack)
+    message?.let { AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { message = null }, containerColor = p.surface,
+        textContentColor = p.primary, text = { Text(it) },
+        confirmButton = { TextButton(onClick = { message = null }) { Text(tr("Close"), color = p.accent) } }) }
+}
+
+/** The History screen's layout, without loading: what the screenshot tests draw with fixed data. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ResponderHistoryBody(p: MaitriPalette, summary: ResponderHistorySummaryDto?, filter: HistoryFilter,
+                                  onFilter: (HistoryFilter) -> Unit, error: String?, refreshing: Boolean, onRefresh: () -> Unit,
+                                  loaded: Boolean, items: List<ResponderHistoryItemDto>, days: Int, hasMore: Boolean,
+                                  list: androidx.compose.foundation.lazy.LazyListState, now: Instant,
+                                  onOpen: (ResponderHistoryItemDto) -> Unit, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(p.background).statusBarsPadding()) {
         Spacer(Modifier.height(20.dp))
         Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -447,14 +486,14 @@ fun MaitriResponderHistory(uid: String, onBack: () -> Unit, onResumeJourney: (St
                     fontWeight = FontWeight.SemiBold)
             }
         }
-        state.summary?.let { s ->
-            Text(tr("You've helped {0} times · Resolved {1}", s.helped, s.resolved), Modifier.padding(start = 24.dp, end = 24.dp, top = 14.dp),
+        summary?.let { s ->
+            Text(summaryLine(s), Modifier.padding(start = 24.dp, end = 24.dp, top = 14.dp),
                 color = p.primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             HistoryFilter.entries.forEach { option ->
-                FilterChip(selected = filter == option, onClick = { filter = option }, label = { Text(option.label()) },
+                FilterChip(selected = filter == option, onClick = { onFilter(option) }, label = { Text(option.label()) },
                     colors = FilterChipDefaults.filterChipColors(containerColor = p.surface, labelColor = p.primary,
                         selectedContainerColor = p.card, selectedLabelColor = p.accent,
                         selectedLeadingIconColor = p.accent),
@@ -464,29 +503,29 @@ fun MaitriResponderHistory(uid: String, onBack: () -> Unit, onResumeJourney: (St
         }
         error?.let { Text(it, Modifier.padding(horizontal = 24.dp, vertical = 4.dp), color = p.accent, fontSize = 12.sp) }
         PullToRefreshBox(isRefreshing = refreshing, modifier = Modifier.fillMaxSize(),
-            onRefresh = { scope.launch { refreshing = true; try { firstPage() } finally { refreshing = false } } }) {
+            onRefresh = onRefresh) {
             when {
-                !state.loaded && state.items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                !loaded && items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     MaitriLoader(message = tr("Loading your history…"), logoSize = 56.dp)
                 }
-                state.items.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) {
+                items.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) {
                     item {
-                        Text(filter.empty(state.days), Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 48.dp),
+                        Text(filter.empty(days), Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 48.dp),
                             color = p.secondary, fontSize = 13.sp, textAlign = TextAlign.Center)
                     }
                 }
                 else -> LazyColumn(Modifier.fillMaxSize(), state = list,
                     contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp + LocalFloatingNavBarPadding.current),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    val groups = state.items.groupBy { historyGroup(it.invitedAt, now) }
+                    verticalArrangement = Arrangement.spacedBy(CARD_GAP)) {
+                    val groups = items.groupBy { historyGroup(it.invitedAt, now) }
                     groups.forEach { (group, entries) ->
                         item(key = "h-$group") {
                             Text(group, Modifier.padding(top = 8.dp).semantics { heading() }, color = p.secondary,
                                 fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp)
                         }
-                        items(entries, key = { it.invitationId }) { item -> IncidentCard(p, item, now, { open(item) }) }
+                        items(entries, key = { it.invitationId }) { item -> IncidentCard(p, item, now, { onOpen(item) }) }
                     }
-                    if (state.cursor != null) item(key = "more") {
+                    if (hasMore) item(key = "more") {
                         Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
                             MaitriLoader(logoSize = 36.dp, delayMillis = 0)
                         }
@@ -495,10 +534,12 @@ fun MaitriResponderHistory(uid: String, onBack: () -> Unit, onResumeJourney: (St
             }
         }
     }
-    message?.let { AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { message = null }, containerColor = p.surface,
-        textContentColor = p.primary, text = { Text(it) },
-        confirmButton = { TextButton(onClick = { message = null }) { Text(tr("Close"), color = p.accent) } }) }
 }
+
+/** "You've helped 4 times · Resolved 3", plus " · + 2 practice" for practice SOSes (never counted as help). */
+internal fun summaryLine(s: ResponderHistorySummaryDto): String =
+    tr("You've helped {0} times · Resolved {1}", s.helped, s.resolved) +
+        if (s.practice > 0) " · " + tr("+ {0} practice", s.practice) else ""
 
 /** The Profile & settings row's description, and the screen's content description. */
 internal fun responderHistoryRowDescription(): String = tr("Requests you received and how they ended")
