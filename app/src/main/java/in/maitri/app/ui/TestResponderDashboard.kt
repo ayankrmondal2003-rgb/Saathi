@@ -34,16 +34,18 @@ import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
 @Composable
-fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (String) -> Unit, openInvitation: (String) -> Unit) {
+fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (String) -> Unit, onViewHistory: () -> Unit = {},
+                           openInvitation: (String) -> Unit) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val scope = rememberCoroutineScope()
     val account = remember(uid) { ExpectedAccount(uid) }
     var profile by remember(uid) { mutableStateOf(`in`.maitri.app.startup.StartupCache.get<ProfileDto>(uid, `in`.maitri.app.startup.StartupCache.PROFILE)) }
-    var inbox by remember(uid) { mutableStateOf(emptyList<InvitationDto>()) }
+    // Recent requests: the first history page (cached, so it shows at once and offline).
+    var history by remember(uid) { mutableStateOf(`in`.maitri.app.startup.StartupCache.get<ResponderHistoryPageDto>(uid, RECENT_REQUESTS)
+        ?.let { it.copy(items = ResponderHistoryEvents.patch(it.items)) }) }
     var preferenceMessage by remember { mutableStateOf("") }
     var locationStatusMessage by remember { mutableStateOf<String?>(null) }
-    var inboxLoaded by remember(uid) { mutableStateOf(false) }
     var volunteer by remember(uid) { mutableStateOf(`in`.maitri.app.startup.StartupCache.get<VolunteerStatusDto>(uid, `in`.maitri.app.startup.StartupCache.VOLUNTEER)) }
     var refreshing by remember { mutableStateOf(false) }
     var profileFresh by remember(uid) { mutableStateOf(false) }
@@ -89,8 +91,9 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
                 `in`.maitri.app.startup.StartupCache.put(uid, `in`.maitri.app.startup.StartupCache.PROFILE, profile)
             }
             profile?.let { `in`.maitri.app.network.ResponderLocation.setAvailable(context, uid, it.optedIn && it.available) }
-            inbox = BackendClient.api.invitations(account).filter { it.canOpenIncoming() || it.status == "ACCEPTED" }
-            inboxLoaded = true
+            history = BackendClient.api.responderHistory(limit = 20, expected = account)
+                .let { it.copy(items = ResponderHistoryEvents.patch(it.items)) }
+            `in`.maitri.app.startup.StartupCache.put(uid, RECENT_REQUESTS, history)
             volunteer = BackendClient.api.volunteerStatus(account)
             `in`.maitri.app.startup.StartupCache.put(uid, `in`.maitri.app.startup.StartupCache.VOLUNTEER, volunteer)
             if (preferenceMessage == tr("Could not refresh responder information")) preferenceMessage = ""
@@ -264,12 +267,16 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
         }
     }
     val bold = androidx.compose.ui.text.font.FontWeight.SemiBold
+    FollowClosures { event -> history = history?.let { it.copy(items = it.items.closing(event)) } }
+    val (openRequest, _) = rememberRequestOpener(uid, onResumeJourney, openInvitation) { preferenceMessage = it }
     val available = profile?.available == true
 
     PullToRefreshBox(isRefreshing = refreshing, modifier = Modifier.fillMaxSize().background(palette.background),
         onRefresh = { scope.launch { refreshing = true; try { load(fullProfile = true) } finally { refreshing = false } } }) {
+    val mapLock = rememberPageScrollLock()
+    CompositionLocalProvider(LocalPageScrollLock provides mapLock) {
     Column(Modifier.fillMaxSize().statusBarsPadding()
-        .verticalScroll(rememberScrollState()).padding(bottom = LocalFloatingNavBarPadding.current),
+        .verticalScroll(rememberScrollState(), enabled = !mapLock.value).padding(bottom = LocalFloatingNavBarPadding.current),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ResponderHeader(palette)
         // Volunteer status card (Verified / Under review / Not approved / Apply).
@@ -337,34 +344,19 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
                     explainBackground = true
                 },
             )) { PhoneTips(palette) }
-            // Recent requests, if any.
-            if (inbox.isNotEmpty()) ResponderCard(palette, title = tr("Recent requests")) {
-                for (invitation in inbox) {
-                    if (invitation.status == "ACCEPTED") {
-                        OutlinedButton(enabled = !busy, onClick = {
-                            busy = true
-                            scope.launch {
-                                try {
-                                    val snapshot = BackendClient.api.snapshot(invitation.incidentId, account)
-                                    if (snapshot.authorizesJourney(invitation.incidentId)) onResumeJourney(invitation.incidentId)
-                                    else preferenceMessage = tr("Responder access has ended.")
-                                } catch (e: CancellationException) { throw e }
-                                catch (_: Exception) { preferenceMessage = tr("Could not confirm responder access.") }
-                                finally { busy = false }
-                            }
-                        }, border = BorderStroke(1.dp, palette.accent)) { Text(tr("Resume responder journey"), color = palette.accent) }
-                    } else OutlinedButton(onClick = { openInvitation(invitation.id) }, border = BorderStroke(1.dp, palette.accent)) {
-                        Text(tr("Open invitation"), color = palette.accent)
-                    }
-                }
-            }
+            // Recent requests: open ones first, then the 3 latest finished (last 7 days), and a link to all of them.
+            if (profile?.optedIn == true || !history?.items.isNullOrEmpty())
+                RecentRequestsCard(palette, history?.items, history?.summary?.total ?: 0, openRequest, onViewHistory)
             // "How responding works" info card.
             HowRespondingWorksCard(palette)
         }
         Spacer(Modifier.height(4.dp))
     }
     }
+    }
 }
+
+private const val RECENT_REQUESTS = "recent_requests"
 
 /** Battery optimisation off for Maitri (Samsung "Unrestricted", Xiaomi "No restrictions"). */
 internal fun batteryUnrestricted(context: android.content.Context): Boolean =

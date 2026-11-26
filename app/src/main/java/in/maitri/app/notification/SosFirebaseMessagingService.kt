@@ -68,6 +68,14 @@ class SosFirebaseMessagingService : FirebaseMessagingService() {
             "SOS_REQUEST_CLOSED" -> {
                 // The SOS ended or enough volunteers accepted: stop alerting and say so for a few seconds.
                 val invitation = data["invitation_id"]?.takeIf { runCatching { UUID.fromString(it) }.isSuccess } ?: return
+                if (data["accepted"] == "true") {
+                    // A volunteer who accepted: their Recent requests / History card turns Resolved or Ended at once.
+                    val incident = data["incident_id"]?.takeIf { runCatching { UUID.fromString(it) }.isSuccess } ?: return
+                    val resolved = data["reason"] == "RESOLVED"
+                    `in`.maitri.app.network.ResponderHistoryEvents.emit(incident, resolved)
+                    SosRequestAlerts.acceptedClosed(applicationContext, invitation, incident, resolved)
+                    return
+                }
                 SosRequestAlerts.closed(applicationContext, invitation, data["reason"].orEmpty())
             }
             "TEST_ALERT", "EMERGENCY_TEST_NOTIFICATION" -> {

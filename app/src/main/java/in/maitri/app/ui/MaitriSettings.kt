@@ -43,7 +43,11 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
     val theme = LocalThemeController.current
     val themeNames = mapOf(ThemeMode.SYSTEM to S.settings_system, ThemeMode.LIGHT to S.settings_light, ThemeMode.DARK to S.settings_dark)
     var dialog by remember { mutableStateOf<Int?>(null) }
-    var verified by remember(user?.uid) { mutableStateOf(false) }
+    // Approved volunteers: shown at once from the cached status, then confirmed by the server.
+    var verified by remember(user?.uid) { mutableStateOf(`in`.maitri.app.startup.StartupCache
+        .get<`in`.maitri.app.network.VolunteerStatusDto>(user?.uid, `in`.maitri.app.startup.StartupCache.VOLUNTEER)?.status == "APPROVED") }
+    // Volunteers get a "Responder history" row under "Keep vibrating"; the artwork below moves down to make room.
+    val gap = KEEP_VIBRATING_HEIGHT + if (verified) HISTORY_ROW_HEIGHT else 0
     LaunchedEffect(user?.uid) {
         val uid = user?.uid?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
         verified = runCatching {
@@ -55,7 +59,7 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
         Uri.fromParts("package", context.packageName, null)))
 
     SettingsBoard(if (p.dark) R.drawable.maitri_dark_09 else R.drawable.maitri_light_09, 729, modifier,
-        gapAt = KEEP_VIBRATING_Y, gapHeight = KEEP_VIBRATING_HEIGHT,
+        gapAt = KEEP_VIBRATING_Y, gapHeight = gap,
         footer = {
             TextButton(onClick = onLogout, modifier = Modifier.padding(horizontal = 24.dp)) {
                 Text(strings.getString(S.settings_logout), color = p.accent)
@@ -73,21 +77,22 @@ fun MaitriSettings(user: UserProfile?, onNavigate: (String) -> Unit, onLogout: (
         SettingsText(strings.getString(S.settings_edit), 299, 166, 50, 38, 12, p.accent, true, true) { onNavigate("EditProfile") }
         BoardAction(24, 144, 275, 82, strings.getString(S.settings_your_profile)) { onNavigate("EditProfile") }
         SettingsText(strings.getString(S.settings_safety), 24, 249, 342, 28, 18, p.primary, true)
-        SettingsText(strings.getString(S.settings_comfort), 24, 478 + KEEP_VIBRATING_HEIGHT, 342, 28, 18, p.primary, true)
+        SettingsText(strings.getString(S.settings_comfort), 24, 478 + gap, 342, 28, 18, p.primary, true)
         ProfileRow(285, 58, S.settings_permissions, S.settings_permissions_sub) { onNavigate("Permissions") }
         ProfileRow(343, 58, S.settings_vibrations, S.settings_vibrations_sub, strings.getString(S.settings_test)) { onNavigate("TestVibration") }
         KeepVibratingRow(p)
-        ProfileRow(401 + KEEP_VIBRATING_HEIGHT, 58, S.settings_pins, S.settings_pins_sub) { onNavigate("SafetyPin") }
-        ProfileRow(510 + KEEP_VIBRATING_HEIGHT, 52, S.settings_language, S.settings_language_sub, language.getDisplayLanguage(language).replaceFirstChar { it.titlecase(language) }) { onNavigate("Language") }
-        ProfileRow(562 + KEEP_VIBRATING_HEIGHT, 52, S.settings_themes, S.settings_themes_sub, strings.getString(themeNames.getValue(theme.themeMode))) { dialog = S.settings_themes }
-        ProfileRow(614 + KEEP_VIBRATING_HEIGHT, 52, S.settings_notifications, S.settings_notifications_sub) {
+        if (verified) ResponderHistoryRow(p) { onNavigate("ResponderHistory") }
+        ProfileRow(401 + gap, 58, S.settings_pins, S.settings_pins_sub) { onNavigate("SafetyPin") }
+        ProfileRow(510 + gap, 52, S.settings_language, S.settings_language_sub, language.getDisplayLanguage(language).replaceFirstChar { it.titlecase(language) }) { onNavigate("Language") }
+        ProfileRow(562 + gap, 52, S.settings_themes, S.settings_themes_sub, strings.getString(themeNames.getValue(theme.themeMode))) { dialog = S.settings_themes }
+        ProfileRow(614 + gap, 52, S.settings_notifications, S.settings_notifications_sub) {
             try {
                 context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
             } catch (_: android.content.ActivityNotFoundException) { appSettings() }
         }
-        ProfileRow(666 + KEEP_VIBRATING_HEIGHT, 52, S.settings_privacy, S.settings_privacy_sub) { onNavigate("PrivacyData") }
-        SettingsText(strings.getString(S.settings_help), 74, 721 + KEEP_VIBRATING_HEIGHT, 290, 36, 13, p.secondary, action = { dialog = S.settings_help })
-        BoardAction(24, 721 + KEEP_VIBRATING_HEIGHT, 50, 36, strings.getString(S.settings_help)) { dialog = S.settings_help }
+        ProfileRow(666 + gap, 52, S.settings_privacy, S.settings_privacy_sub) { onNavigate("PrivacyData") }
+        SettingsText(strings.getString(S.settings_help), 74, 721 + gap, 290, 36, 13, p.secondary, action = { dialog = S.settings_help })
+        BoardAction(24, 721 + gap, 50, 36, strings.getString(S.settings_help)) { dialog = S.settings_help }
     }
 
     if (dialog == S.settings_themes) ThemeDialog(themeNames.mapValues { strings.getString(it.value) }) { dialog = null }
@@ -131,6 +136,26 @@ internal fun ThemeDialog(names: Map<ThemeMode, String>, onDone: () -> Unit) {
 
 internal const val KEEP_VIBRATING_Y = 401
 internal const val KEEP_VIBRATING_HEIGHT = 72
+internal const val HISTORY_ROW_HEIGHT = 58
+
+/** Profile & settings → Responder history (volunteers only), styled like the artwork's rows. */
+@Composable
+private fun ResponderHistoryRow(p: MaitriPalette, onClick: () -> Unit) {
+    Box(settingsSlot(24, KEEP_VIBRATING_Y + KEEP_VIBRATING_HEIGHT, 342, HISTORY_ROW_HEIGHT).background(p.surface)
+        .clickable(role = Role.Button, onClick = onClick)) {
+        Box(Modifier.padding(start = 56.dp, end = 16.dp).fillMaxWidth().height(1.dp).background(p.divider))
+        Box(Modifier.padding(start = 16.dp, top = 13.dp).size(32.dp).background(p.background, RoundedCornerShape(9.dp)),
+            contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.History, null, Modifier.size(18.dp), tint = p.accent)
+        }
+        Column(Modifier.align(Alignment.CenterStart).padding(start = 56.dp, end = 26.dp)) {
+            FitText(tr("Responder history"), Modifier, p.primary, 14f, 16f, FontWeight.SemiBold)
+            Spacer(Modifier.height(3.dp))
+            FitText(responderHistoryRowDescription(), Modifier, p.secondary, 10f, 12f)
+        }
+        Text("›", Modifier.align(Alignment.CenterEnd).padding(end = 16.dp), color = p.secondary, fontSize = 18.sp)
+    }
+}
 
 /**
  * "Keep vibrating for SOS requests" (default on): a native row in the "Safety, your way" card, styled like the

@@ -29,8 +29,12 @@ async def invite(db, params, *, recipient=None):
     restrict = "AND u.id=:recipient" if recipient is not None else ""
     sql = f"""
         WITH added AS (
-            INSERT INTO incident_invitations(incident_id,recipient_user_id,expires_at)
-            SELECT i.id,u.id,clock_timestamp()+make_interval(secs => :ttl)
+            INSERT INTO incident_invitations(incident_id,recipient_user_id,expires_at,invite_distance_m,invite_direction)
+            SELECT i.id,u.id,clock_timestamp()+make_interval(secs => :ttl),
+              -- Frozen for the responder's history: rounded distance and compass direction, never coordinates.
+              CAST(round(ST_Distance(l.location,i.latest_location)/50)*50 AS integer),
+              (ARRAY['N','NE','E','SE','S','SW','W','NW'])[
+                  (CAST(floor((degrees(ST_Azimuth(l.location,i.latest_location))+22.5)/45) AS integer) % 8)+1]
             FROM incidents i JOIN responder_locations l ON ST_DWithin(l.location,i.latest_location,i.radius_meters)
             JOIN users u ON u.id=l.user_id
             WHERE i.id=:id AND {FRESH} AND u.id<>i.victim_user_id AND u.account_status='ACTIVE'

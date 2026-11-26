@@ -239,8 +239,8 @@ internal fun CircleSessionViewer(uid: String, sessionId: String, dismiss: () -> 
                     s.status != "ACTIVE" -> Text(tr("This trip has ended. Their location is no longer shared."))
                     s.fix == null -> Text(tr("Waiting for their first location…"))
                     else -> {
-                        MaitriMap(listOf(MapMarker(s.fix.latitude, s.fix.longitude, MarkerKind.PERSON_IN_NEED)), "",
-                            Modifier.fillMaxWidth().height(220.dp), accuracyMeters = s.fix.accuracyMeters)
+                        MaitriMapCard(listOf(MapMarker(s.fix.latitude, s.fix.longitude, MarkerKind.PERSON_IN_NEED)),
+                            Modifier.fillMaxWidth().height(220.dp), accuracyMeters = s.fix.accuracyMeters, surround = p.surface)
                         Text(tr("Updated ") + relativeTime(s.fix.recordedAt))
                     }
                 }

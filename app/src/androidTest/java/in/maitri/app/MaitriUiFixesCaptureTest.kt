@@ -51,7 +51,7 @@ class MaitriUiFixesCaptureTest {
                     "The police certificate is older than six months. Please upload a recent one.", {},
                     Modifier.padding(horizontal = 24.dp))
                 Spacer(Modifier.height(12.dp))
-                MaitriMap(listOf(MapMarker(28.6139, 77.2090, MarkerKind.YOU)), "", Modifier.fillMaxWidth()
+                MaitriMapCard(listOf(MapMarker(28.6139, 77.2090, MarkerKind.YOU)), Modifier.fillMaxWidth()
                     .padding(horizontal = 24.dp).height(300.dp), accuracyMeters = 35.0,
                     rangeMeters = if (available) RESPONDER_RANGE_METERS else null, alwaysShowAccuracy = true)
                 Spacer(Modifier.height(12.dp))

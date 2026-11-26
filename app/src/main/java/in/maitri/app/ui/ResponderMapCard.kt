@@ -59,7 +59,7 @@ internal data class OwnFix(val latitude: Double, val longitude: Double, val accu
 
 @SuppressLint("MissingPermission") // Only called with location permission granted (checked by the caller).
 @Composable
-private fun liveOwnLocation(enabled: Boolean): OwnFix? {
+internal fun liveOwnLocation(enabled: Boolean): OwnFix? {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var fix by remember { mutableStateOf<OwnFix?>(null) }
@@ -113,7 +113,7 @@ internal fun ResponderMapCard(p: MaitriPalette, available: Boolean, requestPermi
         fix == null -> Box(cardModifier.clip(shape).background(p.card), contentAlignment = Alignment.Center) {
             MaitriLoader(message = tr("Finding where you are…"), logoSize = 56.dp)
         }
-        else -> MaitriMap(listOf(MapMarker(fix.latitude, fix.longitude, MarkerKind.YOU)), tr("Your location"), cardModifier,
+        else -> MaitriMapCard(listOf(MapMarker(fix.latitude, fix.longitude, MarkerKind.YOU)), cardModifier, tr("Your location"),
             accuracyMeters = fix.accuracyMeters, rangeMeters = if (available) RESPONDER_RANGE_METERS else null,
             alwaysShowAccuracy = true)
     }

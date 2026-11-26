@@ -23,7 +23,8 @@ When startup reports `Invalid settings`, correct the named field in the Render w
 | WORKER_ID | Leave unset with multiple Uvicorn workers. Each hub generates its own ID. |
 | RADIUS_METERS | Defaults to 1000 with a server-enforced upper bound of 1000. |
 | MAX_LOCATION_AGE_SECONDS / MAX_ACCURACY_METERS | Defaults of 120 seconds / 100 metres for discovery. |
-| CLOSED_LOCATION_HOURS / EXPIRED_INVITATION_DAYS / EXPIRED_GRANT_DAYS / AUDIT_DAYS | Maintenance defaults are 24 hours / 7 days / 7 days / 30 days. Cleanup requires running the maintenance job. |
+| CLOSED_LOCATION_HOURS / EXPIRED_GRANT_DAYS / AUDIT_DAYS | Maintenance defaults are 24 hours / 7 days / 30 days. Cleanup requires running the maintenance job. |
+| RESPONDER_HISTORY_DAYS | Responder history length and how long volunteer requests of a closed SOS are kept: 30 days (the maximum; longer needs a privacy-policy change). Replaces EXPIRED_INVITATION_DAYS. |
 | surakshaDevApiUrl | Android debug Gradle property or uncommitted root local.properties. Supply only the verified HTTPS origin. |
 
 The server has no SOS_BROADCAST_MODE, SMS_MODE or FIREBASE_ADMIN_CREDENTIALS setting. Public responder discovery and emergency dispatch cannot be enabled by setting those names. TEST_DATABASE_URL and TEST_REDIS_URL are for the isolated test runner. Never point tests at hosted demo data.

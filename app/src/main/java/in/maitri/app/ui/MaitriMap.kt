@@ -4,67 +4,63 @@ import `in`.maitri.app.tr
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.net.Uri
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.MyLocation
+import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.Dash
+import com.google.android.gms.maps.model.Gap
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
+import com.google.android.gms.maps.model.MapStyleOptions
+import com.google.maps.android.compose.*
 import `in`.maitri.app.R
-import `in`.maitri.app.location.TrackingConfig
-import `in`.maitri.app.location.zoomForAccuracy
-import org.maplibre.android.MapLibre
-import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.geometry.LatLng
-import org.maplibre.android.geometry.LatLngBounds
-import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.MapView
-import org.maplibre.android.maps.Style
-import org.maplibre.android.style.expressions.Expression
-import org.maplibre.android.style.layers.FillLayer
-import org.maplibre.android.style.layers.LineLayer
-import org.maplibre.android.style.layers.PropertyFactory
-import org.maplibre.android.style.layers.SymbolLayer
-import org.maplibre.android.style.sources.GeoJsonSource
-import org.maplibre.geojson.Feature
-import org.maplibre.geojson.FeatureCollection
-import org.maplibre.geojson.Point
-import org.maplibre.geojson.Polygon
 import kotlin.math.*
 
-/** OpenFreeMap: free, no key, commercial use allowed. Data © OpenStreetMap contributors. */
-internal object OpenFreeMap {
-    const val LIGHT_STYLE = "https://tiles.openfreemap.org/styles/liberty"
-    /** Bundled; generated from liberty by tools/make_dark_map_style.py. Same tiles and attribution. */
-    const val DARK_STYLE_ASSET = "map/maitri-dark.json"
-    const val ATTRIBUTION = "© OpenFreeMap © OpenMapTiles © OpenStreetMap contributors"
-    val LINKS = listOf(
-        tr("OpenFreeMap") to "https://openfreemap.org",
-        tr("OpenMapTiles") to "https://www.openmaptiles.org/",
-        tr("OpenStreetMap contributors") to "https://www.openstreetmap.org/copyright")
-}
-
-/** A point drawn on the map. [kind] picks the marker artwork. */
+/** A point drawn on the map. [kind] picks the marker. */
 internal data class MapMarker(val latitude: Double, val longitude: Double, val kind: MarkerKind)
 
-internal enum class MarkerKind(val image: String) { PERSON_IN_NEED("maitri-person"), YOU("maitri-you"), RESPONDER("maitri-responder") }
+/** Pink pin: the person in danger. Teal dot: a responder. Blue dot (with its accuracy circle): you. */
+internal enum class MarkerKind { PERSON_IN_NEED, YOU, RESPONDER }
 
 /** Great-circle distance in metres. Shown only as an approximate, straight-line value (no routing service). */
 internal fun straightLineMeters(aLat: Double, aLon: Double, bLat: Double, bLon: Double): Double {
@@ -77,7 +73,7 @@ internal fun straightLineMeters(aLat: Double, aLon: Double, bLat: Double, bLon: 
 
 /**
  * Walking time for a straight-line distance: streets are rarely straight (×1.3) and people walk about 80 m a
- * minute (4.8 km/h). Always labelled "approx." because no route is computed.
+ * minute (4.8 km/h). Always labelled "approx." because no route is computed (no Routes/Directions API).
  */
 internal fun walkingMinutes(straightMeters: Double): Int = max(1, ceil(straightMeters * 1.3 / 80.0).toInt())
 
@@ -88,7 +84,7 @@ internal fun distanceLabel(meters: Double): String =
 internal fun approxDistanceAndWalk(meters: Double): String =
     tr("≈ {0} away · approx. {1} min walk", distanceLabel(meters), walkingMinutes(meters))
 
-/** Accuracy circle as a 64-point polygon (lon/lat ring, closed). */
+/** A circle as a ring of (longitude, latitude) points, closed. Used to fit the camera around a circle. */
 internal fun circleRing(latitude: Double, longitude: Double, radiusMeters: Double, steps: Int = 64): List<Pair<Double, Double>> {
     val dLat = radiusMeters / 111_320.0
     val dLon = radiusMeters / (111_320.0 * cos(Math.toRadians(latitude)).coerceAtLeast(0.01))
@@ -98,228 +94,267 @@ internal fun circleRing(latitude: Double, longitude: Double, radiusMeters: Doubl
     }
 }
 
-/**
- * Live map (MapLibre + OpenFreeMap). Draws only positions it was given; with none it shows a regional view and
- * [emptyLabel], and never invents a position. [accuracyMeters] belongs to the first PERSON_IN_NEED or YOU marker.
- */
-/**
- * MapLibre needs OpenGL ES 3.0 and crashes natively (uncatchable) on GPUs that only have 2.0: older and budget
- * "Android Go" phones, and the Android 8 emulator. Those get a card with the coordinates and Open in Maps instead.
- */
-internal fun liveMapSupported(context: Context): Boolean {
-    val info = (context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager)?.deviceConfigurationInfo
-    return (info?.reqGlEsVersion ?: 0) >= 0x30000
+/** The outer edge of a distance band ("Under 500 m" → 500 m): screen 06's approximate area, never a position. */
+internal fun bandRadiusMeters(band: String?): Double? = when (band) {
+    "Under 500 m" -> 500.0
+    "500 m – 1 km" -> 1000.0
+    "1–2 km" -> 2000.0
+    "2–5 km" -> 5000.0
+    else -> null
 }
 
+/** The navigation hand-off for "Open in Google Maps": walking directions in the Google Maps app, then any maps app. */
+internal fun navigationUris(latitude: Double, longitude: Double): List<String> {
+    val at = "%.6f,%.6f".format(java.util.Locale.ROOT, latitude, longitude)
+    return listOf("google.navigation:q=$at&mode=w", "geo:$at?q=$at")
+}
+
+/**
+ * "Open in Google Maps": walking navigation in the Google Maps app (google.navigation:…&mode=w), or any maps app
+ * through a geo: link when Google Maps isn't installed. Only an intent: no Maps Platform API is called.
+ */
+internal fun openNavigation(context: Context, latitude: Double, longitude: Double): Boolean {
+    val uris = navigationUris(latitude, longitude)
+    val intents = listOf(Intent(Intent.ACTION_VIEW, Uri.parse(uris[0])).setPackage("com.google.android.apps.maps"),
+        Intent(Intent.ACTION_VIEW, Uri.parse(uris[1])))
+    for (intent in intents) {
+        try { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return true }
+        catch (_: android.content.ActivityNotFoundException) { }
+    }
+    return false
+}
+
+/**
+ * The Maps SDK can draw here: a key was built in (local.properties maitriMapsApiKey) and Google Play services is
+ * present. Otherwise every map is a card with "Open in Google Maps" instead.
+ */
+internal fun googleMapsReady(context: Context): Boolean {
+    val key = runCatching {
+        context.packageManager.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
+            .metaData?.getString("com.google.android.geo.API_KEY")
+    }.getOrNull()
+    if (key.isNullOrBlank() || key.startsWith("\${")) return false
+    return GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
+}
+
+/** What one map shows. Circles: [accuracyMeters] around "you" (or the person), [rangeMeters] / [areaMeters] around "you". */
+internal data class MapContent(
+    val markers: List<MapMarker>,
+    val accuracyMeters: Double? = null,
+    val rangeMeters: Double? = null,
+    val alwaysShowAccuracy: Boolean = false,
+    /** Screen 06: "somewhere within this distance of you". No pin for the person: their position isn't known yet. */
+    val areaMeters: Double? = null,
+) {
+    /** The marker the circles belong to: you, else the person in need. */
+    val anchor: MapMarker? get() = markers.firstOrNull { it.kind == MarkerKind.YOU } ?: markers.firstOrNull { it.kind != MarkerKind.RESPONDER }
+
+    /** Everything the camera keeps in view: the markers, and the full circles. */
+    fun bounds(): LatLngBounds? {
+        if (markers.isEmpty()) return null
+        val b = LatLngBounds.builder()
+        markers.forEach { b.include(LatLng(it.latitude, it.longitude)) }
+        val a = anchor
+        if (a != null) listOfNotNull(rangeMeters, areaMeters).maxOrNull()?.let { r ->
+            for (point in circleRing(a.latitude, a.longitude, r, 16)) b.include(LatLng(point.second, point.first))
+        }
+        return b.build()
+    }
+}
+
+/** The live map inside MaitriMapCard: Google Maps when available, otherwise the "Open in Google Maps" card. */
 @Composable
-internal fun MaitriMap(markers: List<MapMarker>, emptyLabel: String, modifier: Modifier = Modifier,
-                       accuracyMeters: Double? = null, rangeMeters: Double? = null, alwaysShowAccuracy: Boolean = false) {
+internal fun MaitriMap(content: MapContent, emptyLabel: String, modifier: Modifier = Modifier, interactive: Boolean = true,
+                       expandable: Boolean = true) {
     val context = LocalContext.current
-    val live = remember(context) { liveMapSupported(context) }
-    if (live) MaitriLiveMap(markers, emptyLabel, modifier, accuracyMeters, rangeMeters, alwaysShowAccuracy)
-    else MaitriMapFallback(markers, emptyLabel, modifier, accuracyMeters)
+    val ready = remember(context) { googleMapsReady(context) }
+    if (!ready) { MaitriMapFallback(content.markers, emptyLabel, modifier, content.accuracyMeters); return }
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    MaitriGoogleMap(content, emptyLabel, modifier, interactive, onExpand = if (expandable) ({ expanded = true }) else null)
+    if (expanded) Dialog(onDismissRequest = { expanded = false },
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        val p = maitriPalette()
+        Box(Modifier.fillMaxSize().background(p.background)) {
+            MaitriGoogleMap(content, emptyLabel, Modifier.fillMaxSize(), interactive = true, onExpand = null,
+                controlsPadding = PaddingValues(bottom = 32.dp, end = 12.dp))
+            IconButton(onClick = { expanded = false },
+                Modifier.statusBarsPadding().padding(16.dp).size(48.dp).shadow(4.dp, CircleShape).background(p.surface, CircleShape)) {
+                Icon(Icons.Rounded.Close, tr("Close full-screen map"), tint = p.primary)
+            }
+        }
+    }
 }
 
-/** No map on this phone: where the person is, in words and numbers, and a hand-off to the phone's maps app. */
+/** No map on this phone (no key built in, or no Google Play services): where, in words, and a hand-off to Maps. */
 @Composable
 private fun MaitriMapFallback(markers: List<MapMarker>, emptyLabel: String, modifier: Modifier, accuracyMeters: Double?) {
     val p = maitriPalette()
     val context = LocalContext.current
     val target = markers.firstOrNull { it.kind == MarkerKind.PERSON_IN_NEED } ?: markers.firstOrNull()
-    Box(modifier.clip(RoundedCornerShape(24.dp)).background(p.card).padding(16.dp), contentAlignment = Alignment.Center) {
+    Box(modifier.background(p.card).padding(16.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (target == null) Text(emptyLabel, color = p.primary, fontSize = 13.sp)
+            if (target == null) Text(emptyLabel.ifBlank { tr("Map unavailable") }, color = p.primary, fontSize = 13.sp)
             else {
-                Text("%.5f, %.5f".format(java.util.Locale.ROOT, target.latitude, target.longitude), color = p.primary,
-                    fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
                 accuracyMeters?.let { Text(tr("Accurate to about {0} m", it.toInt()), color = p.secondary, fontSize = 12.sp) }
-                TextButton(onClick = {
-                    val uri = Uri.parse("geo:${target.latitude},${target.longitude}?q=${target.latitude},${target.longitude}")
-                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-                }) { Text(tr("Open in Maps"), color = p.accent, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold) }
+                TextButton(onClick = { openNavigation(context, target.latitude, target.longitude) }) {
+                    Text(tr("Open in Google Maps"), color = p.accent, fontWeight = FontWeight.SemiBold)
+                }
             }
             Text(tr("The live map isn't available on this phone."), color = p.secondary, fontSize = 11.sp)
         }
     }
 }
 
+private val YOU_BLUE = Color(0xFF1A73E8)
+private val RESPONDER_TEAL = Color(0xFF0E9F8E)
+
 @Composable
-private fun MaitriLiveMap(markers: List<MapMarker>, emptyLabel: String, modifier: Modifier = Modifier,
-                          accuracyMeters: Double? = null, rangeMeters: Double? = null, alwaysShowAccuracy: Boolean = false) {
+private fun MaitriGoogleMap(content: MapContent, emptyLabel: String, modifier: Modifier, interactive: Boolean,
+                            onExpand: (() -> Unit)?, controlsPadding: PaddingValues = PaddingValues(8.dp)) {
     val p = maitriPalette()
     val context = LocalContext.current
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    var showCredits by remember { mutableStateOf(false) }
-    val holder = remember(context) {
-        MapLibre.getInstance(context)
-        MapHolder(MapView(context).apply { onCreate(null) })
+    val density = LocalDensity.current
+    val camera = rememberCameraPositionState { position = CameraPosition.fromLatLngZoom(LatLng(22.5, 79.0), 3.5f) }
+    var loaded by remember { mutableStateOf(false) }
+    // Follow the markers until the user moves the map; "Re-centre" turns it back on.
+    var follow by rememberSaveable { mutableStateOf(true) }
+    val style = remember(p.dark) {
+        runCatching { MapStyleOptions.loadRawResourceStyle(context, if (p.dark) R.raw.maitri_map_dark else R.raw.maitri_map_light) }.getOrNull()
     }
-    DisposableEffect(lifecycle, holder) {
-        val view = holder.view
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START -> view.onStart()
-                Lifecycle.Event.ON_RESUME -> view.onResume()
-                Lifecycle.Event.ON_PAUSE -> view.onPause()
-                Lifecycle.Event.ON_STOP -> view.onStop()
-                else -> Unit
+    LaunchedEffect(camera.isMoving) {
+        if (camera.isMoving && camera.cameraMoveStartedReason == CameraMoveStartedReason.GESTURE) follow = false
+    }
+    val bounds = content.bounds()
+    var size by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    // 48 dp of room around the markers, less on small maps (a padding bigger than the map makes the fit fail).
+    val pad = minOf(with(density) { 48.dp.roundToPx() }, minOf(size.width, size.height) / 6)
+    // Auto-fit: everything relevant in view, with room around it; never closer than street level.
+    LaunchedEffect(loaded, follow, bounds, size) {
+        if (!loaded || !follow || bounds == null || size == androidx.compose.ui.unit.IntSize.Zero) return@LaunchedEffect
+        val single = content.markers.size == 1 && content.rangeMeters == null && content.areaMeters == null
+        runCatching {
+            if (single) camera.animate(CameraUpdateFactory.newLatLngZoom(bounds.center, 16f), 600)
+            else {
+                camera.animate(CameraUpdateFactory.newLatLngBounds(bounds, pad), 600)
+                if (camera.position.zoom > 17f) camera.animate(CameraUpdateFactory.zoomTo(17f), 300)
             }
         }
-        lifecycle.addObserver(observer)
-        onDispose {
-            lifecycle.removeObserver(observer)
-            if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) view.onPause()
-            if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) view.onStop()
-            view.onDestroy()
-        }
     }
-    val data = MapData(markers, accuracyMeters, p.dark, rangeMeters, alwaysShowAccuracy)
-    Box(modifier.clip(RoundedCornerShape(24.dp)).background(p.card)) {
-        AndroidView({ holder.view }, Modifier.fillMaxSize()) { holder.show(data) }
-        if (markers.isEmpty()) Text(emptyLabel, Modifier.align(Alignment.Center)
+    Box(modifier.onSizeChanged { size = it }) {
+        GoogleMap(
+            modifier = Modifier.matchParentSize(),
+            cameraPositionState = camera,
+            properties = MapProperties(mapStyleOptions = style, isBuildingEnabled = true, minZoomPreference = 3f, maxZoomPreference = 20f),
+            uiSettings = MapUiSettings(zoomControlsEnabled = false, myLocationButtonEnabled = false, mapToolbarEnabled = false,
+                compassEnabled = interactive, rotationGesturesEnabled = false, tiltGesturesEnabled = interactive,
+                scrollGesturesEnabled = interactive, zoomGesturesEnabled = interactive, indoorLevelPickerEnabled = false,
+                scrollGesturesEnabledDuringRotateOrZoom = interactive),
+            onMapLoaded = { loaded = true },
+            onMapClick = { onExpand?.invoke() },
+        ) {
+            val anchor = content.anchor
+            val icons = rememberMarkerIcons(p.dark)
+            // Circles first, markers on top.
+            if (anchor != null) {
+                content.areaMeters?.let { r ->
+                    Circle(LatLng(anchor.latitude, anchor.longitude), radius = r, fillColor = p.accent.copy(alpha = 0.10f),
+                        strokeColor = p.accent.copy(alpha = 0.7f), strokeWidth = with(density) { 2.dp.toPx() },
+                        strokePattern = listOf(Dash(24f), Gap(14f)))
+                }
+                content.rangeMeters?.let { r ->
+                    Circle(LatLng(anchor.latitude, anchor.longitude), radius = r, fillColor = p.accent.copy(alpha = 0.05f),
+                        strokeColor = p.accent.copy(alpha = 0.45f), strokeWidth = with(density) { 1.5.dp.toPx() },
+                        strokePattern = listOf(Dash(20f), Gap(14f)))
+                }
+                val accuracy = content.accuracyMeters?.takeIf { it > 0 && (content.alwaysShowAccuracy || it > 25) }
+                if (accuracy != null) {
+                    val color = if (anchor.kind == MarkerKind.YOU) YOU_BLUE else p.accent
+                    Circle(LatLng(anchor.latitude, anchor.longitude), radius = accuracy, fillColor = color.copy(alpha = 0.14f),
+                        strokeColor = color.copy(alpha = 0.5f), strokeWidth = with(density) { 1.dp.toPx() })
+                }
+            }
+            content.markers.forEachIndexed { index, marker ->
+                key(marker.kind, index) { MovingMarker(marker, icons, title = markerTitle(marker.kind)) }
+            }
+        }
+        if (content.markers.isEmpty() && emptyLabel.isNotBlank()) Text(emptyLabel, Modifier.align(Alignment.Center)
             .background(p.surface.copy(alpha = 0.92f), RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
             color = p.primary, fontSize = 12.sp)
-        Text(OpenFreeMap.ATTRIBUTION,
-            Modifier.align(Alignment.BottomStart).fillMaxWidth()
-                .background((if (p.dark) Color.Black else Color.White).copy(alpha = 0.72f))
-                .clickable(onClickLabel = tr("Map data credits")) { showCredits = true }
-                .padding(horizontal = 8.dp, vertical = 2.dp),
-            color = if (p.dark) Color(0xFFE8D9E1) else Color(0xFF40303A), fontSize = 8.sp, lineHeight = 10.sp,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-    if (showCredits) AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { showCredits = false }, title = { Text(tr("Map data")) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(tr("Map tiles from OpenFreeMap, built with OpenMapTiles. Map data © OpenStreetMap contributors."))
-                OpenFreeMap.LINKS.forEach { (name, url) ->
-                    TextButton(onClick = {
-                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-                    }) { Text(name) }
+        if (interactive && content.markers.isNotEmpty()) Column(Modifier.align(Alignment.BottomEnd).padding(controlsPadding),
+            verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
+            if (!follow) MapButton(p, Icons.Rounded.MyLocation, tr("Re-centre the map")) { follow = true }
+            Column(Modifier.shadow(3.dp, RoundedCornerShape(14.dp)).background(p.surface, RoundedCornerShape(14.dp))) {
+                IconButton(onClick = { follow = false; runCatching { camera.move(CameraUpdateFactory.zoomIn()) } }, Modifier.size(40.dp)) {
+                    Icon(Icons.Rounded.Add, tr("Zoom in"), tint = p.primary)
+                }
+                IconButton(onClick = { follow = false; runCatching { camera.move(CameraUpdateFactory.zoomOut()) } }, Modifier.size(40.dp)) {
+                    Icon(Icons.Rounded.Remove, tr("Zoom out"), tint = p.primary)
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = { showCredits = false }) { Text(tr("Close")) } })
+        }
+    }
 }
 
-/** [rangeMeters]: a faint circle around the first marker (a volunteer's request area), kept in view. */
-private data class MapData(val markers: List<MapMarker>, val accuracyMeters: Double?, val dark: Boolean,
-                           val rangeMeters: Double? = null, val alwaysShowAccuracy: Boolean = false)
+@Composable
+private fun MapButton(p: MaitriPalette, icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+    IconButton(onClick = onClick, Modifier.size(40.dp).shadow(3.dp, CircleShape).background(p.surface, CircleShape)) {
+        Icon(icon, label, tint = p.accent)
+    }
+}
 
-/** Owns the MapView and redraws when the style is ready or the data changes. */
-private class MapHolder(val view: MapView) {
-    private var map: MapLibreMap? = null
-    private var style: Style? = null
-    private var styleDark: Boolean? = null
-    private var pending: MapData? = null
-    private var framing: Any? = null
+private fun markerTitle(kind: MarkerKind) = when (kind) {
+    MarkerKind.PERSON_IN_NEED -> tr("Person in need")
+    MarkerKind.YOU -> tr("You")
+    MarkerKind.RESPONDER -> tr("Responder")
+}
 
-    init {
-        view.getMapAsync { m ->
-            map = m
-            m.uiSettings.apply {
-                isLogoEnabled = false
-                isAttributionEnabled = false  // shown as text over the map instead, always visible
-                isRotateGesturesEnabled = false
-                isTiltGesturesEnabled = false
-                isCompassEnabled = false
-            }
-            pending?.let { show(it) }
+/** A marker that glides to each new position instead of jumping (about 0.8 s). */
+@Composable
+private fun MovingMarker(marker: MapMarker, icons: Map<MarkerKind, BitmapDescriptor>, title: String) {
+    val target = LatLng(marker.latitude, marker.longitude)
+    val state = remember { MarkerState(target) }
+    val progress = remember { Animatable(1f) }
+    LaunchedEffect(target) {
+        val from = state.position
+        if (from == target) return@LaunchedEffect
+        progress.snapTo(0f)
+        progress.animateTo(1f, tween(800)) {
+            state.position = LatLng(from.latitude + (target.latitude - from.latitude) * value,
+                from.longitude + (target.longitude - from.longitude) * value)
         }
     }
+    Marker(state = state, icon = icons[marker.kind], title = title,
+        anchor = if (marker.kind == MarkerKind.PERSON_IN_NEED) androidx.compose.ui.geometry.Offset(0.5f, 1f)
+            else androidx.compose.ui.geometry.Offset(0.5f, 0.5f),
+        zIndex = when (marker.kind) { MarkerKind.PERSON_IN_NEED -> 3f; MarkerKind.RESPONDER -> 2f; MarkerKind.YOU -> 1f })
+}
 
-    fun show(data: MapData) {
-        pending = data
-        val m = map ?: return
-        if (styleDark != data.dark) {
-            styleDark = data.dark
-            style = null
-            val builder = if (data.dark) Style.Builder().fromJson(
-                view.context.assets.open(OpenFreeMap.DARK_STYLE_ASSET).bufferedReader().use { it.readText() })
-                else Style.Builder().fromUri(OpenFreeMap.LIGHT_STYLE)
-            m.setStyle(builder) { loaded -> addArtwork(loaded); style = loaded; pending?.let { draw(m, loaded, it) } }
-            return
-        }
-        style?.takeIf { it.isFullyLoaded }?.let { draw(m, it, data) }
+/** Maitri's markers: the pink pin artwork, and drawn dots for you (blue) and responders (teal). */
+@Composable
+private fun rememberMarkerIcons(dark: Boolean): Map<MarkerKind, BitmapDescriptor> {
+    val context = LocalContext.current
+    val density = LocalDensity.current.density
+    return remember(dark, density) {
+        val pin = ContextCompat.getDrawable(context, if (dark) R.drawable.maitri_map_pin_dark else R.drawable.maitri_map_pin_light)
+            ?.toBitmap()?.let { BitmapDescriptorFactory.fromBitmap(it) } ?: BitmapDescriptorFactory.defaultMarker(340f)
+        mapOf(MarkerKind.PERSON_IN_NEED to pin,
+            MarkerKind.YOU to BitmapDescriptorFactory.fromBitmap(dot(YOU_BLUE, 18f * density, 3f * density)),
+            MarkerKind.RESPONDER to BitmapDescriptorFactory.fromBitmap(dot(RESPONDER_TEAL, 16f * density, 3f * density)))
     }
+}
 
-    private fun addArtwork(style: Style) {
-        val ctx = view.context
-        fun image(name: String, res: Int) = ContextCompat.getDrawable(ctx, res)?.toBitmap()?.let { style.addImage(name, it) }
-        val dark = styleDark == true
-        image(MarkerKind.PERSON_IN_NEED.image, if (dark) R.drawable.maitri_map_pin_dark else R.drawable.maitri_map_pin_light)
-        image(MarkerKind.YOU.image, R.drawable.maitri_map_you)
-        image(MarkerKind.RESPONDER.image, R.drawable.maitri_map_responder)
-        style.addSource(GeoJsonSource(RANGE))
-        style.addLayer(FillLayer(RANGE, RANGE).withProperties(
-            PropertyFactory.fillColor(if (dark) "#FF9CBE" else "#B82055"), PropertyFactory.fillOpacity(0.06f)))
-        style.addLayer(LineLayer(RANGE + "-edge", RANGE).withProperties(
-            PropertyFactory.lineColor(if (dark) "#FF9CBE" else "#B82055"), PropertyFactory.lineOpacity(0.45f),
-            PropertyFactory.lineWidth(1.5f), PropertyFactory.lineDasharray(arrayOf(2f, 2f))))
-        style.addSource(GeoJsonSource(ACCURACY))
-        style.addLayer(FillLayer(ACCURACY, ACCURACY).withProperties(
-            PropertyFactory.fillColor("#B82055"), PropertyFactory.fillOpacity(0.18f)))
-        style.addLayer(LineLayer(ACCURACY + "-edge", ACCURACY).withProperties(
-            PropertyFactory.lineColor("#B82055"), PropertyFactory.lineOpacity(0.65f), PropertyFactory.lineWidth(1.5f)))
-        style.addSource(GeoJsonSource(MARKERS))
-        style.addLayer(SymbolLayer(MARKERS, MARKERS).withProperties(
-            PropertyFactory.iconImage(Expression.get("icon")),
-            PropertyFactory.iconAllowOverlap(true), PropertyFactory.iconIgnorePlacement(true)))
-    }
-
-    private fun draw(m: MapLibreMap, style: Style, data: MapData) {
-        style.getSourceAs<GeoJsonSource>(MARKERS)?.setGeoJson(FeatureCollection.fromFeatures(data.markers.map {
-            Feature.fromGeometry(Point.fromLngLat(it.longitude, it.latitude)).apply { addStringProperty("icon", it.kind.image) }
-        }))
-        val anchor = data.markers.firstOrNull { it.kind != MarkerKind.RESPONDER }
-        val ring = anchor?.takeIf { (data.accuracyMeters ?: 0.0) > (if (data.alwaysShowAccuracy) 0.0 else TrackingConfig.PRECISE_METRES.toDouble()) }
-            ?.let { circleRing(it.latitude, it.longitude, data.accuracyMeters!!) }
-        val range = anchor?.let { a -> data.rangeMeters?.let { circleRing(a.latitude, a.longitude, it) } }
-        style.getSourceAs<GeoJsonSource>(RANGE)?.setGeoJson(FeatureCollection.fromFeatures(
-            listOfNotNull(range?.let { r -> Feature.fromGeometry(Polygon.fromLngLats(listOf(r.map { Point.fromLngLat(it.first, it.second) }))) })))
-        style.getSourceAs<GeoJsonSource>(ACCURACY)?.setGeoJson(FeatureCollection.fromFeatures(
-            listOfNotNull(ring?.let { r -> Feature.fromGeometry(Polygon.fromLngLats(listOf(r.map { Point.fromLngLat(it.first, it.second) }))) })))
-        frame(m, data)
-    }
-
-    /** Moves the camera only when what must be visible changes, so a user's pan isn't undone on every update. */
-    private fun frame(m: MapLibreMap, data: MapData) {
-        val points = data.markers.map { LatLng(it.latitude, it.longitude) }
-        val range = data.rangeMeters
-        val key: Any = when {
-            points.isEmpty() -> "region"
-            points.size == 1 && range != null -> "range" to (points[0].latitude * 1e3).roundToInt() to (points[0].longitude * 1e3).roundToInt()
-            points.size == 1 -> points[0] to data.accuracyMeters?.let { zoomForAccuracy(it) }
-            else -> points.toSet()
-        }
-        if (key == framing) return
-        framing = key
-        when {
-            points.isEmpty() -> m.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(22.5, 79.0), 3.5))
-            // The whole request area in view; re-framed only after moving about 100 m, so panning isn't undone.
-            points.size == 1 && range != null -> view.post {
-                runCatching {
-                    val ring = circleRing(points[0].latitude, points[0].longitude, range)
-                    val pad = (24 * view.resources.displayMetrics.density).toInt()
-                    m.moveCamera(CameraUpdateFactory.newLatLngBounds(
-                        LatLngBounds.Builder().includes(ring.map { LatLng(it.second, it.first) }).build(), pad))
-                }
-            }
-            points.size == 1 -> m.moveCamera(CameraUpdateFactory.newLatLngZoom(points[0], zoomForAccuracy(data.accuracyMeters)))
-            else -> view.post {
-                runCatching {
-                    // 56 dp around the markers so neither sits on the edge or under the attribution line.
-                    val pad = (56 * view.resources.displayMetrics.density).toInt()
-                    m.moveCamera(CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().includes(points).build(), pad))
-                    // People a few metres apart would zoom to the maximum, where there's nothing to see: keep streets in view.
-                    if (m.cameraPosition.zoom > 16.5) m.moveCamera(CameraUpdateFactory.zoomTo(16.5))
-                }
-            }
-        }
-    }
-
-    companion object {
-        const val MARKERS = "maitri-markers"
-        const val ACCURACY = "maitri-accuracy"
-        const val RANGE = "maitri-range"
-    }
+/** A filled circle with a white ring and a soft shadow, [size] px across. */
+private fun dot(color: Color, size: Float, ring: Float): Bitmap {
+    val edge = (size + ring * 2).roundToInt() + 4
+    val bitmap = Bitmap.createBitmap(edge, edge, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val c = edge / 2f
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    paint.color = 0x33000000
+    canvas.drawCircle(c, c + 1f, size / 2 + ring + 1f, paint)
+    paint.color = android.graphics.Color.WHITE
+    canvas.drawCircle(c, c, size / 2 + ring, paint)
+    paint.color = color.toArgb()
+    canvas.drawCircle(c, c, size / 2, paint)
+    return bitmap
 }

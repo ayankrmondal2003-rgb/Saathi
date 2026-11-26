@@ -114,6 +114,12 @@ Access: **public** (no sign-in), **account** (Firebase ID token), **admin** (tok
 | GET | `/api/users/me/medical-notes` | account | The account's medical notes (stored encrypted; shown to an accepted responder during an SOS). |
 | PUT | `/api/users/me/medical-notes` | account | Saves medical notes (encrypted with MEDICAL_NOTES_KEY; 503 if the key isn't set). |
 
+### `app.responder_history`
+
+| Method | Path | Access | What it does |
+|---|---|---|---|
+| GET | `/api/responders/history` | account | This volunteer's SOS requests, newest first, from the last RESPONDER_HISTORY_DAYS days. Pass `next_cursor` back as `cursor` for the next page. `incident_id` returns just that request (the app uses it when an SOS ends). |
+
 ### `app.routes`
 
 | Method | Path | Access | What it does |

@@ -1,5 +1,6 @@
 package `in`.maitri.app.navigation
 
+import `in`.maitri.app.ui.SettledScreen
 import `in`.maitri.app.tr
 import `in`.maitri.app.trKey
 
@@ -417,7 +418,7 @@ internal fun MainGraph(
                     val incident = state.incident
                     if (incident?.status == IncidentStatus.ACTIVE && confirmedActive != null && confirmedActive == sync.getActiveIncidentId(uid)) {
                         LaunchedEffect(Unit) { endRequested = false }
-                        MaitriActiveSos(
+                        SettledScreen { MaitriActiveSos(
                             incident = incident,
                             requestEnd = endRequested,
                             incidentId = requireNotNull(confirmedActive),
@@ -428,20 +429,22 @@ internal fun MainGraph(
                                 vm.end()
                                 nav.popBackStack()
                             }
-                        )
+                        ) }
                     } else {
                         LaunchedEffect(Unit) { tab("Home") }
                     }
                 }
                 composable("Responder") {
+                    SettledScreen {
                     if (!isDemoMode && `in`.maitri.app.BuildConfig.API_BASE_URL.isNotBlank()) {
                         TestResponderDashboard(uid, onApply = { nav.navigate("VolunteerVerification") }, onResumeJourney = { id ->
                             authorizedJourney = id
                             nav.navigate("ResponderJourney?incidentId=" + android.net.Uri.encode(id))
-                        }) { invitation ->
+                        }, onViewHistory = { nav.navigate("ResponderHistory") { launchSingleTop = true } }) { invitation ->
                             nav.navigate("Incoming?invitationId=" + android.net.Uri.encode(invitation))
                         }
                     } else ResponderUnavailable()
+                    }
                 }
                 composable(
                     route = "Incoming?invitationId={invitationId}",
@@ -468,7 +471,7 @@ internal fun MainGraph(
                     val invitation = match
                     if (invitation == null) Box(Modifier.fillMaxSize().background(maitriPalette().background), contentAlignment = Alignment.Center) {
                         MaitriLoader()
-                    } else MaitriIncoming(
+                    } else SettledScreen { MaitriIncoming(
                         invitation = invitation,
                         uid = uid,
                         onAccepted = { incId ->
@@ -478,7 +481,7 @@ internal fun MainGraph(
                             }
                         },
                         onDeclined = { nav.popBackStack() }
-                    )
+                    ) }
                 }
                 composable(
                     route = "ResponderJourney?incidentId={incidentId}",
@@ -490,11 +493,27 @@ internal fun MainGraph(
                     val incId = backStackEntry.arguments?.getString("incidentId").orEmpty()
                     if (incId != authorizedJourney) {
                         LaunchedEffect(Unit) { nav.popBackStack() }
-                    } else MaitriResponderJourney(
-                        incidentId = incId,
-                        uid = uid,
-                        onIncidentClosed = { authorizedJourney = null; nav.popBackStack() }
-                    )
+                    } else SettledScreen {
+                        MaitriResponderJourney(
+                            incidentId = incId,
+                            uid = uid,
+                            // However screen 07 was opened (tab, inbox, notification, lock screen, history), the end of
+                            // the SOS returns to the Responder tab.
+                            onIncidentClosed = { authorizedJourney = null; tab("Responder") },
+                            onLeft = { authorizedJourney = null; nav.popBackStack() }
+                        )
+                    }
+                }
+                // Responder history: from "View all history" on the Responder tab, or Profile & settings.
+                composable("ResponderHistory") {
+                    `in`.maitri.app.ui.MaitriResponderHistory(uid, onBack = { nav.popBackStack() },
+                        onResumeJourney = { id ->
+                            authorizedJourney = id
+                            nav.navigate("ResponderJourney?incidentId=" + android.net.Uri.encode(id))
+                        },
+                        onOpenInvitation = { id ->
+                            nav.navigate("Incoming?invitationId=" + android.net.Uri.encode(id)) { launchSingleTop = true }
+                        })
                 }
                 composable("Contacts") {
                     MaitriCircle(contacts = state.contacts, vm = vm, message = state.contactsMessage)

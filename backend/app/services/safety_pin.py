@@ -279,7 +279,8 @@ async def resolve_incident_with_pin(db, hub, incident_id: UUID, user, pin: str, 
         await db.execute(
             update(incidents).where(incidents.c.id == incident_id).values(
                 status="CLOSED",
-                ended_at=now
+                ended_at=now,
+                close_reason="RESOLVED"
             )
         )
         await service.revoke_incident_access(db, incident_id, now)

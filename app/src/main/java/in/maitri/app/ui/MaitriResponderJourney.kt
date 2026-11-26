@@ -18,6 +18,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -45,7 +47,7 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.CancellationException
 
 @Composable
-fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: () -> Unit) {
+fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: () -> Unit, onLeft: () -> Unit = onIncidentClosed) {
     val p = maitriPalette()
     val context = LocalContext.current
     val account = remember(uid) { ExpectedAccount(uid) }
@@ -57,6 +59,28 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
     var message by remember { mutableStateOf<String?>(null) }
     var chooseStatus by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    // The SOS ended: true = resolved with the person's Safety PIN, false = ended otherwise. Shown as a banner, then
+    // back to the Responder tab. The cards in Recent requests and History change at the same moment.
+    var ended by remember { mutableStateOf<Boolean?>(null) }
+    var finishing by remember { mutableStateOf(false) }
+    var lastConfirmed by remember { mutableStateOf<IncidentSnapshotDto?>(null) }
+    fun finish() {
+        if (finishing) return
+        finishing = true
+        scope.launch {
+            val state = kotlinx.coroutines.withTimeoutOrNull(4_000) {
+                runCatching { BackendClient.api.responderHistory(limit = 1, incidentId = incidentId, expected = account)
+                    .items.firstOrNull()?.incidentState }.getOrNull()
+            }
+            if (state != null && state != "ACTIVE") {
+                val resolved = state == "RESOLVED"
+                ResponderHistoryEvents.emit(incidentId, resolved)
+                ended = resolved
+                delay(ENDED_BANNER_MS)
+            }
+            onIncidentClosed()
+        }
+    }
     LaunchedEffect(repo, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             try {
@@ -64,16 +88,17 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
                     try {
                         val snapshot = BackendClient.api.snapshot(incidentId, account)
                         if (!snapshot.authorizesJourney(incidentId)) {
-                            onIncidentClosed()
+                            finish()
                             return@repeatOnLifecycle
                         }
                         authorized = snapshot
+                        lastConfirmed = snapshot
                         repo.startTracking()
                     } catch (e: CancellationException) { throw e }
                     catch (e: Exception) {
                         authorized = null
                         if (e is retrofit2.HttpException && e.code() in listOf(401, 403, 404, 410)) {
-                            onIncidentClosed()
+                            finish()
                             return@repeatOnLifecycle
                         }
                     }
@@ -85,11 +110,9 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
             }
         }
     }
-    if (live.status in setOf("CLOSED", "REVOKED")) {
-        LaunchedEffect(Unit) { onIncidentClosed() }
-        return
-    }
-    val confirmed = authorized
+    if (live.status in setOf("CLOSED", "REVOKED")) LaunchedEffect(Unit) { finish() }
+    // While the end is shown, keep the last confirmed screen under the banner.
+    val confirmed = authorized ?: lastConfirmed?.takeIf { finishing }
     if (confirmed == null) {
         Page(tr("Responder")) { Text(tr("Checking incident access…")) }
         return
@@ -133,16 +156,27 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
             finally { busy = false }
         }
     }
+    // Walking navigation in Google Maps (or any maps app): only an intent, no Directions/Routes API.
     fun openMaps() {
-        fix?.let {
-            try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:${it.latitude},${it.longitude}?q=${it.latitude},${it.longitude}"))) }
-            catch (_: android.content.ActivityNotFoundException) { message = tr("Maps unavailable") }
-        }
+        fix?.let { if (!openNavigation(context, it.latitude, it.longitude)) message = tr("Maps unavailable") }
     }
+    fun copyLocation(latitude: Double, longitude: Double) {
+        val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText(tr("Location"), mapsLink(latitude, longitude)))
+        // Android 13+ confirms copies itself.
+        if (android.os.Build.VERSION.SDK_INT < 33) Toast.makeText(context, tr("Location link copied"), Toast.LENGTH_SHORT).show()
+    }
+    Box(Modifier.fillMaxSize()) {
     MaitriResponderJourneyBoard(p, confirmed.requesterMembership?.assistanceStatus, fix?.let { it.latitude to it.longitude },
         busy, onStatus = { chooseStatus = true }, onMaps = ::openMaps, onHelp = ::requestHelp, onDial = { dial() },
         distanceMeters = distance, self = own, onCallPerson = victimPhone?.let { number -> { dial(number) } },
+        updatedAt = fix?.recordedAt, onCopyLocation = fix?.let { f -> { copyLocation(f.latitude, f.longitude) } },
         onMedicalNotes = confirmed.medicalNotes?.takeIf { it.isNotBlank() }?.let { notes -> { message = tr("Medical notes\n\n{0}", notes) } })
+    AnimatedVisibility(ended != null, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(16.dp),
+        enter = slideInVertically { -it } + fadeIn(), exit = fadeOut()) {
+        IncidentEndedBanner(p, ended == true)
+    }
+    }
     if (chooseStatus) MaitriChoiceDialog(title = tr("Responder status"), confirmLabel = tr("Done"),
         onConfirm = { chooseStatus = false }, onDismiss = { chooseStatus = false },
         footer = {
@@ -159,7 +193,7 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
                         try {
                             if (repo.updateAssistanceStatus(status)) {
                                 chooseStatus = false
-                                if (status == "LEFT_INCIDENT") onIncidentClosed()
+                                if (status == "LEFT_INCIDENT") onLeft()
                             } else message = tr("Status change could not be confirmed.")
                         } finally { busy = false }
                     }
@@ -199,13 +233,47 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
         confirmButton = { TextButton(onClick = { message = null }) { Text(tr("Close"), color = p.accent) } }) }
 }
 
+private const val ENDED_BANNER_MS = 2_800L
+
+/** "Incident resolved. Thank you for helping" (green) or "SOS ended. Thank you for helping" (grey). */
+@Composable
+internal fun IncidentEndedBanner(p: MaitriPalette, resolved: Boolean) {
+    val ink = if (resolved) (if (p.dark) p.background else Color.White) else p.primary
+    Row(Modifier.fillMaxWidth().background(if (resolved) p.verified else p.surface, RoundedCornerShape(18.dp))
+        .border(1.dp, if (resolved) p.verified else p.divider, RoundedCornerShape(18.dp))
+        .padding(horizontal = 16.dp, vertical = 14.dp)
+        .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
+        verticalAlignment = Alignment.CenterVertically) {
+        Icon(if (resolved) Icons.Rounded.CheckCircle else Icons.Rounded.Info, null, tint = ink, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(if (resolved) tr("Incident resolved. Thank you for helping") else tr("SOS ended. Thank you for helping"),
+            color = ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** "Last updated 5 s ago" / "Last updated 3 min ago" for the person's last reported location. */
+internal fun lastUpdatedLabel(recordedAt: String, now: java.time.Instant = java.time.Instant.now()): String? {
+    val at = instantOf(recordedAt) ?: return null
+    val seconds = java.time.Duration.between(at, now).seconds.coerceAtLeast(0)
+    return when {
+        seconds < 60 -> tr("Last updated {0} s ago", seconds)
+        seconds < 3600 -> tr("Last updated {0} min ago", seconds / 60)
+        else -> tr("Last updated {0} h ago", seconds / 3600)
+    }
+}
+
+/** A maps link to the person's last reported location, for "Copy location". Only a link: no Maps API is called. */
+internal fun mapsLink(latitude: Double, longitude: Double): String =
+    "https://www.google.com/maps/search/?api=1&query=%.6f,%.6f".format(java.util.Locale.ROOT, latitude, longitude)
+
 /** Screen 07 board. Stateless: shows only server-confirmed status and the last reported coordinates, if any. */
 @Composable
 internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: String?, coordinates: Pair<Double, Double>?,
                                          busy: Boolean, onStatus: () -> Unit, onMaps: () -> Unit,
                                          onHelp: () -> Unit, onDial: () -> Unit, distanceMeters: Double? = null,
                                          self: Pair<Double, Double>? = null, onCallPerson: (() -> Unit)? = null,
-                                         onMedicalNotes: (() -> Unit)? = null) {
+                                         onMedicalNotes: (() -> Unit)? = null, updatedAt: String? = null,
+                                         onCopyLocation: (() -> Unit)? = null) {
     EmergencyBoard(if (p.dark) R.drawable.maitri_dark_07 else R.drawable.maitri_light_07,
         tr("On your way. Keep both of you safe. Request more responders before you approach.")) {
         BoardLabel(84, 59, 270, tr("RESPONDER · ") + (assistanceStatus?.let { responderStatusLabel(it) } ?: tr("Accepted")).uppercase(), p.accent, 11)
@@ -217,9 +285,10 @@ internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: Str
         ArtText(tr("Contact emergency services"), 24f, 727.7f, 300f, 11f, p.accent, FontWeight.Medium)
         BoardAction(24, 51, 342, 65, tr("Update responder status"), !busy, onStatus)
         // Live map over the crop's map area (342 x 320 at 24,140): the person in need and, when known, you.
-        MaitriMap(listOfNotNull(coordinates?.let { MapMarker(it.first, it.second, MarkerKind.PERSON_IN_NEED) },
+        // Exactly over the artwork's map card, which it covers completely (no illustrative map shows at the edges).
+        MaitriMapCard(listOfNotNull(coordinates?.let { MapMarker(it.first, it.second, MarkerKind.PERSON_IN_NEED) },
             self?.let { MapMarker(it.first, it.second, MarkerKind.YOU) }),
-            tr("Awaiting location"), Modifier.offset(24.dp, (140 - 28).dp).size(342.dp, 320.dp))
+            Modifier.offset(24.dp, (140 - 28).dp).size(342.dp, 320.dp), tr("Awaiting location"))
         // With medical notes the title stops short of the link, so neither runs into the other at large text sizes.
         BoardLabel(40, 489, if (onMedicalNotes != null) 190 else 308, tr("Person in need"), p.primary, 16, height = 22, maxLines = 1)
         // Shared by the person in need for this SOS only; gone when it ends.
@@ -227,14 +296,32 @@ internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: Str
             BoardLabel(236, 491, 120, tr("Medical notes ›"), p.accent, 12, height = 20, maxLines = 1)
             BoardAction(228, 480, 130, 32, tr("Read their medical notes"), onClick = onMedicalNotes)
         }
-        BoardLabel(40, 515, 308, coordinates?.let { "${it.first}, ${it.second}" } ?: tr("Awaiting location"), p.secondary)
-        // Two lines at most, kept inside the card (its bottom edge is 34 units below).
-        BoardLabel(40, 546, 306, height = 32, label = when {
-            coordinates == null -> tr("Distance and ETA unavailable")
-            distanceMeters != null -> approxDistanceAndWalk(distanceMeters) + tr(" · Open in Maps")
-            else -> tr("Open last reported location in Maps")
-        }, color = p.accent)
+        // Never raw coordinates: an approximate straight-line distance and walk, and how fresh the location is.
+        BoardLabel(40, 515, 270, when {
+            coordinates == null -> tr("Awaiting location")
+            distanceMeters != null -> approxDistanceAndWalk(distanceMeters)
+            else -> tr("Distance unavailable")
+        }, p.primary, 13, height = 20, maxLines = 1)
+        val now by produceState(java.time.Instant.now()) { while (true) { delay(1_000); value = java.time.Instant.now() } }
+        BoardLabel(40, 540, 270, updatedAt?.let { lastUpdatedLabel(it, now) } ?: tr("Tap to open in Google Maps"),
+            p.secondary, 11, height = 16, maxLines = 1)
+        BoardLabel(40, 559, 270, tr("Open in Google Maps ›"), p.accent, 11, height = 16, maxLines = 1)
         BoardAction(24, 476, 342, 104, tr("Open last reported location in Maps"), coordinates != null, onMaps)
+        // Overflow: Copy location (a maps link), on top of the card's own tap.
+        if (onCopyLocation != null) Box(Modifier.offset(318.dp, (506 - 28).dp).size(44.dp, 44.dp)) {
+            var menu by remember { mutableStateOf(false) }
+            IconButton(onClick = { menu = true }, Modifier.fillMaxSize()) {
+                Icon(Icons.Rounded.MoreVert, tr("More options for the location"), tint = p.secondary)
+            }
+            DropdownMenu(menu, { menu = false }, containerColor = p.surface) {
+                DropdownMenuItem(text = { Text(tr("Copy location"), color = p.primary) },
+                    leadingIcon = { Icon(Icons.Rounded.ContentCopy, null, tint = p.accent) },
+                    onClick = { menu = false; onCopyLocation() })
+                DropdownMenuItem(text = { Text(tr("Open in Google Maps"), color = p.primary) },
+                    leadingIcon = { Icon(Icons.Rounded.Map, null, tint = p.accent) },
+                    onClick = { menu = false; onMaps() })
+            }
+        }
         BoardAction(24, 654, 226, 48, tr("Bring in help"), !busy, onHelp)
         // The artwork's "Call" pill calls the person in need, only with their consent; otherwise it's covered.
         if (onCallPerson != null) {

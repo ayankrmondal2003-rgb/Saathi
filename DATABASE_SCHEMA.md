@@ -205,8 +205,12 @@ Indexes: `incident_events_pkey` (unique); `ix_incident_events_incident_id`
 | `invited_at` | timestamp with time zone | no | `now()` |
 | `expires_at` | timestamp with time zone | no |  |
 | `responded_at` | timestamp with time zone | yes |  |
+| `invite_distance_m` | integer | yes |  |
+| `invite_direction` | character varying | yes |  |
+| `outcome` | character varying | yes |  |
+| `outcome_at` | timestamp with time zone | yes |  |
 
-Indexes: `incident_invitations_incident_id_recipient_user_id_key` (unique); `incident_invitations_pkey` (unique); `ix_incident_invitations_recipient_user_id`
+Indexes: `incident_invitations_incident_id_recipient_user_id_key` (unique); `incident_invitations_pkey` (unique); `ix_incident_invitations_recipient_user_id`; `ix_invitations_history`
 
 ### `incident_resolution_attempts`
 
@@ -271,6 +275,7 @@ Indexes: `incident_responders_incident_id_responder_user_id_key` (unique); `inci
 | `radius_meters` | integer | no | `1000` |
 | `started_at` | timestamp with time zone | no | `now()` |
 | `ended_at` | timestamp with time zone | yes |  |
+| `close_reason` | character varying | yes |  |
 | `evaluated_at` | timestamp with time zone | yes |  |
 | `evaluated_center` | geography | yes |  |
 

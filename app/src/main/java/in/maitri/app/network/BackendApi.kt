@@ -195,6 +195,10 @@ interface BackendApi {
     @POST("api/incidents/{id}/location") suspend fun submitIncidentFix(@Path("id") id: String, @Body fix: FixDto, @Tag expected: ExpectedAccount)
     @GET("api/incidents/{id}/location") suspend fun incidentLocation(@Path("id") id: String, @Tag expected: ExpectedAccount? = null): IncidentLocationDto
     @GET("api/responders/invitations") suspend fun invitations(@Tag expected: ExpectedAccount? = null): List<InvitationDto>
+    @GET("api/responders/history") suspend fun responderHistory(@retrofit2.http.Query("cursor") cursor: String? = null,
+        @retrofit2.http.Query("limit") limit: Int = 20, @retrofit2.http.Query("filter") filter: String = "all",
+        @retrofit2.http.Query("incident_id") incidentId: String? = null,
+        @Tag expected: ExpectedAccount? = null): ResponderHistoryPageDto
     @POST("api/responders/invitations/{id}/response") suspend fun respond(@Path("id") id: String, @Body decision: DecisionDto, @Tag account: ExpectedAccount? = null): StatusDto
 
     @GET("health") suspend fun health(): HealthDto

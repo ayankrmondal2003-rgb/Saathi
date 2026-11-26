@@ -200,6 +200,7 @@ async def update_responder_status(incident_id: UUID, body: ResponderStatusUpdate
             assistance_status="LEFT_INCIDENT",
             assistance_updated_at=now
         ))
+        await set_outcome(db, incident_id, user.id, "LEFT", now)
         await service.audit(db, incident_id, user.id, "RESPONDER_LEFT_INCIDENT")
         await app_hub.disconnect_user(incident_id, user.id, reason="Responder left incident")
         await app_hub.broadcast(incident_id, "RESPONDER_LEFT", {
@@ -216,6 +217,8 @@ async def update_responder_status(incident_id: UUID, body: ResponderStatusUpdate
         assistance_status=body.status,
         assistance_updated_at=now
     ))
+    # "Can't help" is how this responder's part ended, unless they pick On the way / Helping again.
+    await set_outcome(db, incident_id, user.id, "CANT_HELP" if body.status == "UNABLE_TO_HELP" else None, now)
     await service.audit(db, incident_id, user.id, f"RESPONDER_STATUS_{body.status}")
     await app_hub.broadcast(incident_id, "RESPONDER_STATUS_CHANGED", {
         "responder_id": "resp-" + user.id.hex[:8],
@@ -223,6 +226,12 @@ async def update_responder_status(incident_id: UUID, body: ResponderStatusUpdate
         "updated_at": now.isoformat()
     })
     return {"status": body.status}
+
+
+async def set_outcome(db, incident_id, user_id, outcome, now):
+    """Copies how an accepted responder's part ended onto their invitation, which the history reads (0019)."""
+    await db.execute(update(invitations).where(invitations.c.incident_id == incident_id,
+        invitations.c.recipient_user_id == user_id).values(outcome=outcome, outcome_at=now if outcome else None))
 
 
 @router.get("/responders/invitations")
