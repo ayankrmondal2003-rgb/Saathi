@@ -1,6 +1,7 @@
 [
  "\nand ",
  " away",
+ "+ {0} practice",
  ". You'll be told if they don't check in.",
  "1 person",
  "1 responder accepted",
@@ -488,6 +489,7 @@
  "Resend in {0}s",
  "Reset password",
  "Resolved",
+ "Resolved · marked safe",
  "Responder",
  "Responder access has ended.",
  "Responder availability and invitations need a signed-in account connected to the Maitri server. ",
@@ -675,6 +677,7 @@
  "Unable to confirm this incident.",
  "Unable to create this account. Try signing in or resetting your password.",
  "Unable to start phone verification: Activity context required.",
+ "Under 50 m from you",
  "Unknown error",
  "Unread. {0}. {1}",
  "Up to 60 seconds, recorded only while you can see the red indicator. ",

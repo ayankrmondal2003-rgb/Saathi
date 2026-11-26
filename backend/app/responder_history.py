@@ -64,9 +64,11 @@ class HistoryItem(BaseModel):
 
 
 class Summary(BaseModel):
+    """`helped` and `resolved` count real SOSes only; accepted practice SOSes are counted apart in `practice`."""
     total: int
     helped: int
     resolved: int
+    practice: int
 
 
 class HistoryPage(BaseModel):
@@ -138,8 +140,9 @@ async def history(request: Request, cursor: str | None = None, limit: int = Quer
     more = len(rows) > limit
     rows = rows[:limit]
     summary = (await db.execute(text(f"""SELECT count(*) AS total,
-            count(*) FILTER (WHERE v.status = 'ACCEPTED') AS helped,
-            count(*) FILTER (WHERE {FILTERS['resolved']}) AS resolved {base}"""), params)).mappings().one()
+            count(*) FILTER (WHERE v.status = 'ACCEPTED' AND NOT i.is_test) AS helped,
+            count(*) FILTER (WHERE {FILTERS['resolved']} AND NOT i.is_test) AS resolved,
+            count(*) FILTER (WHERE v.status = 'ACCEPTED' AND i.is_test) AS practice {base}"""), params)).mappings().one()
     timeline = await _timelines(db, user.id, [r["incident_id"] for r in rows])
     now = datetime.now(timezone.utc)
     items = [_item(row, timeline.get(row["incident_id"], []), now) for row in rows]

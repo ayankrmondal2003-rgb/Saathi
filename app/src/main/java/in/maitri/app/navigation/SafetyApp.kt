@@ -492,7 +492,9 @@ internal fun MainGraph(
                 ) { backStackEntry ->
                     val incId = backStackEntry.arguments?.getString("incidentId").orEmpty()
                     if (incId != authorizedJourney) {
-                        LaunchedEffect(Unit) { nav.popBackStack() }
+                        // Only while this screen is the current one: during its exit animation (after the SOS ended
+                        // and the Responder tab opened) popping here would undo that and land on Home.
+                        LaunchedEffect(Unit) { if (nav.currentBackStackEntry?.id == backStackEntry.id) nav.popBackStack() }
                     } else SettledScreen {
                         MaitriResponderJourney(
                             incidentId = incId,

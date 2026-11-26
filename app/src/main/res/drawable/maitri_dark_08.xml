@@ -4,13 +4,7 @@
         <path android:pathData="M32,972 h390 v844 h-390 Z" android:fillColor="#19151B"/>
         <path android:pathData="M332,1033 h48 a18,18 0,0 1 18,18 v0 a18,18 0,0 1 -18,18 h-48 a18,18 0,0 1 -18,-18 v-0 a18,18 0,0 1 18,-18 Z" android:fillColor="#36232F"/>
         <path android:pathData="M80,1108 h294 a24,24 0,0 1 24,24 v204 a24,24 0,0 1 -24,24 h-294 a24,24 0,0 1 -24,-24 v-204 a24,24 0,0 1 24,-24 Z" android:fillColor="#211D26"/>
-        <path android:pathData="M118,1125.33 h46 a12,12 0,0 1 12,12 v43.724999999999994 a12,12 0,0 1 -12,12 h-46 a12,12 0,0 1 -12,-12 v-43.724999999999994 a12,12 0,0 1 12,-12 Z" android:fillColor="#2A2530"/>
-        <path android:pathData="M230,1246.6 h136 a12,12 0,0 1 12,12 v17.737499999999997 a12,12 0,0 1 -12,12 h-136 a12,12 0,0 1 -12,-12 v-17.737499999999997 a12,12 0,0 1 12,-12 Z" android:fillColor="#2A2530"/>
-        <path android:pathData="M228,1323.78 h142 a12,12 0,0 1 12,12 v5.925000000000001 a12,12 0,0 1 -12,12 h-142 a12,12 0,0 1 -12,-12 v-5.925000000000001 a12,12 0,0 1 12,-12 Z" android:fillColor="#2A2530"/>
-        <path android:pathData="M116,1230.06 h48 a12,12 0,0 1 12,12 v24.825000000000003 a12,12 0,0 1 -12,12 h-48 a12,12 0,0 1 -12,-12 v-24.825000000000003 a12,12 0,0 1 12,-12 Z" android:fillColor="#2A2530"/>
-        <path android:pathData="M254,1117.45 h110 a18,18 0,0 1 18,18 v23.85 a18,18 0,0 1 -18,18 h-110 a18,18 0,0 1 -18,-18 v-23.85 a18,18 0,0 1 18,-18 Z" android:fillColor="#24362F"/>
-        <path android:pathData="M56 1210.38H398M56 1304.88H398M196 1108V1360M86 1108V1360" android:strokeColor="#3D3443" android:strokeWidth="15" android:strokeLineCap="round" android:strokeLineJoin="round"/>
-        <path android:pathData="M299,1338 h86 a5,5 0,0 1 5,5 v6 a5,5 0,0 1 -5,5 h-86 a5,5 0,0 1 -5,-5 v-6 a5,5 0,0 1 5,-5 Z" android:fillColor="#211D26"/>
+        <!-- The illustrative map that sat here is gone: MaitriMapCard draws the live map on this card. Its roads had round caps that stuck out past the card (the "grey dots" around screen 07/08 maps). -->
         <path android:pathData="M74,1406 h306 a18,18 0,0 1 18,18 v54 a18,18 0,0 1 -18,18 h-306 a18,18 0,0 1 -18,-18 v-54 a18,18 0,0 1 18,-18 Z" android:fillColor="#28212A"/>
         <path android:pathData="M71,1542 h135 a15,15 0,0 1 15,15 v12 a15,15 0,0 1 -15,15 h-135 a15,15 0,0 1 -15,-15 v-12 a15,15 0,0 1 15,-15 Z" android:fillColor="#28212A"/>
         <path android:pathData="M248,1542 h135 a15,15 0,0 1 15,15 v12 a15,15 0,0 1 -15,15 h-135 a15,15 0,0 1 -15,-15 v-12 a15,15 0,0 1 15,-15 Z" android:fillColor="#28212A"/>

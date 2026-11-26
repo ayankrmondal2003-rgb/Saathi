@@ -205,6 +205,9 @@ private fun MaitriMapFallback(markers: List<MapMarker>, emptyLabel: String, modi
     }
 }
 
+/** Appended to a bundled style (before its closing bracket) for small maps that show only a circle. */
+private const val NO_LABELS = """, {"elementType": "labels", "stylers": [{"visibility": "off"}]}]"""
+
 private val YOU_BLUE = Color(0xFF1A73E8)
 private val RESPONDER_TEAL = Color(0xFF0E9F8E)
 
@@ -218,8 +221,13 @@ private fun MaitriGoogleMap(content: MapContent, emptyLabel: String, modifier: M
     var loaded by remember { mutableStateOf(false) }
     // Follow the markers until the user moves the map; "Re-centre" turns it back on.
     var follow by rememberSaveable { mutableStateOf(true) }
-    val style = remember(p.dark) {
-        runCatching { MapStyleOptions.loadRawResourceStyle(context, if (p.dark) R.raw.maitri_map_dark else R.raw.maitri_map_light) }.getOrNull()
+    val style = remember(p.dark, interactive) {
+        runCatching {
+            val json = context.resources.openRawResource(if (p.dark) R.raw.maitri_map_dark else R.raw.maitri_map_light)
+                .bufferedReader().use { it.readText() }.trim()
+            // A small, non-interactive map (screen 06) shows only its circle: street and place names would swamp it.
+            MapStyleOptions(if (interactive) json else json.removeSuffix("]").trimEnd() + NO_LABELS)
+        }.getOrNull()
     }
     LaunchedEffect(camera.isMoving) {
         if (camera.isMoving && camera.cameraMoveStartedReason == CameraMoveStartedReason.GESTURE) follow = false
@@ -244,7 +252,7 @@ private fun MaitriGoogleMap(content: MapContent, emptyLabel: String, modifier: M
         GoogleMap(
             modifier = Modifier.matchParentSize(),
             cameraPositionState = camera,
-            properties = MapProperties(mapStyleOptions = style, isBuildingEnabled = true, minZoomPreference = 3f, maxZoomPreference = 20f),
+            properties = MapProperties(mapStyleOptions = style, isBuildingEnabled = false, minZoomPreference = 3f, maxZoomPreference = 20f),
             uiSettings = MapUiSettings(zoomControlsEnabled = false, myLocationButtonEnabled = false, mapToolbarEnabled = false,
                 compassEnabled = interactive, rotationGesturesEnabled = false, tiltGesturesEnabled = interactive,
                 scrollGesturesEnabled = interactive, zoomGesturesEnabled = interactive, indoorLevelPickerEnabled = false,
@@ -257,8 +265,8 @@ private fun MaitriGoogleMap(content: MapContent, emptyLabel: String, modifier: M
             // Circles first, markers on top.
             if (anchor != null) {
                 content.areaMeters?.let { r ->
-                    Circle(LatLng(anchor.latitude, anchor.longitude), radius = r, fillColor = p.accent.copy(alpha = 0.10f),
-                        strokeColor = p.accent.copy(alpha = 0.7f), strokeWidth = with(density) { 2.dp.toPx() },
+                    Circle(LatLng(anchor.latitude, anchor.longitude), radius = r, fillColor = p.accent.copy(alpha = 0.16f),
+                        strokeColor = p.accent, strokeWidth = with(density) { 2.5.dp.toPx() },
                         strokePattern = listOf(Dash(24f), Gap(14f)))
                 }
                 content.rangeMeters?.let { r ->

@@ -141,8 +141,6 @@ fun MaitriIncoming(
 
 @Composable
 internal fun MaitriIncomingContent(
-    self: OwnFix? = null,
-    areaMeters: Double? = null,
     p: MaitriPalette,
     approxLocality: String,
     approxDistance: String,
@@ -151,7 +149,10 @@ internal fun MaitriIncomingContent(
     errorMessage: String?,
     onAccept: () -> Unit,
     onDecline: () -> Unit,
-    dismissError: () -> Unit = {}
+    dismissError: () -> Unit = {},
+    // Before accepting: your position and the band's outer edge, for the approximate-area map. Never theirs.
+    self: OwnFix? = null,
+    areaMeters: Double? = null
 ) {
     EmergencyBoard(if (p.dark) R.drawable.maitri_dark_06 else R.drawable.maitri_light_06,
         tr("Someone needs help. Only accept if you can respond safely."), 816) {
@@ -178,8 +179,8 @@ internal fun MaitriIncomingContent(
                 surround = p.background, shape = RoundedCornerShape(14.dp))
             BoardLabel(170, 408, 176, tr("Within {0} of you", distanceLabel(areaMeters)), p.primary, 14, height = 22, maxLines = 1)
             BoardLabel(170, 430, 176, tr("Location private until accepted"), p.secondary, 11, height = 30, maxLines = 2)
-            BoardLabel(170, 462, 176, estimatedEta, p.accent, height = 18, maxLines = 1)
-            BoardLabel(170, 478, 176, approxDistance, p.primary, height = 18, maxLines = 1)
+            // The band is already in "Within 500 m of you"; the countdown gets the rest of the row.
+            BoardLabel(170, 464, 176, estimatedEta, p.accent, height = 24, maxLines = 1)
         } else {
             // The card's rows are 24 units apart: each label keeps to its row at any text size.
             BoardLabel(86, 410, 252, approxLocality, p.primary, 15, height = 26, maxLines = 1)
