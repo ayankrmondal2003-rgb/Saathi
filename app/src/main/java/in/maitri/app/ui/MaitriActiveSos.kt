@@ -375,11 +375,11 @@ fun MaitriActiveSos(
         BoardLabel(24, 98, 330, locationLine(shown, hint),
             if (hint == LocationHint.NONE || hint == LocationHint.SEARCHING) p.secondary else p.accent)
         // Live map over the crop's map area (342 x 252 at 24,136): the phone's own fix at once, then the server's.
-        MaitriMap(listOfNotNull(shown?.let { MapMarker(it.latitude, it.longitude, MarkerKind.PERSON_IN_NEED) }) +
+        MaitriMapCard(listOfNotNull(shown?.let { MapMarker(it.latitude, it.longitude, MarkerKind.PERSON_IN_NEED) }) +
             snapshot?.activeResponders.orEmpty().mapNotNull { r ->
                 if (r.latitude != null && r.longitude != null) MapMarker(r.latitude, r.longitude, MarkerKind.RESPONDER) else null
             },
-            locationHintText(hint) ?: tr("Finding your location…"), Modifier.offset(24.dp, (136 - 28).dp).size(342.dp, 252.dp),
+            Modifier.offset(24.dp, (136 - 28).dp).size(342.dp, 252.dp), locationHintText(hint) ?: tr("Finding your location…"),
             accuracyMeters = shown?.accuracyMeters)
         locationAction(hint)?.let { (label, act) ->
             Text(label, Modifier.offset(36.dp, (136 - 28 + 12).dp).clip(RoundedCornerShape(16.dp))

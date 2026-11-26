@@ -152,7 +152,10 @@ private fun MaitriLiveMap(markers: List<MapMarker>, emptyLabel: String, modifier
     var showCredits by remember { mutableStateOf(false) }
     val holder = remember(context) {
         MapLibre.getInstance(context)
-        MapHolder(MapView(context).apply { onCreate(null) })
+        // TextureView, not the default GLSurfaceView: a SurfaceView is composited outside the window's views, so it
+        // ignores the card's clip and lags behind screen transitions (the map spilled past the card on screen 07).
+        MapHolder(MapView(context, org.maplibre.android.maps.MapLibreMapOptions.createFromAttributes(context).textureMode(true))
+            .apply { onCreate(null) })
     }
     DisposableEffect(lifecycle, holder) {
         val view = holder.view

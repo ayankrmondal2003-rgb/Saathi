@@ -498,7 +498,8 @@ Screen numbers 01–14 are the design boards in `design-reference/` (`maitri · 
 
 | Control | Step by step |
 |---|---|
-| Map, distance, approx. walk | `GET /api/incidents/{id}/snapshot` + WebSocket; walking time is straight-line × 1.3 at 80 m/min (`ui/MaitriMap.kt: walkingMinutes`). |
+| Map, distance, approx. walk | `GET /api/incidents/{id}/snapshot` + WebSocket; walking time is straight-line × 1.3 at 80 m/min (`ui/MaitriMap.kt: walkingMinutes`). The map is the shared `ui/MaitriMapCard.kt: MaitriMapCard` (every map in the app): fixed to the artwork's map card, clipped to its rounded corners, on an opaque card so the illustrative map in the artwork never shows, and created only after the screen's enter transition (`SettledScreen`). Every entry point (Responder tab, Inbox, notification, lock-screen Accept, Responder history, app restart) opens the same `ResponderJourney` route. |
+| Person in need card | "≈ 10 m away · approx. 1 min walk" (never raw coordinates), "Last updated 5 s ago" (ticks every second), tap → Maps; **⋮** → **Copy location** (a `google.com/maps/search` link to the clipboard) or **Open in Maps**. |
 | **Update status** (On the way / Helping / Can't help / Leave) | `PUT /api/incidents/{id}/responders/status` (`incident_responders`, `incident_events`; broadcasts `RESPONDER_STATUS_CHANGED`). |
 | **Call** | Only if the person allowed it (`users.share_phone_in_sos`, migration 0016); otherwise hidden. |
 | **Medical notes ›** | Shown only to an authorized responder on an active SOS (`privacy.py: notes_for_responder`). |
