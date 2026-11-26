@@ -7,7 +7,7 @@ from app.config import load_settings
 
 
 async def cleanup(db, settings, batch=250):
-    params = dict(batch=batch, hours=settings.closed_location_hours, invitations=settings.expired_invitation_days,
+    params = dict(batch=batch, hours=settings.closed_location_hours, history=settings.responder_history_days,
                   grants=settings.expired_grant_days, audits=settings.audit_days)
     queries = [
         """UPDATE incidents SET latest_location=NULL,evaluated_center=NULL,location_recorded_at=NULL,
@@ -26,10 +26,11 @@ async def cleanup(db, settings, batch=250):
         """DELETE FROM trusted_contact_grants WHERE id IN (SELECT id FROM trusted_contact_grants
            WHERE LEAST(access_expires_at, COALESCE(revoked_at, access_expires_at)) < now() - make_interval(days => :grants)
            ORDER BY access_expires_at LIMIT :batch FOR UPDATE SKIP LOCKED)""",
+        # Volunteer requests of closed SOSes, whatever the answer, once they leave the responder history.
         """DELETE FROM incident_invitations WHERE id IN (SELECT v.id FROM incident_invitations v JOIN incidents i
-           ON i.id=v.incident_id WHERE i.status='CLOSED' AND v.status='EXPIRED'
-           AND v.expires_at<now()-make_interval(days => :invitations)
-           ORDER BY v.expires_at LIMIT :batch FOR UPDATE OF v SKIP LOCKED)""",
+           ON i.id=v.incident_id WHERE i.status='CLOSED'
+           AND v.invited_at<now()-make_interval(days => :history)
+           ORDER BY v.invited_at LIMIT :batch FOR UPDATE OF v SKIP LOCKED)""",
         """DELETE FROM incident_resolution_attempts WHERE id IN (
            SELECT a.id FROM incident_resolution_attempts a JOIN incidents i ON i.id=a.incident_id
            WHERE i.status='CLOSED' AND a.created_at<now()-make_interval(days => :audits)

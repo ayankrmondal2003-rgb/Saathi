@@ -25,6 +25,7 @@ from app.circle import router as circle_members_router
 from app.live_link import router as live_router
 from app.checkins import CheckInScheduler
 from app.admin import router as admin_router
+from app.responder_history import router as history_router
 from app.privacy import router as privacy_router, purge_sos_media
 from app.maintenance import cleanup as retention_cleanup
 from app.services.outbox_worker import default_firebase_sender
@@ -156,6 +157,7 @@ def create_app(settings=None, *, initialize_firebase=True):
     app.include_router(circle_members_router)
     app.include_router(live_router)
     app.include_router(admin_router)
+    app.include_router(history_router)
     app.include_router(privacy_router)
     app.include_router(ws_router)
 

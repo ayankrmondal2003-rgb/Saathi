@@ -438,7 +438,7 @@ internal fun MainGraph(
                         TestResponderDashboard(uid, onApply = { nav.navigate("VolunteerVerification") }, onResumeJourney = { id ->
                             authorizedJourney = id
                             nav.navigate("ResponderJourney?incidentId=" + android.net.Uri.encode(id))
-                        }) { invitation ->
+                        }, onViewHistory = { nav.navigate("ResponderHistory") { launchSingleTop = true } }) { invitation ->
                             nav.navigate("Incoming?invitationId=" + android.net.Uri.encode(invitation))
                         }
                     } else ResponderUnavailable()
@@ -493,8 +493,22 @@ internal fun MainGraph(
                     } else MaitriResponderJourney(
                         incidentId = incId,
                         uid = uid,
-                        onIncidentClosed = { authorizedJourney = null; nav.popBackStack() }
+                        // However screen 07 was opened (tab, inbox, notification, lock screen, history), the end of
+                        // the SOS returns to the Responder tab.
+                        onIncidentClosed = { authorizedJourney = null; tab("Responder") },
+                        onLeft = { authorizedJourney = null; nav.popBackStack() }
                     )
+                }
+                // Responder history: from "View all history" on the Responder tab, or Profile & settings.
+                composable("ResponderHistory") {
+                    `in`.maitri.app.ui.MaitriResponderHistory(uid, onBack = { nav.popBackStack() },
+                        onResumeJourney = { id ->
+                            authorizedJourney = id
+                            nav.navigate("ResponderJourney?incidentId=" + android.net.Uri.encode(id))
+                        },
+                        onOpenInvitation = { id ->
+                            nav.navigate("Incoming?invitationId=" + android.net.Uri.encode(id)) { launchSingleTop = true }
+                        })
                 }
                 composable("Contacts") {
                     MaitriCircle(contacts = state.contacts, vm = vm, message = state.contactsMessage)

@@ -134,7 +134,9 @@ async def test_workers_expiry_closure_and_retention(world):
     async with sessions.begin() as db:
         invite = await db.scalar(text("SELECT id FROM incident_invitations"))
         assert invite and await db.scalar(text("SELECT count(*) FROM notification_outbox")) == 1
-        await db.execute(text("UPDATE incident_invitations SET expires_at=now()-interval '8 days'"))
+        # Past the responder history (RESPONDER_HISTORY_DAYS, 30): deleted once the SOS is closed.
+        await db.execute(text("UPDATE incident_invitations SET expires_at=now()-interval '8 days', "
+                              "invited_at=now()-interval '31 days'"))
     accepted,_ = await asyncio.gather(call("responder","POST",f"/responders/invitations/{invite}/response",
         json={"decision":"ACCEPTED"}),batch(cleanup))
     assert accepted.status_code == 409 or accepted.json()["status"] == "EXPIRED"

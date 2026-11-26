@@ -15,7 +15,7 @@ provider's current price or limit). They are marked **Unverified** and should be
 environment variable or file that holds each one instead.
 
 **Snapshot.** Written against `master` at commit `03faae9` (app version **0.9.4-beta.5**, versionCode 904,
-`app/build.gradle.kts: defaultConfig`), backend migrations up to `0018`.
+`app/build.gradle.kts: defaultConfig`), backend migrations up to `0019`.
 
 ## Contents
 
@@ -220,7 +220,7 @@ Android levels: `minSdk = 26` (Android 8.0), `targetSdk = 37`, `compileSdk = 37`
 | SQLAlchemy (asyncio) | ≥2.0.38,<2.1 | Database access (Core + raw SQL) | `backend/app/database/v1.py`, routes |
 | asyncpg | ≥0.30,<1 | PostgreSQL driver | `backend/app/database/engine.py` |
 | GeoAlchemy2 | ≥0.17,<1 | PostGIS geography columns | `backend/app/database/v1.py` |
-| Alembic | ≥1.14,<2 | Database migrations (0001–0018), run on every deploy | `backend/alembic/`, `backend/render-migrate.sh` |
+| Alembic | ≥1.14,<2 | Database migrations (0001–0019), run on every deploy | `backend/alembic/`, `backend/render-migrate.sh` |
 | Pydantic + pydantic-settings | ≥2.10 / ≥2.7 | Request models; settings from environment variables | `backend/app/schemas.py`, `backend/app/config.py` |
 | firebase-admin | ≥6.6,<8 | Verifies ID tokens, sends FCM, deletes Firebase users | `backend/app/core.py`, `services/outbox_worker.py`, `privacy.py` |
 | argon2-cffi | ≥23.1 | Hashes Safety PINs | `backend/app/services/safety_pin.py` |
@@ -445,11 +445,24 @@ Screen numbers 01–14 are the design boards in `design-reference/` (`maitri · 
 | **Community responder** switch | `PUT /api/users/me` with `responder_opt_in` (`routes.py: profile` → `users`). On Android 13+ asks for notifications. |
 | **Available for nearby requests** switch | `PUT /api/users/me` with `responder_available`; then the phone reports its location: `PUT /api/responders/location` (`routes.py: responder_fix` → `responder_locations`; 409 if not newer) while the tab is visible, when Maitri opens, and every ~15 min in the background if allowed (`network/ResponderLocation.kt`). Turning it off deletes the volunteer's location row (`routes.py: profile`). |
 | Request alerts → **Fix** buttons | Open the right setting: notifications, the SOS requests channel, lock-screen (full-screen) alerts, battery, background location. |
-| Recent requests | `GET /api/responders/invitations` (`routes.py: inbox` → `incident_invitations`). |
+| Recent requests | `GET /api/responders/history?limit=20` (`responder_history.py: history` → `incident_invitations`, `incidents`, `incident_events`). Shows every open request (accepted SOS still active, or waiting for an answer) and the 3 latest finished ones from the last 7 days, as incident cards (`ui/ResponderHistory.kt: IncidentCard`): Active (pink, live pulse, elapsed time; tap → screen 07), Incident resolved (green), SOS ended (grey), You left / Couldn't help (grey), Declined / Missed (subtle grey). A finished card opens a read-only summary (timeline, durations, responders; no map or location). Cached on the phone. **View all history (N) ›** → Responder history. When the SOS ends the card changes at once (push `SOS_REQUEST_CLOSED` with `accepted=true`, or screen 07's `INCIDENT_CLOSED`; `network/ResponderHistory.kt: ResponderHistoryEvents`). |
 
 - **Loading.** A loader card until the profile arrives; cached profile shows at once.
 - **Permissions.** Location (foreground; background only with "Allow all the time"), notifications, full-screen
   intent (Android 14+).
+
+### Responder history (extra screen)
+
+- **Purpose.** Every SOS request this volunteer received in the last 30 days and how it ended. File: `ui/ResponderHistory.kt:
+  MaitriResponderHistory`; server `responder_history.py`.
+- **Opened from.** **View all history (N) ›** on the Responder tab, and Profile & settings → **Responder history** (shown
+  only to approved volunteers). Back returns to where it was opened.
+- **Shown.** "You've helped N times · Resolved M"; filter chips All · Accepted · Resolved · Declined & missed; cards grouped
+  Today · Yesterday · This week · then by month. 20 at a time with infinite scroll (`GET /api/responders/history?cursor=`),
+  pull-to-refresh, MaitriLoader while loading, an empty text per filter. What was loaded is cached on the phone
+  (`StartupCache` key `history_<filter>`, up to 100 cards) and shown offline.
+- **Privacy.** No map, coordinates, name or phone. Where it was: "~450 m north-east of you" after accepting, otherwise only the
+  distance band seen before answering.
 
 ### 04 Volunteer verification
 
@@ -937,6 +950,7 @@ in that code path.
 
 | Method | Path | Access | What it does | Code | Tables touched | Limits |
 |---|---|---|---|---|---|---|
+| GET | `/api/responders/history` | account | This volunteer's SOS requests from the last `RESPONDER_HISTORY_DAYS` (30) days, newest first, 20 a page (`cursor`, `limit` ≤ 50, `filter` = all / accepted / resolved / declined_missed, optional `incident_id`). Each item: ids, invited/accepted/closed times, my response, incident state, distance band, approximate area (rounded distance + compass direction, accepted only), duration, number of responders, timeline. Never coordinates, name or phone. | `backend/app/responder_history.py: history` | `incident_invitations`, `incidents`, `incident_events` | |
 | GET | `/api/responders/invitations` | account | Pending SOS requests for this volunteer. | `backend/app/routes.py: inbox` | `incident_invitations`, `incidents`, `responder_locations` |  |
 | POST | `/api/responders/invitations/{invitation_id}/response` | account | Accept or decline an SOS request. | `backend/app/routes.py: respond` | `inbox_items`, `incident_events`, `incident_invitations`, `incident_responders`, `incidents`, `notification_outbox`, `responder_locations`, `volunteer_applications` |  |
 | PUT | `/api/responders/location` | account | A volunteer's current location, used to find nearby responders. | `backend/app/routes.py: responder_fix` | `responder_locations` |  |
@@ -1046,7 +1060,7 @@ starts exactly one worker.
 2. `start-render.sh` checks `DATABASE_URL`, `FIREBASE_PROJECT_ID` and (on Render) `GOOGLE_APPLICATION_CREDENTIALS`;
    warns if `REDIS_URL` is missing; checks the Firebase secret file is readable (exit 78 if not).
 3. `render-migrate.sh` → `alembic -x ensure_postgis=true upgrade head` (creates the PostGIS extension if needed,
-   applies migrations 0001–0018). If a migration fails, the API does not start.
+   applies migrations 0001–0019). If a migration fails, the API does not start.
 4. `uvicorn app.main:create_app --factory --workers 1`.
 5. `create_app` → `init_sentry` (if `SENTRY_DSN`) → lifespan: database engine, Firebase Admin (checks the credential
    project matches `FIREBASE_PROJECT_ID`), realtime hub, the three background loops.
@@ -1248,6 +1262,10 @@ Volunteers asked to help.
 | `invited_at` | timestamp with time zone | no | When the volunteer was asked. |
 | `expires_at` | timestamp with time zone | no | When it stops being valid. |
 | `responded_at` | timestamp with time zone | yes | When they answered. |
+| `invite_distance_m` | integer | yes | Distance to the SOS when invited, rounded to 50 m (responder history; 0019). |
+| `invite_direction` | character varying(2) | yes | Compass direction (N…NW) from the volunteer to the SOS when invited. |
+| `outcome` | character varying(16) | yes | LEFT / CANT_HELP: how an accepted volunteer's part ended. |
+| `outcome_at` | timestamp with time zone | yes | When that happened. |
 
 #### `incident_resolution_attempts`
 
@@ -1314,6 +1332,7 @@ One row per SOS.
 | `radius_meters` | integer | no | Volunteer search radius (1000). |
 | `started_at` | timestamp with time zone | no | SOS start. |
 | `ended_at` | timestamp with time zone | yes | SOS end. |
+| `close_reason` | character varying(16) | yes | RESOLVED (Safety PIN) / ORPHANED (auto-closed) / OTHER (0019). |
 | `evaluated_at` | timestamp with time zone | yes | Last volunteer search. |
 | `evaluated_center` | geography | yes | Where that search was centred (moving geofence). |
 
@@ -1508,6 +1527,7 @@ One application per user.
 | `0016_sos_responder_details.py` | Consent to share the owner's phone number with accepted responders during an SOS (screen 07 "Call"). |
 | `0017_medical_notes.py` | Medical notes stored encrypted on the server (AES-256-GCM, key MEDICAL_NOTES_KEY; see app/privacy.py). |
 | `0018_sos_request_closed.py` | Push-only inbox kind SOS_REQUEST_CLOSED: tells a volunteer their open request closed (SOS ended, or enough volunteers accepted) so the phone stops alerting. |
+| `0019_responder_history.py` | Responder history: distance (rounded to 50 m) and compass direction to the SOS frozen at invite time, the responder's outcome (LEFT / CANT_HELP) and the incident's close reason (RESOLVED / ORPHANED / OTHER). No coordinates. |
 
 ### 8.3 Data map
 
@@ -1663,7 +1683,8 @@ All are read by `backend/app/config.py: Settings` (names are case-insensitive; `
 | `ORPHANED_INCIDENT_HOURS` | no | `12` | Auto-close an SOS with no activity this long |
 | `CLOSED_LOCATION_HOURS` | no | `168` | Erase SOS location this long after closing |
 | `SOS_MEDIA_DAYS` | no | `30` | Delete SOS photos/voice after this many days |
-| `EXPIRED_INVITATION_DAYS`, `EXPIRED_GRANT_DAYS`, `AUDIT_DAYS` | no | `7`, `7`, `30` | Retention of expired invitations, grants, PIN audit rows |
+| `RESPONDER_HISTORY_DAYS` | no | `30` (max 30) | Responder history, and how long volunteer requests of a closed SOS are kept. The privacy policy promises SOS records for 30 days, so a longer value needs a policy change first; the setting refuses more than 30. Replaces `EXPIRED_INVITATION_DAYS`. |
+| `EXPIRED_GRANT_DAYS`, `AUDIT_DAYS` | no | `7`, `30` | Retention of grants, PIN audit rows |
 | `DB_IDLE_SECONDS`, `IDLE_SWEEP_SECONDS` | no | `900`, `3600` | Let Neon sleep when idle (section 2) |
 | `MEDICAL_NOTES_KEY` | for notes | — | 32 random bytes, base64 (section 9.2) |
 | `LIVE_LINK_SECRET` | recommended | — | Signs live links; without it links break on every restart |
@@ -1838,7 +1859,7 @@ App Distribution, cron-job.org, Sentry Developer, GitHub (public repo, Pages). T
 | Term | Meaning |
 |---|---|
 | **API** | The server's set of web addresses the app calls. |
-| **Alembic / migration** | A versioned script that changes the database structure; run in order (0001–0018). |
+| **Alembic / migration** | A versioned script that changes the database structure; run in order (0001–0019). |
 | **Argon2** | A slow, memory-hard hashing method for passwords/PINs, so stolen hashes are hard to crack. |
 | **Baseline Profile** | A list of app code that Android compiles ahead of time on install, so start-up and scrolling are faster. |
 | **BOM** | Bill of materials: one version that pins a family of libraries. |

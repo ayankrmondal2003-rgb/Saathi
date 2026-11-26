@@ -52,13 +52,24 @@ incidents = Table("incidents", metadata, pk(), reference("victim_user_id", "user
     stamp("location_recorded_at", nullable=True), stamp("location_received_at", nullable=True),
     Column("radius_meters", Integer, nullable=False, server_default="1000"),
     stamp("started_at", True), stamp("ended_at", nullable=True), UniqueConstraint("victim_user_id","idempotency_key"),
+    # Why it closed (0019): RESOLVED (Safety PIN), ORPHANED (auto-closed after inactivity), OTHER.
+    Column("close_reason", String(16)),
+    CheckConstraint("close_reason IN ('RESOLVED','ORPHANED','OTHER')", name="incidents_close_reason_check"),
     CheckConstraint("status IN ('ACTIVE','RESOLUTION_REQUESTED','CLOSED','ESCALATION_REQUIRED')"), CheckConstraint("radius_meters = 1000"),
     CheckConstraint("location_accuracy_meters >= 0 AND location_accuracy_meters < 'Infinity'::float8"))
 Index("uq_open_incident_owner", incidents.c.victim_user_id, unique=True, postgresql_where=text("status <> 'CLOSED'"))
 invitations = Table("incident_invitations", metadata, pk(), reference("incident_id","incidents"),
     reference("recipient_user_id","users", index=True), Column("status", String, nullable=False, server_default="PENDING"),
     stamp("invited_at", True), stamp("expires_at"), stamp("responded_at", nullable=True),
+    # Responder history (0019): distance (rounded to 50 m) and compass direction to the SOS at invite time, never
+    # coordinates; and how an accepted responder's part ended (LEFT / CANT_HELP).
+    Column("invite_distance_m", Integer), Column("invite_direction", String(2)),
+    Column("outcome", String(16)), stamp("outcome_at", nullable=True),
+    CheckConstraint("invite_direction IN ('N','NE','E','SE','S','SW','W','NW')", name="incident_invitations_direction_check"),
+    CheckConstraint("outcome IN ('LEFT','CANT_HELP')", name="incident_invitations_outcome_check"),
+    CheckConstraint("invite_distance_m >= 0", name="incident_invitations_distance_check"),
     UniqueConstraint("incident_id","recipient_user_id"), CheckConstraint("status IN ('PENDING','ACCEPTED','DECLINED','EXPIRED')"))
+Index("ix_invitations_history", invitations.c.recipient_user_id, invitations.c.invited_at.desc(), invitations.c.id.desc())
 responders = Table("incident_responders", metadata, pk(), reference("incident_id","incidents"),
     reference("responder_user_id","users"), Column("authorization_status", String, nullable=False, server_default="AUTHORIZED"),
     Column("assistance_status", String, nullable=False, server_default="ACCEPTED"),

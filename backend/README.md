@@ -146,7 +146,7 @@ Each API worker sleeps between bounded periodic batches. PostgreSQL SKIP LOCKED 
 
 ## Retention
 
-Schedule `python -m app.maintenance` using your deployment scheduler. Each invocation processes at most 250 rows per cleanup operation. Closed center and last fix are cleared after CLOSED_LOCATION_HOURS (24). Expired invitations are removed after EXPIRED_INVITATION_DAYS (7) on closed incidents, with their outbox rows. Active incidents retain invitation identities for deduplication. Expired or revoked grants can be removed after EXPIRED_GRANT_DAYS (7). Minimal audit events expire after AUDIT_DAYS (30). The job never deletes incident rows or live grants. Review consent, legal holds, backups and retention before production.
+Schedule `python -m app.maintenance` using your deployment scheduler. Each invocation processes at most 250 rows per cleanup operation. Closed center and last fix are cleared after CLOSED_LOCATION_HOURS (24). Volunteer requests (any answer) are removed RESPONDER_HISTORY_DAYS (30) after they were sent, once the incident is closed, with their outbox rows; until then they make up the responder history. Active incidents retain invitation identities for deduplication. Expired or revoked grants can be removed after EXPIRED_GRANT_DAYS (7). Minimal audit events expire after AUDIT_DAYS (30). The job never deletes incident rows or live grants. Review consent, legal holds, backups and retention before production.
 
 ## Isolated verification and two-account exercise
 

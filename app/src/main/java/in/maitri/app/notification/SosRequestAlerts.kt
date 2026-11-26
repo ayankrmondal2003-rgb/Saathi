@@ -43,6 +43,7 @@ object SosRequestAlerts {
     const val EXTRA_INVITATION = "in.maitri.app.extra.REQUEST_INVITATION"
     const val CAP_MS = 120_000L
     private const val CLOSED_SHOWN_MS = 5_000L
+    private const val ACCEPTED_CLOSED_SHOWN_MS = 15_000L
     private const val PREFS = "sos_requests"
     private const val KEY_KEEP_VIBRATING = "keep_vibrating"
 
@@ -269,6 +270,24 @@ object SosRequestAlerts {
         if (Build.VERSION.SDK_INT >= 33 && androidx.core.content.ContextCompat.checkSelfPermission(context,
                 android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return
         try { nm.notify(NotificationHelper.incidentTag(r.incident), notificationId(invitation), n) } catch (_: SecurityException) { }
+    }
+
+    /**
+     * The SOS a volunteer accepted is over: a quiet note for a few seconds ("Incident resolved · person marked safe" or
+     * "SOS ended"), and nothing at all while Maitri is open (screen 07 shows its own banner, the cards change).
+     */
+    fun acceptedClosed(context: Context, invitation: String, incident: String, resolved: Boolean) {
+        val state = android.app.ActivityManager.RunningAppProcessInfo().also { android.app.ActivityManager.getMyMemoryState(it) }
+        if (state.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) return
+        if (Build.VERSION.SDK_INT >= 33 && androidx.core.content.ContextCompat.checkSelfPermission(context,
+                android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        val n = NotificationCompat.Builder(context, channelId(context))
+            .setSmallIcon(R.drawable.maitri_launcher_monochrome).setColor(0xFFB82055.toInt())
+            .setContentTitle(if (resolved) tr("Incident resolved · person marked safe") else tr("SOS ended"))
+            .setContentText(tr("Thank you for helping."))
+            .setSilent(true).setOnlyAlertOnce(true).setAutoCancel(true).setTimeoutAfter(ACCEPTED_CLOSED_SHOWN_MS).build()
+        try { NotificationManagerCompat.from(context).notify(NotificationHelper.incidentTag(incident), notificationId(invitation), n) }
+        catch (_: SecurityException) { }
     }
 
     /** Expired or answered elsewhere: remove quietly. */

@@ -18,6 +18,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -45,7 +47,7 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.CancellationException
 
 @Composable
-fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: () -> Unit) {
+fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: () -> Unit, onLeft: () -> Unit = onIncidentClosed) {
     val p = maitriPalette()
     val context = LocalContext.current
     val account = remember(uid) { ExpectedAccount(uid) }
@@ -57,6 +59,28 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
     var message by remember { mutableStateOf<String?>(null) }
     var chooseStatus by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    // The SOS ended: true = resolved with the person's Safety PIN, false = ended otherwise. Shown as a banner, then
+    // back to the Responder tab. The cards in Recent requests and History change at the same moment.
+    var ended by remember { mutableStateOf<Boolean?>(null) }
+    var finishing by remember { mutableStateOf(false) }
+    var lastConfirmed by remember { mutableStateOf<IncidentSnapshotDto?>(null) }
+    fun finish() {
+        if (finishing) return
+        finishing = true
+        scope.launch {
+            val state = kotlinx.coroutines.withTimeoutOrNull(4_000) {
+                runCatching { BackendClient.api.responderHistory(limit = 1, incidentId = incidentId, expected = account)
+                    .items.firstOrNull()?.incidentState }.getOrNull()
+            }
+            if (state != null && state != "ACTIVE") {
+                val resolved = state == "RESOLVED"
+                ResponderHistoryEvents.emit(incidentId, resolved)
+                ended = resolved
+                delay(ENDED_BANNER_MS)
+            }
+            onIncidentClosed()
+        }
+    }
     LaunchedEffect(repo, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             try {
@@ -64,16 +88,17 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
                     try {
                         val snapshot = BackendClient.api.snapshot(incidentId, account)
                         if (!snapshot.authorizesJourney(incidentId)) {
-                            onIncidentClosed()
+                            finish()
                             return@repeatOnLifecycle
                         }
                         authorized = snapshot
+                        lastConfirmed = snapshot
                         repo.startTracking()
                     } catch (e: CancellationException) { throw e }
                     catch (e: Exception) {
                         authorized = null
                         if (e is retrofit2.HttpException && e.code() in listOf(401, 403, 404, 410)) {
-                            onIncidentClosed()
+                            finish()
                             return@repeatOnLifecycle
                         }
                     }
@@ -85,11 +110,9 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
             }
         }
     }
-    if (live.status in setOf("CLOSED", "REVOKED")) {
-        LaunchedEffect(Unit) { onIncidentClosed() }
-        return
-    }
-    val confirmed = authorized
+    if (live.status in setOf("CLOSED", "REVOKED")) LaunchedEffect(Unit) { finish() }
+    // While the end is shown, keep the last confirmed screen under the banner.
+    val confirmed = authorized ?: lastConfirmed?.takeIf { finishing }
     if (confirmed == null) {
         Page(tr("Responder")) { Text(tr("Checking incident access…")) }
         return
@@ -139,10 +162,16 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
             catch (_: android.content.ActivityNotFoundException) { message = tr("Maps unavailable") }
         }
     }
+    Box(Modifier.fillMaxSize()) {
     MaitriResponderJourneyBoard(p, confirmed.requesterMembership?.assistanceStatus, fix?.let { it.latitude to it.longitude },
         busy, onStatus = { chooseStatus = true }, onMaps = ::openMaps, onHelp = ::requestHelp, onDial = { dial() },
         distanceMeters = distance, self = own, onCallPerson = victimPhone?.let { number -> { dial(number) } },
         onMedicalNotes = confirmed.medicalNotes?.takeIf { it.isNotBlank() }?.let { notes -> { message = tr("Medical notes\n\n{0}", notes) } })
+    AnimatedVisibility(ended != null, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(16.dp),
+        enter = slideInVertically { -it } + fadeIn(), exit = fadeOut()) {
+        IncidentEndedBanner(p, ended == true)
+    }
+    }
     if (chooseStatus) MaitriChoiceDialog(title = tr("Responder status"), confirmLabel = tr("Done"),
         onConfirm = { chooseStatus = false }, onDismiss = { chooseStatus = false },
         footer = {
@@ -159,7 +188,7 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
                         try {
                             if (repo.updateAssistanceStatus(status)) {
                                 chooseStatus = false
-                                if (status == "LEFT_INCIDENT") onIncidentClosed()
+                                if (status == "LEFT_INCIDENT") onLeft()
                             } else message = tr("Status change could not be confirmed.")
                         } finally { busy = false }
                     }
@@ -197,6 +226,24 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
     message?.let { AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = { message = null }, containerColor = p.surface,
         textContentColor = p.primary, text = { Text(it) },
         confirmButton = { TextButton(onClick = { message = null }) { Text(tr("Close"), color = p.accent) } }) }
+}
+
+private const val ENDED_BANNER_MS = 2_800L
+
+/** "Incident resolved. Thank you for helping" (green) or "SOS ended. Thank you for helping" (grey). */
+@Composable
+internal fun IncidentEndedBanner(p: MaitriPalette, resolved: Boolean) {
+    val ink = if (resolved) (if (p.dark) p.background else Color.White) else p.primary
+    Row(Modifier.fillMaxWidth().background(if (resolved) p.verified else p.surface, RoundedCornerShape(18.dp))
+        .border(1.dp, if (resolved) p.verified else p.divider, RoundedCornerShape(18.dp))
+        .padding(horizontal = 16.dp, vertical = 14.dp)
+        .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
+        verticalAlignment = Alignment.CenterVertically) {
+        Icon(if (resolved) Icons.Rounded.CheckCircle else Icons.Rounded.Info, null, tint = ink, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(if (resolved) tr("Incident resolved. Thank you for helping") else tr("SOS ended. Thank you for helping"),
+            color = ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+    }
 }
 
 /** Screen 07 board. Stateless: shows only server-confirmed status and the last reported coordinates, if any. */

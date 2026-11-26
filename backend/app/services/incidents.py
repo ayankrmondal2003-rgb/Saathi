@@ -128,9 +128,28 @@ async def close_requests(db, incident_id, reason: str, keep_user=None):
     return [invitation_id for invitation_id, _ in rows]
 
 
+async def tell_accepted_responders(db, incident_id):
+    """Volunteers still helping learn the SOS is over, so their Recent requests and History cards change at once:
+    "Incident resolved" (Safety PIN) or "SOS ended". A push-only inbox row (hidden from the inbox) with ids only."""
+    from app.inbox import add_item
+    resolved = await db.scalar(text("SELECT close_reason = 'RESOLVED' FROM incidents WHERE id=:id"), {"id": incident_id})
+    rows = (await db.execute(text("""SELECT v.id, v.recipient_user_id FROM incident_invitations v
+        JOIN incident_responders r ON r.incident_id = v.incident_id AND r.responder_user_id = v.recipient_user_id
+        WHERE v.incident_id=:id AND v.status='ACCEPTED' AND r.revoked_at IS NULL"""), {"id": incident_id})).all()
+    for invitation_id, recipient in rows:
+        item = await add_item(db, recipient, "SOS_REQUEST_CLOSED",
+                              "Incident resolved" if resolved else "SOS ended",
+                              "The person was marked safe. Thank you for helping." if resolved else "Thank you for helping.",
+                              data={"invitation_id": str(invitation_id), "incident_id": str(incident_id),
+                                    "reason": "RESOLVED" if resolved else "ENDED", "accepted": "true"},
+                              incident_id=incident_id)
+        await db.execute(text("UPDATE inbox_items SET read_at=now() WHERE id=:id"), {"id": item})
+
+
 async def revoke_incident_access(db, incident_id, now):
     """Side effects shared by every way an incident closes: pending alerts stop and nobody keeps access."""
     await close_requests(db, incident_id, "ENDED")
+    await tell_accepted_responders(db, incident_id)
     await db.execute(text("UPDATE notification_outbox SET delivery_status='CANCELLED' WHERE incident_id=:id "
                           "AND delivery_status IN ('PENDING','RETRY_SCHEDULED','SENDING')"), {"id": incident_id})
     await db.execute(text("UPDATE incident_invitations SET status='EXPIRED' WHERE incident_id=:id AND status='PENDING'"),
@@ -168,7 +187,7 @@ async def expire_orphaned(db, settings, batch=50):
     now = datetime.now(timezone.utc)
     for incident_id, owner_id in rows:
         await db.execute(update(incidents).where(incidents.c.id == incident_id, incidents.c.status == "ACTIVE")
-                         .values(status="CLOSED", ended_at=now))
+                         .values(status="CLOSED", ended_at=now, close_reason="ORPHANED"))
         await revoke_incident_access(db, incident_id, now)
         # actor_user_id is NOT NULL; the owner is recorded and the metadata says the system closed it.
         await db.execute(events.insert().values(incident_id=incident_id, actor_user_id=owner_id,

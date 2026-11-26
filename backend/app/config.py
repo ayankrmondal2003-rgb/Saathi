@@ -61,7 +61,10 @@ class Settings(BaseSettings):
     sos_media_days: int = Field(30, ge=1)
     # 32 bytes, base64: encrypts medical notes at rest. Losing it makes stored notes unreadable.
     medical_notes_key: SecretStr | None = None
-    expired_invitation_days: int = Field(7, ge=1)
+    # Responder history (GET /api/responders/history) and the volunteer requests behind it: kept this many days after
+    # the request, then deleted once the SOS is closed. The privacy policy promises SOS records for 30 days, so
+    # keeping them longer needs a privacy-policy change first; the limit stops a longer value by accident.
+    responder_history_days: int = Field(30, ge=1, le=30)
     expired_grant_days: int = Field(7, ge=1)
     audit_days: int = Field(30, ge=1)
     # ACTIVE incidents with no fix and no responder activity for this long are closed (orphaned sessions).
