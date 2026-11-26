@@ -175,8 +175,10 @@ internal fun MaitriMap(content: MapContent, emptyLabel: String, modifier: Modifi
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         val p = maitriPalette()
         Box(Modifier.fillMaxSize().background(p.background)) {
+            // Above the phone's navigation buttons: the Google logo (map content padding) and + / −.
+            val bars = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             MaitriGoogleMap(content, emptyLabel, Modifier.fillMaxSize(), interactive = true, onExpand = null,
-                controlsPadding = PaddingValues(bottom = 32.dp, end = 12.dp))
+                controlsPadding = PaddingValues(bottom = bars + 24.dp, end = 12.dp), mapPadding = PaddingValues(bottom = bars))
             IconButton(onClick = { expanded = false },
                 Modifier.statusBarsPadding().padding(16.dp).size(48.dp).shadow(4.dp, CircleShape).background(p.surface, CircleShape)) {
                 Icon(Icons.Rounded.Close, tr("Close full-screen map"), tint = p.primary)
@@ -213,7 +215,8 @@ private val RESPONDER_TEAL = Color(0xFF0E9F8E)
 
 @Composable
 private fun MaitriGoogleMap(content: MapContent, emptyLabel: String, modifier: Modifier, interactive: Boolean,
-                            onExpand: (() -> Unit)?, controlsPadding: PaddingValues = PaddingValues(8.dp)) {
+                            onExpand: (() -> Unit)?, controlsPadding: PaddingValues = PaddingValues(8.dp),
+                            mapPadding: PaddingValues = PaddingValues(0.dp)) {
     val p = maitriPalette()
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -251,6 +254,7 @@ private fun MaitriGoogleMap(content: MapContent, emptyLabel: String, modifier: M
     Box(modifier.onSizeChanged { size = it }) {
         GoogleMap(
             modifier = Modifier.matchParentSize(),
+            contentPadding = mapPadding,
             cameraPositionState = camera,
             properties = MapProperties(mapStyleOptions = style, isBuildingEnabled = false, minZoomPreference = 3f, maxZoomPreference = 20f),
             uiSettings = MapUiSettings(zoomControlsEnabled = false, myLocationButtonEnabled = false, mapToolbarEnabled = false,

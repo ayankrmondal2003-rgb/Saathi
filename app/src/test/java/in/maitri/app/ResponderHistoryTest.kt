@@ -101,6 +101,6 @@ class ResponderHistoryTest {
 
     @Test fun practiceSosesAreShownApartFromHelpGiven() {
         assertEquals("You've helped 4 times · Resolved 3", summaryLine(ResponderHistorySummaryDto(9, 4, 3, 0)))
-        assertEquals("You've helped 0 times · Resolved 0 · + 5 practice", summaryLine(ResponderHistorySummaryDto(7, 0, 0, 5)))
+        assertEquals("You've helped 0 times · Resolved 0 ·\u00A0+\u00A05\u00A0practice", summaryLine(ResponderHistorySummaryDto(7, 0, 0, 5)))
     }
 }

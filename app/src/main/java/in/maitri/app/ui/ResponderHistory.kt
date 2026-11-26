@@ -539,7 +539,8 @@ internal fun ResponderHistoryBody(p: MaitriPalette, summary: ResponderHistorySum
 /** "You've helped 4 times · Resolved 3", plus " · + 2 practice" for practice SOSes (never counted as help). */
 internal fun summaryLine(s: ResponderHistorySummaryDto): String =
     tr("You've helped {0} times · Resolved {1}", s.helped, s.resolved) +
-        if (s.practice > 0) " · " + tr("+ {0} practice", s.practice) else ""
+        // Non-breaking spaces: "+ 3 practice" never splits across lines.
+        if (s.practice > 0) " ·\u00A0" + tr("+ {0} practice", s.practice).replace(' ', '\u00A0') else ""
 
 /** The Profile & settings row's description, and the screen's content description. */
 internal fun responderHistoryRowDescription(): String = tr("Requests you received and how they ended")
