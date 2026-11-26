@@ -1,8 +1,12 @@
-Maitri 0.9.4-beta.5 - small polish
+Maitri 0.9.5-beta.6 - responder history and live Google maps
 
 What's new:
-- Opening your profile or your notifications now shows the page softly blurred with the Maitri logo beating while it loads.
-- Volunteers: if an update turns off "SOS requests on the lock screen", Maitri reminds you with a notification. Tap it to turn it back on, so a nearby SOS request can still wake your screen.
+- Every map is now a live Google map: drag, zoom and tilt it, tap it for full screen, and "Re-centre" to come back. Pink pin for the person who needs help, blue dot for you, teal dots for responders.
+- Volunteers: "Recent requests" on the Responder tab shows each SOS as its own card - Active, Incident resolved, SOS ended, Declined or Missed - and "View all history" opens your Responder history (also in Profile & settings).
+- When the person marks themselves safe, your card turns green straight away and you see "Incident resolved. Thank you for helping".
+- "On your way" shows "about 10 m away, approx. 1 min walk" and when the location was last updated, never raw coordinates. Use the menu to copy the location or open walking directions in Google Maps.
+- Before you accept, the request shows only an area ("within 500 m of you"), never where the person is.
+- Fixed: grey shapes around the map on "On your way" and "SOS is active".
 
 Reminders:
 - SOS here is REAL: your circle gets an alert and your live location. Don't hold the SOS button for fun.

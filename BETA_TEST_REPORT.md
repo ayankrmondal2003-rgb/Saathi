@@ -31,7 +31,8 @@ debugging (Security settings)" on), with screenshots over adb. "Before" = 0.9.4-
 | 2 | Before: screen 07 opened from the Inbox | ❌ grey/white blobs half outside the map card; raw coordinates on "Person in need" |
 | 3 | Notification → 06 → Accept → 07 | ✅ 06 shows only "Within 500 m of you" and a circle around B, no pin; 07 map on its card |
 | 4 | Inbox → request → Accept → 07 | ✅ no blobs, rounded corners; "≈ 10 m away · approx. 1 min walk", "Last updated 5 s ago" |
-| 5 | Locked phone: notification → unlock → Accept → 07 (dark) | ✅ (full-screen alert not shown: B has full-screen notifications, "Show on lock screen" and background pop-ups switched off; Maitri fell back to a lock-screen notification as designed) |
+| 5 | Locked phone: notification → unlock → Accept → 07 (dark) | ✅ with full-screen alerts off on B, Maitri fell back to a lock-screen notification as designed |
+| 5b | Locked phone, full-screen request → Accept → unlock → 07 (dark) | ✅ after allowing full-screen notifications, "Show on lock screen" and background pop-ups on B: the full-screen request (band only, countdown, Accept / Decline / Silence) appeared over the lock screen |
 | 6 | Responder tab "New request" card → Accept → 07 (dark) | ✅ |
 | 7 | App restart / history card → 07 | covered by `JourneyEntryPointsScreenshotTest` (all entry points, light/dark) |
 | 8 | A ends with the PIN while B is on 07 | ✅ green "Incident resolved. Thank you for helping", then the Responder tab (light and dark) |
@@ -66,6 +67,7 @@ debugging (Security settings)" on), with screenshots over adb. "Before" = 0.9.4-
 Before → after, Recent requests (B): ![](docs/beta-test/rh-recent-before-after.jpg)
 Before → after, screen 07 from the Inbox: ![](docs/beta-test/rh-07-inbox-before-after.jpg)
 Screen 06 area map (B) and screen 08 with a responder (A): ![](docs/beta-test/rh-06-08-after.jpg)
+Full-screen request over the lock screen, then 07 (dark): ![](docs/beta-test/rh-fullscreen-lockscreen-accept.jpg)
 07 from the lock screen and from the Responder tab (dark): ![](docs/beta-test/rh-07-lockscreen-tab-dark.jpg)
 End of SOS on B: 07 → banner → Responder tab (dark): ![](docs/beta-test/rh-banner-return-dark.jpg)
 Live update of the Recent requests card (dark): ![](docs/beta-test/rh-live-update-dark.jpg)
@@ -76,8 +78,6 @@ Screenshot test, 360 dp at 130 % text, light and dark: ![](docs/beta-test/rh-scr
 
 ### Open
 
-- B's full-screen lock-screen alert: switched off on that phone. Allow full-screen notifications, "Show on lock
-  screen" and background pop-ups for Maitri, then repeat test 5 to see the full-screen request.
 - The Maps key appeared once in a chat log during debugging; it is restricted to the app and the Maps SDK. Rotate it
   if you prefer.
 - Translations for the new texts are machine-drafted and need native review.

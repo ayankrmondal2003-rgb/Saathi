@@ -62,9 +62,9 @@ android {
         targetSdk = 37
         // versionCode = major*10000 + minor*100 + patch. A later beta of the same version must bump patch
         // (0.9.1-beta.2 -> 901), because Android rejects an update with an equal or lower versionCode.
-        val (major, minor, patch) = listOf(0, 9, 4)
+        val (major, minor, patch) = listOf(0, 9, 5)
         versionCode = major * 10000 + minor * 100 + patch
-        versionName = "$major.$minor.$patch-beta.5"
+        versionName = "$major.$minor.$patch-beta.6"
         // Google Maps key from local.properties (maitriMapsApiKey), never committed. Restricted in the Cloud console
         // to this package + Maitri's signing certificates and to the Maps SDK for Android only.
         manifestPlaceholders["maitriMapsApiKey"] = localSetting("maitriMapsApiKey")
