@@ -12,6 +12,76 @@ Server: Render Free, branch `beta-complete`, `ENVIRONMENT=beta`, Neon + R2.
 | Emulator | Pixel 10 Pro (API 37 image) | 17 | 3.0 | Design-width captures (390 dp) |
 | Emulator | Maitri_API26 (Google Play image, x86) | 8.0 (API 26) | 2.0 | The app's minimum Android version |
 
+## Responder history, screen 07 map, Google Maps: 2026-11-26/27 (night)
+
+Build: release from `responder-history-and-maps` (versionName still `0.9.4-beta.5`, not bumped, not uploaded) on B;
+a local debug build on A whose SOS goes out as a **practice** SOS (a switch used only for this run, never committed).
+Server: Render, `master` at `1330b16` then `f43780d` (migration 0019, practice count). Backend suite: 198 passed.
+
+Phone A = person in need (Samsung SM-E625F, light). Phone B = volunteer (Xiaomi 22041216I, large text; light, then
+dark). Every SOS was a practice SOS from A, whose circle is empty; B was the only volunteer who answered. No SMS was
+composed. A's Safety PIN was typed by the owner. B was driven by hand (HyperOS blocks adb input even with "USB
+debugging (Security settings)" on), with screenshots over adb. "Before" = 0.9.4-beta.5 as installed.
+
+### Results
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Before: Recent requests on 0.9.4-beta.5 | ❌ five identical "Resume responder journey" buttons, still there after the SOS ended |
+| 2 | Before: screen 07 opened from the Inbox | ❌ grey/white blobs half outside the map card; raw coordinates on "Person in need" |
+| 3 | Notification → 06 → Accept → 07 | ✅ 06 shows only "Within 500 m of you" and a circle around B, no pin; 07 map on its card |
+| 4 | Inbox → request → Accept → 07 | ✅ no blobs, rounded corners; "≈ 10 m away · approx. 1 min walk", "Last updated 5 s ago" |
+| 5 | Locked phone: notification → unlock → Accept → 07 (dark) | ✅ (full-screen alert not shown: B has full-screen notifications, "Show on lock screen" and background pop-ups switched off; Maitri fell back to a lock-screen notification as designed) |
+| 6 | Responder tab "New request" card → Accept → 07 (dark) | ✅ |
+| 7 | App restart / history card → 07 | covered by `JourneyEntryPointsScreenshotTest` (all entry points, light/dark) |
+| 8 | A ends with the PIN while B is on 07 | ✅ green "Incident resolved. Thank you for helping", then the Responder tab (light and dark) |
+| 9 | A ends with the PIN while B looks at Recent requests | ✅ the Active card turned into green "Incident resolved · person marked safe" within ~2 s, no refresh |
+| 10 | Decline | ✅ grey "Declined", "You declined", only the band ("Under 500 m away") |
+| 11 | Missed (request expired before B answered) | ✅ grey "Missed", "Not answered in time", band only |
+| 12 | History: summary, groups, filters | ✅ "You've helped 4 times · Resolved 4 · + 5 practice"; Today / Yesterday; Declined & missed filter |
+| 13 | Opening and closing a card's summary | ✅ no card stays grey afterwards |
+| 14 | Map: drag, Re-centre, zoom, full screen, Copy location | ✅ the page doesn't scroll while dragging the map; full screen clears the navigation bar |
+| 15 | Map with location permission off (A) | ✅ "Allow location to see where you are" card |
+| 16 | Map offline (A: airplane mode, Wi-Fi off, fresh start) | ✅ map from Google's cache, blue dot and 1 km circle |
+| 17 | Light and dark styles | ✅ soft light, Maitri dark; no Map ID |
+| 18 | Release build (R8 on) | ✅ all of the above on B ran the R8 release build; no extra keep rules needed |
+| 19 | Timed out / orphaned SOS (12 h) and paging past 20 | not on the phones (needs 12 h / 20+ SOSes); covered by the backend tests (`test_responder_history.py`) |
+| 20 | Screenshot tests on A | ✅ `ResponderHistoryScreenshotTest`: Recent requests and History, light/dark, 360/600 dp, text 100/130 %, pill one line |
+
+### Bugs found and fixed in this run
+
+| Bug | Cause | Fix |
+|---|---|---|
+| Blobs around the 07/08 map (the reported bug) | The 07/08 (and 06) artwork still drew the illustrative map; its roads have round line caps that stuck 7.5 units past the card once the SVG's clip was lost in the vector conversion. Not a SurfaceView timing problem as first assumed in `96db297` | Illustrative map removed from the artwork (`08f8416`, `c71928f`) |
+| All maps grey | The new Maps key was rejected (Authorization failure) | Fixed in the Cloud console by the owner |
+| After "Incident resolved" B landed on Home | 07's guard popped the back stack during its exit animation | Guard only acts while 07 is current (`c71928f`) |
+| 06 lines overlapping, 07 lines clipped at large text | Fixed-height labels | `c71928f` |
+| Recent requests ran together in one white card; pill wrapped | Cards inside a card; long pill text | Separate cards like History; one-line pill (`72c95b6`) |
+| Card stayed grey after closing its summary | Focus/ripple highlight | Press scale only while pressed (`72c95b6`) |
+| Full-screen map under the navigation buttons | No inset padding | `0e2d68f` |
+| Device tests didn't compile | New screen 06 parameters first in the list | `fd107f3` |
+
+### Screenshots
+
+Before → after, Recent requests (B): ![](docs/beta-test/rh-recent-before-after.jpg)
+Before → after, screen 07 from the Inbox: ![](docs/beta-test/rh-07-inbox-before-after.jpg)
+Screen 06 area map (B) and screen 08 with a responder (A): ![](docs/beta-test/rh-06-08-after.jpg)
+07 from the lock screen and from the Responder tab (dark): ![](docs/beta-test/rh-07-lockscreen-tab-dark.jpg)
+End of SOS on B: 07 → banner → Responder tab (dark): ![](docs/beta-test/rh-banner-return-dark.jpg)
+Live update of the Recent requests card (dark): ![](docs/beta-test/rh-live-update-dark.jpg)
+History summary and Declined & missed filter: ![](docs/beta-test/rh-history-filter-summary.jpg)
+Map: dragged (Re-centre shown) and full screen: ![](docs/beta-test/rh-map-interaction.jpg)
+Map: location permission off, offline: ![](docs/beta-test/rh-map-location-off-offline.jpg)
+Screenshot test, 360 dp at 130 % text, light and dark: ![](docs/beta-test/rh-screenshot-test-360-x13.jpg)
+
+### Open
+
+- B's full-screen lock-screen alert: switched off on that phone. Allow full-screen notifications, "Show on lock
+  screen" and background pop-ups for Maitri, then repeat test 5 to see the full-screen request.
+- The Maps key appeared once in a chat log during debugging; it is restricted to the app and the Maps SDK. Rotate it
+  if you prefer.
+- Translations for the new texts are machine-drafted and need native review.
+
 ## Responder alert tests, 2026-11-24/25 (night)
 
 Phone A = person in need (Samsung SM-E625F). Phone B = volunteer (Xiaomi 22041216I, HyperOS), the only approved
