@@ -303,9 +303,9 @@ internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: Str
             else -> tr("Distance unavailable")
         }, p.primary, 13, height = 20, maxLines = 1)
         val now by produceState(java.time.Instant.now()) { while (true) { delay(1_000); value = java.time.Instant.now() } }
-        BoardLabel(40, 540, 270, updatedAt?.let { lastUpdatedLabel(it, now) } ?: tr("Tap to open in Google Maps"),
-            p.secondary, 11, height = 16, maxLines = 1)
-        BoardLabel(40, 559, 270, tr("Open in Google Maps ›"), p.accent, 11, height = 16, maxLines = 1)
+        BoardLabel(40, 536, 270, updatedAt?.let { lastUpdatedLabel(it, now) } ?: tr("Tap to open in Google Maps"),
+            p.secondary, 11, height = 19, maxLines = 1)
+        BoardLabel(40, 556, 270, tr("Open in Google Maps ›"), p.accent, 11, height = 19, maxLines = 1)
         BoardAction(24, 476, 342, 104, tr("Open last reported location in Maps"), coordinates != null, onMaps)
         // Overflow: Copy location (a maps link), on top of the card's own tap.
         if (onCopyLocation != null) Box(Modifier.offset(318.dp, (506 - 28).dp).size(44.dp, 44.dp)) {

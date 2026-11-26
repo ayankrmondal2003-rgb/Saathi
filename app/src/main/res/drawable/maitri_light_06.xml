@@ -12,13 +12,7 @@
         <path android:pathData="M2232.42 140.156C2232.77 140.156 2233.06 139.695 2233.06 139.125C2233.06 138.555 2232.77 138.094 2232.42 138.094C2232.07 138.094 2231.78 138.555 2231.78 139.125C2231.78 139.695 2232.07 140.156 2232.42 140.156Z" android:fillColor="#D92B65"/>
         <path android:pathData="M2229.15 140.719C2229.88 141.469 2230.6 141.469 2231.33 140.719" android:strokeColor="#D92B65" android:strokeWidth="0.461333" android:strokeLineCap="round" android:strokeLineJoin="round"/>
         <path android:pathData="M2230,192 h294 a24,24 0,0 1 24,24 v302 a24,24 0,0 1 -24,24 h-294 a24,24 0,0 1 -24,-24 v-302 a24,24 0,0 1 24,-24 Z" android:fillColor="#F5EDF1"/>
-        <path android:pathData="M2268,216.062 h46 a12,12 0,0 1 12,12 v70.0625 a12,12 0,0 1 -12,12 h-46 a12,12 0,0 1 -12,-12 v-70.0625 a12,12 0,0 1 12,-12 Z" android:fillColor="#EADFE7"/>
-        <path android:pathData="M2380,384.5 h136 a12,12 0,0 1 12,12 v33.9688 a12,12 0,0 1 -12,12 h-136 a12,12 0,0 1 -12,-12 v-33.9688 a12,12 0,0 1 12,-12 Z" android:fillColor="#EADFE7"/>
-        <path android:pathData="M2378,491.688 h142 a12,12 0,0 1 12,12 v17.5625 a12,12 0,0 1 -12,12 h-142 a12,12 0,0 1 -12,-12 v-17.5625 a12,12 0,0 1 12,-12 Z" android:fillColor="#EADFE7"/>
-        <path android:pathData="M2266,361.531 h48 a12,12 0,0 1 12,12 v43.8125 a12,12 0,0 1 -12,12 h-48 a12,12 0,0 1 -12,-12 v-43.8125 a12,12 0,0 1 12,-12 Z" android:fillColor="#EADFE7"/>
-        <path android:pathData="M2404,205.125 h110 a18,18 0,0 1 18,18 v47.125 a18,18 0,0 1 -18,18 h-110 a18,18 0,0 1 -18,-18 v-47.125 a18,18 0,0 1 18,-18 Z" android:fillColor="#DFEBE1"/>
-        <path android:pathData="M2206 334.188H2548M2206 465.438H2548M2346 192V542M2236 192V542" android:strokeColor="#FFFFFF" android:strokeWidth="15" android:strokeLineCap="round" android:strokeLineJoin="round"/>
-        <path android:pathData="M2449,520 h86 a5,5 0,0 1 5,5 v6 a5,5 0,0 1 -5,5 h-86 a5,5 0,0 1 -5,-5 v-6 a5,5 0,0 1 5,-5 Z" android:fillColor="#F5EDF1"/>
+        <!-- The illustrative map behind the dimmed backdrop is gone (its round-cap roads stuck out past the card). -->
         <path android:pathData="M2228,566 h298 a22,22 0,0 1 22,22 v136 a22,22 0,0 1 -22,22 h-298 a22,22 0,0 1 -22,-22 v-136 a22,22 0,0 1 22,-22 Z" android:fillColor="#FFFFFF"/>
         <path android:pathData="M2182,805 h390 v87 h-390 Z" android:fillColor="#FFF9FA"/>
         <path android:pathData="M2206,805 h342 v1 h-342 Z" android:fillColor="#F2DCE3"/>
