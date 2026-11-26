@@ -273,8 +273,10 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
 
     PullToRefreshBox(isRefreshing = refreshing, modifier = Modifier.fillMaxSize().background(palette.background),
         onRefresh = { scope.launch { refreshing = true; try { load(fullProfile = true) } finally { refreshing = false } } }) {
+    val mapLock = rememberPageScrollLock()
+    CompositionLocalProvider(LocalPageScrollLock provides mapLock) {
     Column(Modifier.fillMaxSize().statusBarsPadding()
-        .verticalScroll(rememberScrollState()).padding(bottom = LocalFloatingNavBarPadding.current),
+        .verticalScroll(rememberScrollState(), enabled = !mapLock.value).padding(bottom = LocalFloatingNavBarPadding.current),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ResponderHeader(palette)
         // Volunteer status card (Verified / Under review / Not approved / Apply).
@@ -349,6 +351,7 @@ fun TestResponderDashboard(uid: String, onApply: () -> Unit, onResumeJourney: (S
             HowRespondingWorksCard(palette)
         }
         Spacer(Modifier.height(4.dp))
+    }
     }
     }
 }

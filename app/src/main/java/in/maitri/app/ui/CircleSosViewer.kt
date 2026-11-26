@@ -29,6 +29,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import `in`.maitri.app.network.BackendClient
+import `in`.maitri.app.location.locationAllowed
 import `in`.maitri.app.network.ExpectedAccount
 import `in`.maitri.app.network.SosMediaItemDto
 import `in`.maitri.app.network.Uploads
@@ -95,14 +96,48 @@ internal fun CircleSosViewer(uid: String, incidentId: String, liveUrl: String?, 
         }.onFailure { stopPlayback(); error = tr("Couldn't play this voice note.") }
     }
 
+    // Their live location while the SOS is active, from the live link (/l/<token>/location, the same data the web
+    // page shows), every 10 s. Ended or unreachable: no map.
+    var live by remember(liveUrl) { mutableStateOf<LiveFix?>(null) }
+    var ended by remember(liveUrl) { mutableStateOf(liveUrl == null) }
+    LaunchedEffect(liveUrl) {
+        val url = liveUrl?.takeIf { it.startsWith("https://") } ?: return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (!ended) {
+                when (val fix = fetchLiveFix(url)) {
+                    LiveFix.Ended -> { live = null; ended = true }
+                    null -> Unit
+                    else -> live = fix
+                }
+                delay(10_000)
+            }
+        }
+    }
+    val self = liveOwnLocation(context.locationAllowed())
+    val mapLock = rememberPageScrollLock()
     AlertDialog(modifier = Modifier.dialogEnter(), onDismissRequest = dismiss, containerColor = p.surface, titleContentColor = p.primary, textContentColor = p.secondary,
-        title = { Text(if (liveUrl != null) tr("SOS from your circle") else tr("Their SOS")) },
+        title = { Text(if (!ended) tr("SOS from your circle") else tr("Their SOS")) },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (liveUrl != null) Button(onClick = {
-                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(liveUrl))) }
-                }, colors = ButtonDefaults.buttonColors(containerColor = p.accent), modifier = Modifier.fillMaxWidth()) {
-                    Text(tr("See live location"), fontWeight = FontWeight.SemiBold)
+            CompositionLocalProvider(LocalPageScrollLock provides mapLock) {
+            Column(Modifier.verticalScroll(rememberScrollState(), enabled = !mapLock.value), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                val at = live as? LiveFix.At
+                if (!ended) {
+                    MaitriMapCard(listOfNotNull(at?.let { MapMarker(it.latitude, it.longitude, MarkerKind.PERSON_IN_NEED) },
+                        self?.let { MapMarker(it.latitude, it.longitude, MarkerKind.YOU) }),
+                        Modifier.fillMaxWidth().height(220.dp), tr("Waiting for their location…"),
+                        accuracyMeters = at?.accuracyMeters, surround = p.surface)
+                    at?.let { fix ->
+                        self?.let { me -> Text(approxDistanceAndWalk(straightLineMeters(me.latitude, me.longitude, fix.latitude, fix.longitude)),
+                            color = p.primary, fontSize = 13.sp) }
+                        fix.recordedAt?.let { recorded -> lastUpdatedLabel(recorded)?.let { Text(it, fontSize = 11.sp) } }
+                        Button(onClick = { openNavigation(context, fix.latitude, fix.longitude) },
+                            colors = ButtonDefaults.buttonColors(containerColor = p.accent), modifier = Modifier.fillMaxWidth()) {
+                            Text(tr("Open in Google Maps"), fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    if (liveUrl != null) TextButton(onClick = {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(liveUrl))) }
+                    }) { Text(tr("Open the live-location page"), color = p.accent) }
                 } else Text(tr("This SOS has ended. Their location is no longer shared."))
                 Text(tr("Voice notes and photos"), color = p.primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 error?.let { Text(it, color = p.accent, fontSize = 12.sp) }
@@ -119,8 +154,37 @@ internal fun CircleSosViewer(uid: String, incidentId: String, liveUrl: String?, 
                 }
                 Text(tr("Only their circle can see these. They're deleted 30 days after the SOS."), fontSize = 11.sp)
             }
+            }
         },
         confirmButton = { TextButton(onClick = dismiss) { Text(tr("Close"), color = p.accent) } })
+}
+
+/** The live link's answer: where they are, or that the SOS ended. */
+internal sealed interface LiveFix {
+    data class At(val latitude: Double, val longitude: Double, val accuracyMeters: Double?, val recordedAt: String?) : LiveFix
+    data object Ended : LiveFix
+}
+
+/** GET <live link>/location (no account needed: the link is the permission). null = couldn't reach it this time. */
+internal suspend fun fetchLiveFix(liveUrl: String): LiveFix? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    runCatching {
+        val connection = (java.net.URL(liveUrl.trimEnd('/') + "/location").openConnection() as java.net.HttpURLConnection).apply {
+            connectTimeout = 10_000; readTimeout = 10_000
+        }
+        try {
+            if (connection.responseCode == 404) return@runCatching LiveFix.Ended
+            parseLiveFix(connection.inputStream.bufferedReader().use { it.readText() })
+        } finally { connection.disconnect() }
+    }.getOrNull()
+}
+
+internal fun parseLiveFix(body: String): LiveFix? {
+    val json = com.google.gson.JsonParser.parseString(body).asJsonObject
+    if (json.get("status")?.asString != "ACTIVE") return LiveFix.Ended
+    val lat = json.get("latitude")?.takeIf { !it.isJsonNull }?.asDouble ?: return null
+    val lon = json.get("longitude")?.takeIf { !it.isJsonNull }?.asDouble ?: return null
+    return LiveFix.At(lat, lon, json.get("accuracy_meters")?.takeIf { !it.isJsonNull }?.asDouble,
+        json.get("recorded_at")?.takeIf { !it.isJsonNull }?.asString)
 }
 
 @Composable

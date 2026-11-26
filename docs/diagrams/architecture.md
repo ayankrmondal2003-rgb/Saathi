@@ -12,7 +12,7 @@ flowchart TB
     Pre["Preloader + StartupCache\nstartup/*"]
     Msg["SosFirebaseMessagingService\nSosRequestAlerts"]
     Up["Uploads + SosMedia\nnetwork/Uploads.kt"]
-    Map["MaitriMap (MapLibre)\nMapWarmup"]
+    Map["MaitriMapCard\n(Google Maps, Maps Compose)"]
   end
 
   subgraph Firebase["Firebase (Google)"]
@@ -34,6 +34,7 @@ flowchart TB
   R2[("Cloudflare R2\nprivate bucket")]
   Cron["cron-job.org"]
   Sentry["Sentry"]
+  GMaps["Google Maps\n(Maps SDK for Android)"]
   OFM["OpenFreeMap\n(OpenStreetMap data)"]
   Pages["GitHub Pages\nprivacy, terms, delete-account"]
   Browser["Browser: admin\nor circle member"]
@@ -46,7 +47,8 @@ flowchart TB
   Pre -- "GET /ready, /api/incidents/active,\nprofile, inbox, PIN, circle" --> Routes
   Up -- "POST /api/files/upload-url, /complete" --> Routes
   Up -- "PUT bytes (presigned, 5 min)" --> R2
-  Map -- "style + vector tiles" --> OFM
+  Map -- "map tiles (restricted key)" --> GMaps
+  Live -- "tiles (live-location web page)" --> OFM
   UI -- "crash report (release, opt-out)" --> Crash
   AD -- "release APK" --> UI
   UI -- "WebSocket /ws/incidents/{id} (ticket)" --> Hub

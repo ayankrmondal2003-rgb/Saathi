@@ -25,6 +25,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import `in`.maitri.app.R
 import `in`.maitri.app.network.BackendClient
+import `in`.maitri.app.location.locationAllowed
 import `in`.maitri.app.network.DecisionDto
 import `in`.maitri.app.network.ExpectedAccount
 import com.google.firebase.auth.FirebaseAuth
@@ -117,7 +118,11 @@ fun MaitriIncoming(
         }
     }
     val expired = expiresAt != null && secondsLeft == 0L
+    // Before accepting, only an area: a circle around you as wide as the distance band. Never the person's position.
+    val self = liveOwnLocation(context.locationAllowed())
     MaitriIncomingContent(
+        self = self,
+        areaMeters = bandRadiusMeters(invitation.distanceBand),
         p = p,
         approxLocality = if (approxLocality == "Nearby emergency") tr("Nearby emergency") else approxLocality,
         approxDistance = invitation.distanceBand ?: approxDistance,
@@ -136,6 +141,8 @@ fun MaitriIncoming(
 
 @Composable
 internal fun MaitriIncomingContent(
+    self: OwnFix? = null,
+    areaMeters: Double? = null,
     p: MaitriPalette,
     approxLocality: String,
     approxDistance: String,
@@ -164,11 +171,22 @@ internal fun MaitriIncomingContent(
         ArtText(tr("Only accept if you can respond safely."), 40f, 521.9f, 310f, 11f, p.secondary, center = true)
         ArtText(tr("Accept"), 40f, 577f, 148f, 14f, if (p.dark) p.background else Color.White, FontWeight.SemiBold, center = true)
         ArtText(tr("Decline"), 202f, 577.1f, 148f, 14f, p.accent, FontWeight.SemiBold, center = true)
-        // The card's rows are 24 units apart: each label keeps to its row at any text size.
-        BoardLabel(86, 410, 252, approxLocality, p.primary, 15, height = 26, maxLines = 1)
-        BoardLabel(86, 434, 252, tr("Location private until accepted"), p.secondary, height = 18, maxLines = 1)
-        BoardLabel(54, 466, 154, estimatedEta, p.accent, height = 18, maxLines = 1)
-        BoardLabel(215, 466, 132, approxDistance, p.primary, height = 18, maxLines = 1)
+        if (self != null && areaMeters != null) {
+            // A small map of the approximate area (tap: full screen) at the row's left, the texts beside it.
+            MaitriMapCard(listOf(MapMarker(self.latitude, self.longitude, MarkerKind.YOU)),
+                Modifier.offset(48.dp, (404 - 28).dp).size(112.dp, 86.dp), areaMeters = areaMeters, interactive = false,
+                surround = p.background, shape = RoundedCornerShape(14.dp))
+            BoardLabel(170, 408, 176, tr("Within {0} of you", distanceLabel(areaMeters)), p.primary, 14, height = 22, maxLines = 1)
+            BoardLabel(170, 430, 176, tr("Location private until accepted"), p.secondary, 11, height = 30, maxLines = 2)
+            BoardLabel(170, 462, 176, estimatedEta, p.accent, height = 18, maxLines = 1)
+            BoardLabel(170, 478, 176, approxDistance, p.primary, height = 18, maxLines = 1)
+        } else {
+            // The card's rows are 24 units apart: each label keeps to its row at any text size.
+            BoardLabel(86, 410, 252, approxLocality, p.primary, 15, height = 26, maxLines = 1)
+            BoardLabel(86, 434, 252, tr("Location private until accepted"), p.secondary, height = 18, maxLines = 1)
+            BoardLabel(54, 466, 154, estimatedEta, p.accent, height = 18, maxLines = 1)
+            BoardLabel(215, 466, 132, approxDistance, p.primary, height = 18, maxLines = 1)
+        }
         BoardAction(40, 548, 148, 48, tr("Accept"), !isSubmitting, onAccept)
         BoardAction(202, 548, 148, 48, tr("Decline"), !isSubmitting, onDecline)
     }

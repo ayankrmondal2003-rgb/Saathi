@@ -156,11 +156,9 @@ fun MaitriResponderJourney(incidentId: String, uid: String, onIncidentClosed: ()
             finally { busy = false }
         }
     }
+    // Walking navigation in Google Maps (or any maps app): only an intent, no Directions/Routes API.
     fun openMaps() {
-        fix?.let {
-            try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:${it.latitude},${it.longitude}?q=${it.latitude},${it.longitude}"))) }
-            catch (_: android.content.ActivityNotFoundException) { message = tr("Maps unavailable") }
-        }
+        fix?.let { if (!openNavigation(context, it.latitude, it.longitude)) message = tr("Maps unavailable") }
     }
     fun copyLocation(latitude: Double, longitude: Double) {
         val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
@@ -305,9 +303,9 @@ internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: Str
             else -> tr("Distance unavailable")
         }, p.primary, 13, height = 20, maxLines = 1)
         val now by produceState(java.time.Instant.now()) { while (true) { delay(1_000); value = java.time.Instant.now() } }
-        BoardLabel(40, 540, 270, updatedAt?.let { lastUpdatedLabel(it, now) } ?: tr("Tap to open in Maps"),
+        BoardLabel(40, 540, 270, updatedAt?.let { lastUpdatedLabel(it, now) } ?: tr("Tap to open in Google Maps"),
             p.secondary, 11, height = 16, maxLines = 1)
-        BoardLabel(40, 559, 270, tr("Open in Maps ›"), p.accent, 11, height = 16, maxLines = 1)
+        BoardLabel(40, 559, 270, tr("Open in Google Maps ›"), p.accent, 11, height = 16, maxLines = 1)
         BoardAction(24, 476, 342, 104, tr("Open last reported location in Maps"), coordinates != null, onMaps)
         // Overflow: Copy location (a maps link), on top of the card's own tap.
         if (onCopyLocation != null) Box(Modifier.offset(318.dp, (506 - 28).dp).size(44.dp, 44.dp)) {
@@ -319,7 +317,7 @@ internal fun MaitriResponderJourneyBoard(p: MaitriPalette, assistanceStatus: Str
                 DropdownMenuItem(text = { Text(tr("Copy location"), color = p.primary) },
                     leadingIcon = { Icon(Icons.Rounded.ContentCopy, null, tint = p.accent) },
                     onClick = { menu = false; onCopyLocation() })
-                DropdownMenuItem(text = { Text(tr("Open in Maps"), color = p.primary) },
+                DropdownMenuItem(text = { Text(tr("Open in Google Maps"), color = p.primary) },
                     leadingIcon = { Icon(Icons.Rounded.Map, null, tint = p.accent) },
                     onClick = { menu = false; onMaps() })
             }

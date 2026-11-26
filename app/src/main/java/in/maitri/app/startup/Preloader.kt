@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Work started on every cold start, all in parallel while "Getting things ready" shows:
  * a) Firebase auth restore + ID-token refresh, b) wake the server (/ready, so a sleeping Render instance starts now),
  * c) the account's open SOS, d) profile / volunteer / unread / PIN / circle into [StartupCache], e) FCM registration,
- * f) map style and tiles around the last location, g) crash-report settings off the main thread.
+ * g) crash-report settings off the main thread. (Google Maps caches its own tiles; there is no map warm-up.)
  * Nothing here blocks the app: the startup screen waits at most 2.5 s, and everything else keeps going behind it.
  */
 object Preloader {
@@ -55,7 +55,6 @@ object Preloader {
         scope.launch(Dispatchers.Default) { `in`.maitri.app.I18n.preload(); done("translations parsed") }
         scope.launch(Dispatchers.Default) { CrashReports.apply(app); done("crash reports") }  // g
         scope.launch { wakeServer(); done("server awake") }                                   // b
-        scope.launch { MapWarmup.run(app); done("map warmed") }                               // f
         scope.launch {
             val user = runCatching { FirebaseAuth.getInstance().currentUser }.getOrNull()?.takeIf { it.isMaitriVerified() }
             if (user == null || BuildConfig.API_BASE_URL.isBlank()) { essentials.value = true; done("no account"); return@launch }

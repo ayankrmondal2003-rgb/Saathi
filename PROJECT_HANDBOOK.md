@@ -85,7 +85,8 @@ uploading its location; a *moving geofence* on the server finds approved, availa
 sends them a **Firebase Cloud Messaging (FCM)** data message; the volunteer's phone builds a heads-up or full-screen
 alert. Circle members who have Maitri get a push too; the rest get an SMS that the user's own phone prepares, with
 a **live-location web link**. A free **cron-job.org** ping keeps the Render server awake, **Sentry** collects server
-errors, **Crashlytics** collects app crashes, and the map tiles come from **OpenFreeMap**.
+errors, **Crashlytics** collects app crashes, the app's maps are **Google Maps** (Maps SDK for Android, free for
+mobile map loads), and the live-location web page's map tiles come from **OpenFreeMap**.
 
 ---
 
@@ -110,6 +111,8 @@ flowchart LR
   R2[("Cloudflare R2\nprivate bucket")]
   Cron["cron-job.org"]
   Sentry["Sentry"]
+  GMaps["Google Maps
+(Maps SDK for Android)"]
   OFM["OpenFreeMap tiles"]
   Admin["/admin page\n(browser)"]
   Live["/l/&lt;token&gt; live page\n(browser)"]
@@ -117,7 +120,8 @@ flowchart LR
   App -- "sign in, ID token" --> Auth
   App -- "HTTPS + Bearer token" --> API
   App -- "PUT file (presigned URL)" --> R2
-  App -- "GET tiles, style" --> OFM
+  App -- "map tiles (Maps SDK)" --> GMaps
+  Live -- "GET tiles" --> OFM
   App -- "crash reports" --> Crash
   AD -- "APK to testers" --> App
   API -- "verify token, admin claim" --> Auth
@@ -143,7 +147,8 @@ flowchart LR
 | App → R2 | The file bytes, directly (the API never sees them) | After `POST /api/files/upload-url` | `app/.../network/Uploads.kt` |
 | API → FCM | Data-only, high-priority messages (`event_type`, ids, times) | Volunteer invitations (outbox), circle alerts, check-in reminders, closes | `backend/app/services/outbox_worker.py: default_firebase_sender`; `backend/app/inbox.py: send_pending_pushes` |
 | FCM → App | The data message; the app builds the notification itself | Same as above | `app/.../notification/SosFirebaseMessagingService.kt: onMessageReceived` |
-| App → OpenFreeMap | Requests for the map style and vector tiles | When a map is shown; once a day a small area around the last location is pre-downloaded | `app/.../ui/MaitriMap.kt: OpenFreeMap`; `app/.../startup/MapWarmup.kt` |
+| App → Google Maps | Map tile requests from the Maps SDK for Android (the area shown, IP, device info), with the restricted API key; markers and circles are drawn on the phone. No Map ID, no Routes/Directions/Geocoding/Places/Street View calls | When a map is shown | `app/.../ui/MaitriMap.kt: MaitriGoogleMap`; key: `local.properties` `maitriMapsApiKey` → manifest |
+| Browser (/l/token) → OpenFreeMap | Map style and tiles for the live-location web page (Leaflet) | While someone watches a live link | `backend/app/live_link.py: live_page` |
 | App → Crashlytics | Stack trace, app version, phone model (no user id or personal data) | After a crash, release builds only, unless turned off in Privacy & data | `app/.../MaitriApp.kt: CrashReports` |
 | App Distribution → App | Signed release APK + release notes | When a developer runs `appDistributionUploadRelease` | `app/build.gradle.kts` |
 | API → Sentry | Server exceptions, scrubbed of coordinates, emails, phones and live-link tokens | When an error happens and `SENTRY_DSN` is set | `backend/app/telemetry.py: init_sentry`, `scrub` |
@@ -197,7 +202,7 @@ version number that fixes the versions of a whole family of libraries.
 | Retrofit + Gson converter | 2.11.0 | Typed HTTP calls to the API | `network/BackendApi.kt` and the other `*Api` interfaces |
 | OkHttp | 4.12.0 | HTTP client; adds the Bearer token; raw uploads to R2 | `network/BackendApi.kt: BackendClient`; `network/Uploads.kt` |
 | Google Play services Location | 21.3.0 | GPS / fused location | `location/FusedLocationSource.kt`; `ui/ResponderMapCard.kt` |
-| MapLibre Android (OpenGL) | 13.7.1 | Draws the maps with OpenFreeMap tiles; offline warm-up | `ui/MaitriMap.kt`; `startup/MapWarmup.kt` |
+| Maps Compose (Google Maps SDK for Android) | 7.0.0 (newest built with Kotlin 2.2) | Every map in the app, through the shared `MaitriMapCard`: bundled light/dark styles, custom markers, auto-fit camera, zoom/re-centre, full screen | `ui/MaitriMapCard.kt`; `ui/MaitriMap.kt`; `res/raw/maitri_map_*.json` |
 | Firebase BOM | 34.19.0 | Versions for the Firebase libraries below | `app/build.gradle.kts` |
 | Firebase Auth | from BOM | Sign-in (email, Google, phone OTP code path) | `data/FirebaseAuthRepository.kt` |
 | Credential Manager + Google ID | 1.5.0 / 1.1.1 | "Sign in with Google" | `ui/MaitriLogin.kt`; `state/AuthViewModel.kt: signInWithGoogle` |
@@ -274,7 +279,8 @@ Free-tier limits change; treat every number here as **Unverified** until you che
 | Cloudflare R2 | dash.cloudflare.com → R2 | Private storage for volunteer documents, SOS photos/voice, profile photos | Free tier | ~10 GB storage, ~1M writes and ~10M reads/month, no egress fees | `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, optional `R2_ENDPOINT` | Uploads return 503 `STORAGE_NOT_CONFIGURED`/fail; photos and documents can't be viewed. SOS itself still works |
 | cron-job.org | cron-job.org | Keeps Render awake: `GET /ready` every 10 min | Free | Jobs as often as every minute | Job set up in the cron-job.org dashboard (`DEPLOYMENT.md` §4) | Render sleeps when idle; the first request after a quiet spell waits for a cold start (up to ~1 min) |
 | Sentry | sentry.io | Server error reports | Free Developer plan | ~5k errors/month | `SENTRY_DSN`, `SENTRY_TEST` | No error reports; the app is unaffected |
-| OpenFreeMap / OpenStreetMap | openfreemap.org / openstreetmap.org | Map style and vector tiles (OSM data) | Free, no key | No published hard limit (**Unverified**) | `app/.../ui/MaitriMap.kt: OpenFreeMap.LIGHT_STYLE`; dark style bundled at `app/src/main/assets/map/maitri-dark.json` | Maps show without tiles (or from the warm-up cache); coordinates and "Open in Maps" still work on the fallback card |
+| Google Maps Platform (Maps SDK for Android only) | console.cloud.google.com | All maps in the app | Pay-as-you-go account required; Android map loads ("Mobile Native Dynamic Maps") are $0 with no cap (**Unverified**, check mapsplatform.google.com/pricing) | Only the Maps SDK for Android is enabled; no Map ID / cloud styling; budget alert ₹100 | `maitriMapsApiKey` in `local.properties`; setup in `docs/GOOGLE_MAPS_SETUP.md` | Maps show grey without tiles; markers, distance and "Open in Google Maps" still work. Without a key built in, every map is the "Open in Google Maps" card |
+| OpenFreeMap / OpenStreetMap | openfreemap.org / openstreetmap.org | Map tiles on the live-location web page (`/l/<token>`, Leaflet) | Free, no key | No published hard limit (**Unverified**) | `backend/app/live_link.py` | The web page shows the position without a map background |
 | GitHub | github.com/ayankrmondal2003-rgb/Saathi | Source code, pull requests, Pages | Free | — | `.github/workflows/pages.yml` | No code changes; the running app is unaffected |
 | GitHub Pages | ayankrmondal2003-rgb.github.io/Saathi | Privacy policy, terms, account-deletion page | Free | — | `docs/site/*.html`; `app/.../network/Privacy.kt: SITE` | Links from the app to the policy pages fail |
 | Email (support) | — | "Email support" in Help | — | — | `app/.../ui/MaitriPrivacyData.kt: supportEmailIntent` | — |
@@ -303,7 +309,7 @@ Screen numbers 01–14 are the design boards in `design-reference/` (`maitri · 
 ### Startup: "Getting things ready" (extra screen)
 
 - **Purpose.** Shown on every cold start for 0.7–2.5 s while everything loads in parallel.
-  Files: `ui/MaitriStartupScreen.kt`, `startup/Preloader.kt`, `startup/StartupCache.kt`, `startup/MapWarmup.kt`,
+  Files: `ui/MaitriStartupScreen.kt`, `startup/Preloader.kt`, `startup/StartupCache.kt`,
   gate in `navigation/SafetyApp.kt: SafetyNavigation`.
 - **Controls.** None. It's a logo in a pulsing circle, the wordmark, the title and three animated dots; static if the
   phone's "Remove animations" is on (`ui/MaitriLoader.kt: reduceMotion`).
@@ -311,7 +317,7 @@ Screen numbers 01–14 are the design boards in `design-reference/` (`maitri · 
   time: token refresh (Firebase), `GET /ready`, `GET /api/incidents/active` (`routes.py: active_incident` → reads
   `incidents`), cache refresh (`GET /api/users/me`, `/api/volunteer/status`, `/api/inbox`,
   `/api/security/safety-pin/status`, `/api/circle-sharing/links`, `/api/circle/memberships`), FCM token
-  registration (`POST /api/devices/register` → `devices`), and the map warm-up (OpenFreeMap). The screen waits for
+  registration (`POST /api/devices/register` → `devices`). (No map warm-up: Google Maps caches its own tiles.) The screen waits for
   sign-in state plus the open-SOS check, at least 700 ms and at most 2.5 s (`SafetyApp.kt: SafetyNavigation`).
 - **Then.** If an SOS is open → screen 08. If the app was opened from an SOS-request notification, this screen is
   skipped. Otherwise Welcome (signed out) or Home.
@@ -441,7 +447,7 @@ Screen numbers 01–14 are the design boards in `design-reference/` (`maitri · 
 | Control | Step by step |
 |---|---|
 | Volunteer status card | `GET /api/volunteer/status` (`volunteer.py: get_volunteer_status` → `volunteer_applications`, `stored_files`). Shows Verified / Under review / Not approved (with reviewer's note and **Reapply**) / **Volunteer application** → screen 04. |
-| Live map | Your own position only, from the phone (`FusedLocationProvider`, balanced power, only while visible); a 1 km dashed circle while Available. Never uploaded from this card. |
+| Live map | Google map (`MaitriMapCard`): your own position only (blue dot + accuracy circle), from the phone (`FusedLocationProvider`, balanced power, only while visible); a 1 km dashed circle while Available. Pan, zoom, tilt, +/− and re-centre; tap → full screen. A finger on the map pans it; the page scrolls outside it (`LocalPageScrollLock`). Never uploaded from this card. |
 | **Community responder** switch | `PUT /api/users/me` with `responder_opt_in` (`routes.py: profile` → `users`). On Android 13+ asks for notifications. |
 | **Available for nearby requests** switch | `PUT /api/users/me` with `responder_available`; then the phone reports its location: `PUT /api/responders/location` (`routes.py: responder_fix` → `responder_locations`; 409 if not newer) while the tab is visible, when Maitri opens, and every ~15 min in the background if allowed (`network/ResponderLocation.kt`). Turning it off deletes the volunteer's location row (`routes.py: profile`). |
 | Request alerts → **Fix** buttons | Open the right setting: notifications, the SOS requests channel, lock-screen (full-screen) alerts, battery, background location. |
@@ -483,7 +489,9 @@ Screen numbers 01–14 are the design boards in `design-reference/` (`maitri · 
 
 - **Purpose.** A volunteer sees a request and answers it. Files: `ui/MaitriIncoming.kt`, `ui/SosRequestActivity.kt`
   (lock-screen version), `notification/SosRequestAlerts.kt`.
-- **Shown.** Distance band only ("Under 500 m"), never a place; countdown to expiry (`InvitationDto.expiresAt`).
+- **Shown.** Distance band only ("Under 500 m"), never a place; countdown to expiry (`InvitationDto.expiresAt`). A small
+  map (`MaitriMapCard`, tap → full screen) shows only an area: a dashed circle around **you** as wide as the band
+  ("Within 500 m of you"), never a pin for the person before accepting (`ui/MaitriMap.kt: bandRadiusMeters`).
 - **Controls.** **Accept** → sends a fresh location first (`ResponderLocation.reportNow` → `PUT /api/responders/location`)
   → `POST /api/responders/invitations/{id}/response` (`ACCEPTED`; `routes.py: respond` → checks opt-in, available,
   **approved application**, fresh location inside the radius; inserts `incident_responders`; may close other
@@ -582,7 +590,9 @@ Screen numbers 01–14 are the design boards in `design-reference/` (`maitri · 
 
 ### Circle SOS viewer (extra screen)
 
-- **File.** `ui/CircleSosViewer.kt`. For a circle member: the person's live location, and voice notes and photos
+- **File.** `ui/CircleSosViewer.kt`. For a circle member: the person's live location on a Google map (`MaitriMapCard`,
+  pink pin, and you if location is allowed; polled every 10 s from the live link `/l/<token>/location`), distance and
+  approx. walk, **Open in Google Maps** (walking navigation), and voice notes and photos
   from their SOS (`GET /api/files/incidents/{id}/media`, then short-lived download URLs). Volunteers never see media
   (`files.py: can_see_incident_media`).
 
@@ -667,7 +677,6 @@ sequenceDiagram
     Pre->>API: GET /api/incidents/active
     Pre->>API: profile, volunteer, inbox, PIN, circle -> save to Cache
     Pre->>API: POST /api/devices/register (FCM token)
-    Pre->>OS: map warm-up (OpenFreeMap tiles, once a day)
   end
   Main->>Main: splash fades into "Getting things ready"
   Main->>Main: wait >= 0.7 s and <= 2.5 s for sign-in + open-SOS check
@@ -679,7 +688,7 @@ sequenceDiagram
 ```
 
 - Code: `MainActivity.kt: onCreate`; `startup/Preloader.kt: start`; `startup/StartupCache.kt`;
-  `startup/MapWarmup.kt`; `navigation/SafetyApp.kt: SafetyNavigation` (gate), Home's `consumeOpenActiveSos`.
+  `navigation/SafetyApp.kt: SafetyNavigation` (gate), Home's `consumeOpenActiveSos`.
 - Measured on a Samsung SM-E625F (release, Baseline Profile): first frame ~324 ms, Home fully drawn ~1.13 s
   (`BETA_TEST_REPORT.md` and the PR #11 description). Treat as **Unverified** on other phones.
 
@@ -1576,7 +1585,6 @@ From the `getSharedPreferences(...)`, DataStore and SQLite names in `app/src/mai
 | `startup_cache` (DataStore) | Cached server data (section 6.2) |
 | `fcm_prefs`, `device_installation` | FCM token and installation id |
 | `seen_sos_invitations`, `circle_request_ids`, `sos_sms_prompts` | De-duplication of alerts and prompts |
-| `map_warmup` | Date of the last map tile warm-up (tiles themselves are in MapLibre's offline database) |
 | `onboarding`, `location_permission`, `maitri_permission_prefs` | Prompt history |
 
 ---
@@ -1601,7 +1609,7 @@ From the `getSharedPreferences(...)`, DataStore and SQLite names in `app/src/mai
 
 | Where | How | Code |
 |---|---|---|
-| In transit | HTTPS to Render, Firebase, R2 and OpenFreeMap; the app's network security config **Unverified** (no cleartext exception seen) | — |
+| In transit | HTTPS to Render, Firebase, R2 and Google Maps; the app's network security config **Unverified** (no cleartext exception seen) | — |
 | Medical notes at rest | AES-256-GCM with `MEDICAL_NOTES_KEY` (32 bytes, base64); ciphertext bound to the account id; losing the key makes notes unreadable | `backend/app/privacy.py` |
 | Safety PINs | Argon2id (time cost 2, memory 64 MB) | `services/safety_pin.py: _hasher` |
 | Invite/pairing codes | SHA-256 hashes only | `circle.py: code_hash`; `circle_sharing.py` |
@@ -1641,7 +1649,7 @@ only during an SOS, a trip you start, or while you're an available volunteer (in
 background report); volunteers see only a distance band until they accept; circle members get your live location
 and evidence; medical notes are encrypted and shown only to an accepted responder during your SOS; retention (SOS
 location 7 days after closing, media 30 days, inbox 30 days); crash reports (Crashlytics, opt-out) and server error
-reports (Sentry, scrubbed); the processors (Google Firebase, Render, Neon, Cloudflare, Sentry, OpenFreeMap); data
+reports (Sentry, scrubbed); the processors (Google Firebase, Google Maps for the app's map tiles, Render, Neon, Cloudflare, Sentry, OpenFreeMap for the live-location web page); data
 export and deletion; that Maitri does not call 112 or send SMS itself. **Unverified:** whether `privacy.html` still
 matches every point above (the background volunteer location and lock-screen alerts were added after it was
 written; check it).
@@ -1709,6 +1717,7 @@ All are read by `backend/app/config.py: Settings` (names are case-insensitive; `
 | `maitriKeystorePath`, `maitriKeystorePassword`, `maitriKeyAlias`, `maitriKeyPassword` | Release signing (upload key) | `app/build.gradle.kts: signingConfigs.upload` |
 | `maitriAppDistributionCredentials` | Path to the App Distribution service-account JSON | `AppDistributionExtension` |
 | `maitriTesterGroups` | Tester group (default `friends`) | same |
+| `maitriMapsApiKey` | Google Maps key (Maps SDK for Android only, restricted to `in.maitri.app` + the debug/upload/Play SHA-1s). Empty = maps show the "Open in Google Maps" card | `app/build.gradle.kts: manifestPlaceholders` → `AndroidManifest.xml` `com.google.android.geo.API_KEY`; `docs/GOOGLE_MAPS_SETUP.md` |
 | Legacy `suraksha*` names | Older names still accepted | `backendUrl(..., legacy)` |
 
 Gradle `-P` switches: `-PsignDebugWithUpload=true` (sign debug/test APKs with the upload key so they install over
@@ -1830,7 +1839,7 @@ From `MAITRI_AUDIT_V2.md` (audit v3 summary: 34 works, 34 partial, 8 missing, 1 
 true in today's code: phone OTP blocked (#4); circle delivery without SMS blocked (#5); no CI (#15); missed check-ins
 only to app users (#14); trips only while open (#13). Items now **fixed** that the audit lists as open: background
 location (now opt-in for volunteers, `ResponderLocation.kt`), full-screen requests, Inter font, maps (MapLibre, not
-Esri), R2 uploads, /admin, export/deletion, crash reporting.
+Esri; since replaced by Google Maps), R2 uploads, /admin, export/deletion, crash reporting.
 
 ---
 

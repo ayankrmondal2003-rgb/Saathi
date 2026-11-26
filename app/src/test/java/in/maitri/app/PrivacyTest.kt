@@ -27,7 +27,7 @@ class PrivacyTest {
         assertTrue(config.contains("sos_media_days: int = Field(30"))
         assertTrue(policy.contains("deleted 30 days after"))
         assertTrue(policy.contains(MaitriLinks.SUPPORT_EMAIL))
-        assertTrue(policy.contains("OpenFreeMap"))
+        assertTrue(policy.contains("Google Maps"))
         assertTrue(File(site, "delete-account.html").readText().contains("Delete my account"))
     }
 

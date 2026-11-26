@@ -65,6 +65,9 @@ android {
         val (major, minor, patch) = listOf(0, 9, 4)
         versionCode = major * 10000 + minor * 100 + patch
         versionName = "$major.$minor.$patch-beta.5"
+        // Google Maps key from local.properties (maitriMapsApiKey), never committed. Restricted in the Cloud console
+        // to this package + Maitri's signing certificates and to the Maps SDK for Android only.
+        manifestPlaceholders["maitriMapsApiKey"] = localSetting("maitriMapsApiKey")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -139,10 +142,10 @@ android {
 }
 
 dependencies {
-    // MapLibre + OpenFreeMap tiles: no API key, free for commercial use.
-    // OpenGL ES renderer: the default artifact renders with Vulkan and crashes ("No Vulkan compatible GPU found")
-    // on phones without Vulkan, which includes the Android 8 emulator and many budget phones.
-    implementation("org.maplibre.gl:android-sdk-opengl:13.7.1")
+    // Google Maps through the Maps SDK for Android only ("Mobile Native Dynamic Maps": $0, no cap). No Map ID or
+    // cloud styling, and no Routes/Directions/Geocoding/Places/Street View calls. docs/GOOGLE_MAPS_SETUP.md.
+    // 7.0.0 is the newest Maps Compose built with Kotlin 2.2 (8.x needs Kotlin 2.3+).
+    implementation("com.google.maps.android:maps-compose:7.0.0")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.datastore:datastore-preferences:1.1.7")

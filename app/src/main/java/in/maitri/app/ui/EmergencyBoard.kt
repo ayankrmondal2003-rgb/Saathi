@@ -20,8 +20,9 @@ internal fun EmergencyBoard(art: Int, description: String, height: Int = 729, co
         val width = maxWidth.coerceAtMost(520.dp)
         val density = LocalDensity.current
         val scaled = Density(density.density * width.value / 390f, density.fontScale)
-        Column(Modifier.width(width).verticalScroll(rememberScrollState())) {
-            CompositionLocalProvider(LocalDensity provides scaled) {
+        val lock = rememberPageScrollLock()
+        Column(Modifier.width(width).verticalScroll(rememberScrollState(), enabled = !lock.value)) {
+            CompositionLocalProvider(LocalDensity provides scaled, LocalPageScrollLock provides lock) {
                 Box(Modifier.fillMaxWidth().height(height.dp)) {
                     Image(painterResource(art), description, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
                     content()

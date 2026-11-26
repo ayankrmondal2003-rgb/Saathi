@@ -17,6 +17,10 @@ import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 
@@ -46,12 +50,25 @@ internal fun AnimatedContentScope.SettledScreen(content: @Composable () -> Unit)
 @Composable
 internal fun MaitriMapCard(markers: List<MapMarker>, modifier: Modifier, emptyLabel: String = "",
                            accuracyMeters: Double? = null, rangeMeters: Double? = null, alwaysShowAccuracy: Boolean = false,
+                           areaMeters: Double? = null, interactive: Boolean = true, expandable: Boolean = true,
                            surround: Color = maitriPalette().background, shape: Shape = RoundedCornerShape(24.dp)) {
     val p = maitriPalette()
     val settled = LocalScreenSettled.current
-    Box(modifier.testTag(MAP_CARD_TAG)) {
+    val lock = LocalPageScrollLock.current
+    // The map takes every touch that starts on it (pan, zoom, tilt); the page scrolls only outside it.
+    val capture = if (lock == null || !interactive) Modifier else Modifier.pointerInput(lock) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            lock.value = true
+            try {
+                do { val event = awaitPointerEvent(PointerEventPass.Initial) } while (event.changes.any { it.pressed })
+            } finally { lock.value = false }
+        }
+    }
+    Box(modifier.testTag(MAP_CARD_TAG).then(capture)) {
         Box(Modifier.fillMaxSize().clip(shape).background(p.card), contentAlignment = Alignment.Center) {
-            if (settled) MaitriMap(markers, emptyLabel, Modifier.fillMaxSize(), accuracyMeters, rangeMeters, alwaysShowAccuracy)
+            if (settled) MaitriMap(MapContent(markers, accuracyMeters, rangeMeters, alwaysShowAccuracy, areaMeters), emptyLabel,
+                Modifier.fillMaxSize(), interactive, expandable)
             else MaitriLoader(logoSize = 40.dp)
         }
         // Outside the clip, so it can cover whatever a map surface draws past the curve.
@@ -60,6 +77,16 @@ internal fun MaitriMapCard(markers: List<MapMarker>, modifier: Modifier, emptyLa
 }
 
 internal const val MAP_CARD_TAG = "maitri-map-card"
+
+/**
+ * Pages that scroll and hold a map provide this and pass `!lock.value` as their scroll's `enabled`: while a finger is
+ * on the map, the page doesn't scroll, so dragging the map pans it instead of moving the page.
+ */
+internal val LocalPageScrollLock = compositionLocalOf<MutableState<Boolean>?> { null }
+
+/** For a scrolling page with a map: the lock to provide, and whether the page may scroll right now. */
+@Composable
+internal fun rememberPageScrollLock(): MutableState<Boolean> = remember { mutableStateOf(false) }
 
 /** Paints [color] everywhere outside [shape]: the card's corners, whatever the map below draws. */
 @Composable
